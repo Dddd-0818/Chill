@@ -16415,7 +16415,7 @@ const AgentModule = (() => {
                        _lastDiaryAttempt[char.id] = now; // 记录尝试时间
                        
                        console.log(`[Agent] 📓 角色【${char.name}】的日记引擎触发`);
-                       await DiaryModule.generateDiary(String(char.id));
+                      await DiaryModule.generateDiary(String(char.id), true);
                    }
                }
            }

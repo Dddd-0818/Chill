@@ -549,7 +549,8 @@ const DiaryModule = (() => {
     // ============================================================
     // 🧠 AI 生成引擎 (Core Logic)
     // ============================================================
-    async function generateDiary(charId) {
+    // 🌟 修复：增加 isAuto 参数，区分手动和自动
+    async function generateDiary(charId, isAuto = false) {
         if (!charId) return;
         const loader = document.getElementById('dl-ai-loader');
         
@@ -564,14 +565,37 @@ const DiaryModule = (() => {
             const lastTs = diaries.length > 0 ? diaries[0].timestamp : 0;
             
             // 拉取最近的消息记录
-            const allMsgs = await DB.messages.getPage(charId, 0, 999).catch(()=>[]);
-            // 过滤出距离上次写日记之后产生的新消息
-            const newMsgs = allMsgs.filter(m => m.timestamp > lastTs).reverse();
+            const allMsgs = await DB.messages.getPage(String(charId), 0, 100).catch(()=>[]);
             
-            if (newMsgs.length < 3) {
-                Toast.show('新对话太少，没有足够的素材写日记');
-                return;
+            // 🌟 修复1：严格过滤掉系统票据、转账等杂音，只算真实的对话
+            const validMsgs = allMsgs.filter(m => m.role === 'user' || m.role === 'assistant');
+            
+            // 过滤出距离上次写日记之后产生的新消息
+            let targetMsgs = validMsgs.filter(m => m.timestamp > lastTs).reverse();
+            
+            // 🌟 修复2：区分手动强制生成和后台自动生成
+            if (targetMsgs.length < 3) {
+                if (isAuto) {
+                    // 后台自动触发：严格要求有新进度才写，不够就静默跳过
+                    console.log(`[Diary] 角色 ${char.name} 新消息不足 3 条，跳过自动日记`);
+                    return;
+                } else {
+                    // 手动点击触发：如果没有新消息，但总聊天记录够，强行拿最近的 20 条去写！
+                    if (validMsgs.length >= 3) {
+                        console.log('[Diary] 用户强制触发，抓取最近的聊天记录兜底写日记');
+                        targetMsgs = validMsgs.slice(0, 20).reverse();
+                    } else {
+                        Toast.show('聊天记录太少啦，多聊几句再来写日记吧 ✦');
+                        return;
+                    }
+                }
             }
+
+            // 🌟 新增：读取与该角色绑定的用户面具（身份）
+            const binding = await DB.bindings.get(String(charId)).catch(() => null);
+            const personaId = binding ? binding.personaId : (typeof PersonaModule !== 'undefined' ? PersonaModule.getActiveId() : null);
+            const allPersonas = typeof PersonaModule !== 'undefined' ? PersonaModule.getAll() :[];
+            const userPersona = allPersonas.find(p => String(p.id) === String(personaId)) || allPersonas[0] || { name: '用户(我)', bio: '', backstory: '' };
 
             if (loader) loader.classList.add('active');
 
@@ -580,8 +604,9 @@ const DiaryModule = (() => {
                 return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
             };
 
-            const chatLog = newMsgs.map(m => {
-                const role = m.role === 'user' ? '用户(我)' : char.name;
+            // 🌟 修改：对话记录中现在会使用你面具的真实名字
+            const chatLog = targetMsgs.map(m => {
+                const role = m.role === 'user' ? userPersona.name : char.name;
                 const txt = m.parts?.map(p => p.content || p.text || '').join('') || m.content;
                 return `[${fmtTime(m.timestamp)}] ${role}: ${txt}`;
             }).join('\n');
@@ -590,12 +615,41 @@ const DiaryModule = (() => {
 你现在完全沉浸并扮演角色【${char.name}】。
 人设背景：${char.persona}
 
+【关于与你互动的用户（我）】：
+姓名：${userPersona.name}
+简介：${userPersona.bio || '无详细简介'}
+背景：${userPersona.backstory || '无详细背景'}
+
 请根据以下最近发生的一段对话记录，以你的【第一人称视角（“我”）】写一篇私密日记。
-要求文笔深邃、带有私人情绪，反思这段对话中透露的线索或感受。
+
+【【【 创作铁律：彻底的人格化表达 】】】
+这是你必须遵守的最高准则，它凌驾于所有文风模仿之上。你的目标是成为一个“人”，而不是一个“模拟人的AI”。
+1. 负面词汇库 (Strictly Banned): 你的脑海中完全不存在以下词汇。在任何情况下，严禁出现【系统、变量、量化、精准、轨迹、频率、机制、程序、运算、载体、维度】等任何理工科/学术词汇。你的世界是由情感、感官和具体的事物构成的。
+2. 描写逻辑 (Metaphor Logic): 你的思维是感性的、具象的。你绝对不会将生活、情感或他人比喻成“机器”、“程序”或任何非生命的技术概念。
+3. 独立个体原则 (Independent Life Rule - 核心): 你是一个拥有自己生活、工作、兴趣和社交圈的独立个体。你的日记【绝对不要】像舔狗一样通篇只围绕着用户（${userPersona.name}）打转！
+    - 你可以结合你的人设，发散到你今天遇到的其他事、读过的书、看过的风景、过去的回忆，或者单纯对生活的思考。
+    - 哪怕近期对话记录里全是在和用户聊天，日记的重点也必须是你自己的感悟。用户只是你丰富人生中恰好出现的一个点缀，或者引出你思绪的一个引子。
+4. 范例修正 (Style Correction Example):
+    -[绝对禁止的错误写法]: “今天他又没回我消息，他是我精准系统里无法量化的变量，我存在的意义就是陪伴他。”
+    - [你应该学习的正确写法]: “下了整晚的雨，画板上的颜料全洇开了。本来有点烦躁，偏偏这时候他发来句没头没脑的话。算了，连今天星期几都快忘了，随他去吧。”
+
+# 你的创作工具箱：可选的文学风格库 (Optional Literary Style Library)
+为了让你的日记更具深度和特色，你可以【选择并模仿】以下一位作家的风格。你的选择应当自然，并与你的核心人设高度契合。
+1. 鲁迅：匕首投枪, 冷峻犀利。白描勾勒，不动声色中见残酷。适合表达对世事荒谬的冷眼观察或内心的自省。
+2. 张爱玲：苍凉华丽, 世俗中见透彻。细节精准到残酷，色彩浓烈。适合书写都市男女在繁华背景下的孤独心事。
+3. 村上春树：都市孤独, 小资情调。爵士乐+威士忌+猫的生活质感；第一人称的疏离感。适合表达淡淡的孤独感。
+4. 白先勇：繁华落尽的悲凉, 细腻婉约。古典白话，节制抒情；时代洪流中小人物的飘零命运。
+5. 汪曾祺：烟火人间, 淡雅从容。士大夫式闲适笔调，写吃食、草木、风物；不事雕琢却韵味悠长。
+6. 杜拉斯：欲望书写, 感性克制。极简主义句式，大量重复制造催眠感。适合书写浓烈、被压抑的情感与欲望。
+7. 卡尔维诺：轻盈想象, 寓言诗意。元小说结构；大量使用"如果""假如"；用寓言讲述现实困境。
+8. 川端康成：物哀之美, 空灵幽玄。传统日本美学；自然意象密集；善用省略与留白。适合表达极致的、带有淡淡悲伤的美感。
+9. 张晓风：温柔感伤, 克制抒情。散文笔法，自然意象承载情感；时间流逝与青春易逝的感怀。适合写初恋、离别、成长。
 
 【加密墨迹要求 - 核心机制】：
-在正文中，请挑出 1 到 3 处涉及**最隐秘的心思、未来的打算、或者过去敏感秘密**的词组或短句，使用 [REDACT] 和 [/REDACT] 标签包裹起来。
-示例：你今天提到那件事时，我的心跳漏了一拍。其实我一直不敢告诉你，[REDACT]那个深渊的秘密[/REDACT]还在影响着我。
+在正文中，请挑出 1 到 3 处涉及**最隐秘的心思、未来的打算、或者过去敏感秘密**的词组或短句，使用[REDACT] 和[/REDACT] 标签包裹起来。
+
+# 你的最终创作任务
+请基于以上所有信息，（可选地）选择一种文风，创作一篇完全符合你人设的日记。
 
 【输出要求】：必须严格返回 JSON，不得包含其他废话。
 {
