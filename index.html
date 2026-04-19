@@ -17,6 +17,11 @@
 <script src="music.js"></script>
 <script src="chill-meet-bundle.js"></script>
 <script src="diary.js"></script>
+<script src="https://unpkg.com/vconsole@latest/dist/vconsole.min.js"></script>
+<script>
+  // 初始化 VConsole
+  var vConsole = new VConsole();
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Noto+Sans+SC:wght@300;400;500;700&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,700&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Inter:wght@300;400;500;700;900&family=Cinzel:wght@500;700&family=Noto+Serif+SC:wght@500;700;900&family=Libre+Barcode+39+Text&display=swap" rel="stylesheet">
@@ -3789,13 +3794,35 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
             </div>
           </div>
          <!-- 🌟 新增：方便测试的摇人按钮 -->
-          <button class="btn-outline" style="margin-top:16px; border-style:dashed;" onclick="AgentModule.forceProactivePost()">🎲 [Debug] 强制唤醒角色发帖</button>
+         <button class="btn-outline" style="margin-top:16px; border-style:dashed;" onclick="AgentModule.forceProactivePost()">🎲[Debug] 强制唤醒角色发帖</button>
+        </div>
+
+        <!-- 🌟 新增：自动写日记 -->
+        <div class="form-section">
+          <div class="section-title">私密记录 / Private Diary</div>
+          <div class="toggle-row" style="border-bottom:none; padding-bottom:8px;">
+            <div class="toggle-row-info">
+              <div class="toggle-row-label">角色自动写日记</div>
+              <div class="toggle-row-desc">积攒一定对话后，角色会在后台偷偷写下心事</div>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="ag-toggle-diary" checked>
+              <div class="toggle-track"></div>
+              <div class="toggle-thumb"></div>
+            </label>
+          </div>
+          <div class="input-wrapper">
+            <label class="label-text">日记触发间隔 (小时) / Interval</label>
+            <div class="slider-row">
+              <input type="range" id="ag-diary-interval-slider" class="styled-slider" min="1" max="72" step="1" value="24" oninput="document.getElementById('ag-diary-interval-val').textContent=this.value+'h'">
+              <span class="slider-val" id="ag-diary-interval-val">24h</span>
+            </div>
+          </div>
         </div>
 
         <div style="margin-top:40px;">
           <button class="btn-primary" onclick="AgentModule.saveSettings()">保存引擎配置</button>
-        </div>
-        
+        </div>        
       </div>
     </div>
   </div><!-- #settings-screen -->
@@ -6675,7 +6702,7 @@ const ProfileModule = (() => {
 // UIModule — 壁纸 & 图标
 // ============================================================
 const ICON_DEFAULTS = [
-  'ph ph-image','ph ph-envelope-simple','ph ph-music-note','ph ph-calendar-blank',
+  'ph ph-image','ph ph-book-open-text','ph ph-music-note','ph ph-calendar-blank',
   'ph ph-gear','ph ph-bell','ph ph-mask-happy','ph ph-cloud'
 ];
 
@@ -9258,10 +9285,16 @@ const NotificationModule = (() => {
     }, 5500);
   }
 
-  function handleClick() {
+ function handleClick() {
     const banner = document.getElementById('global-banner');
     banner.classList.remove('active');
     clearTimeout(_timer);
+    
+    // 🌟 新增修复：如果当前停留在日记这种独立遮罩层，强制将其关闭，防止挡住底层跳转
+    if (typeof DiaryModule !== 'undefined') {
+        DiaryModule.close();
+    }
+
     if (_currentData) {
       // 🌟 核心修复：如果是 Feed 动态，跳转到动态广场
       if (_currentData.type === 'feed') {
@@ -16239,13 +16272,17 @@ const AgentModule = (() => {
   let _taskQueue = [];
   let _tickTimer = null;
   let _lastProactiveTime = 0;
+  let _lastSlowCheckTime = 0;
+  let _lastDiaryAttempt = {};
   
   // 🌟 默认配置
-  let _cfg = {
+ let _cfg = {
     enabled: true,
     reactionDelay: 10,
     proactiveEnabled: true,
-    proactiveInterval: 4
+    proactiveInterval: 4,
+    diaryEnabled: true,       // 👈 新增日记开关
+    diaryInterval: 24         // 👈 新增日记间隔（小时）
   };
   
   // 🌟 新增：后台静默识别图片内容
@@ -16319,22 +16356,32 @@ const AgentModule = (() => {
     _tickTimer = setInterval(_tick, 3000);
   }
 
-async function _tick() {
+  async function _tick() {
     const now = Date.now();
+    
+    // ==========================================
+    // ⚡️ 1. 轻量级快速心跳 (每 3 秒执行)
+    // 纯内存数组过滤，毫无性能压力。处理需要“秒回”的社交互动
+    // ==========================================
     const readyTasks = _taskQueue.filter(t => t.executeAt <= now);
     _taskQueue = _taskQueue.filter(t => t.executeAt > now);
 
-   for (const task of readyTasks) {
+    for (const task of readyTasks) {
       if (task.type === 'EVALUATE_COMMENT_REPLY') {
         await _handleCommentReply(task.data);
       } else if (task.type === 'BATCH_EVALUATE_NEW_POST') {
-        // 👇 新增：调用我们刚刚写的“批量评估大脑”
         await _batchEvaluateNewPost(task.data);
       } else if (task.type === 'PUBLISH_COMMENT') {
-        // 👇 新增：调用我们刚刚写的“错峰发射器”
         await _publishComment(task.data);
       }
     }
+
+    // ==========================================
+    // 🐢 2. 重度数据库扫描心跳 (每 3 分钟才放行一次)
+    // 大幅拯救手机性能、发热和电池续航！
+    // ==========================================
+    if (now - _lastSlowCheckTime < 3 * 60 * 1000) return; // 拦截：不足3分钟直接退下
+    _lastSlowCheckTime = now; // 记录本次扫描时间
 
     // 🌟 检查是否该让角色主动发帖了
     if (_cfg.enabled && _cfg.proactiveEnabled) {
@@ -16345,7 +16392,37 @@ async function _tick() {
       }
     }
 
-    // 👇 🌟 新增：检查离线夺命连环call
+    // 🌟 检查自动日记引擎
+    if (_cfg.enabled && _cfg.diaryEnabled) {
+       if (typeof DiaryModule !== 'undefined') {
+           const chars = await DB.characters.getAll().catch(()=>[]);
+           for (const char of chars) {
+               // 获取最后一次写日记的时间
+               const diaries = await DB.settings.get(`diaries-${char.id}`).catch(()=>[]);
+               const lastDiaryTs = diaries && diaries.length > 0 ? diaries[0].timestamp : 0;
+               
+               const intervalMs = _cfg.diaryInterval * 60 * 60 * 1000;
+               // 如果超过了设定的时间间隔
+               if (now - lastDiaryTs > intervalMs) {
+                   // 加入失败冷却机制（如果刚才失败了，这3分钟内也不会再试）
+                   const lastAttempt = _lastDiaryAttempt[char.id] || 0;
+                   if (now - lastAttempt < 5 * 60 * 1000) continue;
+
+                   // 检查一下这段时间内有没有聊够至少 3 条消息
+                   const msgs = await DB.messages.getPage(String(char.id), 0, 20).catch(()=>[]);
+                   const recentMsgs = msgs.filter(m => m.timestamp > lastDiaryTs);
+                   if (recentMsgs.length >= 3) {
+                       _lastDiaryAttempt[char.id] = now; // 记录尝试时间
+                       
+                       console.log(`[Agent] 📓 角色【${char.name}】的日记引擎触发`);
+                       await DiaryModule.generateDiary(String(char.id));
+                   }
+               }
+           }
+       }
+    }
+
+    // 🌟 检查离线夺命连环call
     if (_cfg.enabled) {
       await _checkOfflineMessages(now);
     }
@@ -16963,9 +17040,16 @@ ${historyText || '（无）'}
 
     if (elEnable) elEnable.checked = _cfg.enabled;
     if (elProactive) elProactive.checked = _cfg.proactiveEnabled;
-    if (elDelay) {
+   if (elDelay) {
       elDelay.value = _cfg.reactionDelay;
       document.getElementById('ag-delay-val').textContent = _cfg.reactionDelay + 's';
+    }
+    const elDiary = document.getElementById('ag-toggle-diary');
+    const elDiaryInt = document.getElementById('ag-diary-interval-slider');
+    if (elDiary) elDiary.checked = _cfg.diaryEnabled;
+    if (elDiaryInt) {
+      elDiaryInt.value = _cfg.diaryInterval;
+      document.getElementById('ag-diary-interval-val').textContent = _cfg.diaryInterval + 'h';
     }
     if (elInterval) {
       elInterval.value = _cfg.proactiveInterval;
@@ -16984,6 +17068,8 @@ ${historyText || '（无）'}
     _cfg.proactiveEnabled = document.getElementById('ag-toggle-proactive').checked;
     _cfg.reactionDelay = parseInt(document.getElementById('ag-delay-slider').value, 10);
     _cfg.proactiveInterval = parseInt(document.getElementById('ag-interval-slider').value, 10);
+    _cfg.diaryEnabled = document.getElementById('ag-toggle-diary').checked;
+    _cfg.diaryInterval = parseInt(document.getElementById('ag-diary-interval-slider').value, 10);
     
     await DB.settings.set(KEY_CFG, _cfg);
     Toast.show('Agent 引擎配置已更新');
