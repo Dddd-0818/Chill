@@ -17,6 +17,7 @@
 <script src="music.js"></script>
 <script src="chill-meet-bundle.js"></script>
 <script src="diary.js"></script>
+<script src="forum.js"></script>
 <script src="https://unpkg.com/vconsole@latest/dist/vconsole.min.js"></script>
 <script>
   // 初始化 VConsole
@@ -3317,7 +3318,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
     <div class="dock-wrapper" id="dock-wrapper">
       <div class="dock">
         <div class="dock-item active-dot" onclick="toggleDock(event)"><i class="ph-fill ph-house"></i></div>
-        <div class="dock-item"><i class="ph-fill ph-magnifying-glass"></i></div>
+        <div class="dock-item" onclick="Router.go('forum')"><i class="ph-fill ph-magnifying-glass"></i></div>
         <div class="dock-item" onclick="Router.go('chat')"><i class="ph-fill ph-chat-circle-dots"></i></div>
         <div class="dock-item" id="dock-character"><i class="ph-fill ph-user"></i></div>
       </div>
@@ -5722,7 +5723,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
 // ============================================================
 const DB = (() => {
   const DB_NAME    = 'chillOS';
-  const DB_VERSION = 9;
+  const DB_VERSION = 10;
   let _db = null;
 
   function open() {
@@ -5785,7 +5786,12 @@ const DB = (() => {
     db.createObjectStore('feed_posts', { keyPath: 'id' });
   }
 }
-      };
+       if (old < 10) {
+          if (!db.objectStoreNames.contains('forum_posts')) {
+            db.createObjectStore('forum_posts', { keyPath: 'id' });
+          }
+        }
+    };
 
       req.onsuccess = e => { _db = e.target.result; resolve(_db); };
       req.onerror   = e => reject(new Error(`DB open failed: ${e.target.error}`));
@@ -6214,7 +6220,32 @@ async function msgDel(id) {
       req.onerror   = e => reject(e.target.error);
     });
   }
-
+// ---- forum_posts ----
+  async function forumGetAll() {
+    await open();
+    return new Promise((resolve, reject) => {
+      const req = tx('forum_posts').getAll();
+      req.onsuccess = () => resolve(req.result || []); // 保证没数据时返回空数组
+      req.onerror   = e => reject(e.target.error);
+    });
+  }
+  async function forumPut(post) {
+    await open();
+    return new Promise((resolve, reject) => {
+      // put 方法会自动处理新增和更新，非常方便
+      const req = tx('forum_posts', 'readwrite').put(post);
+      req.onsuccess = () => resolve();
+      req.onerror   = e => reject(e.target.error);
+    });
+  }
+  async function forumDel(id) {
+    await open();
+    return new Promise((resolve, reject) => {
+      const req = tx('forum_posts', 'readwrite').delete(id);
+      req.onsuccess = () => resolve();
+      req.onerror   = e => reject(e.target.error);
+    });
+  }
   return {
     VERSION: DB_VERSION,
     settings:   { get: settingsGet, set: settingsSet, del: settingsDel },
@@ -6228,6 +6259,7 @@ async function msgDel(id) {
    messages:   { get: msgGet, getAll: msgGetAll, add: msgAdd, put: msgPut, getPage: msgGetPage, countByChar: msgCountByChar, delByChar: msgDelByChar, del: msgDel },
     worldInfo:  { getAll: wiGetAll, put: wiPut, add: wiAdd, del: wiDel },
     feed: { getAll: feedGetAll, put: feedPut, del: feedDel },
+    forum: { getAll: forumGetAll, put: forumPut, del: forumDel },
     clearAll,
     init: open,
   };
@@ -6358,13 +6390,12 @@ const Toast = (() => {
 // ============================================================
 const Router = (() => {
   // 顶层 screen id 列表
-const TOP_SCREENS =['settings-screen', 'character-screen', 'chat-screen', 'conv-screen', 'worldbook-screen', 'story-roster-screen', 'story-chat-screen'];
-
+const TOP_SCREENS =['settings-screen', 'character-screen', 'chat-screen', 'conv-screen', 'worldbook-screen', 'story-roster-screen', 'story-chat-screen', 'forum-screen'];
   // 改为数组栈，支持多级子页导航
   const _subStack = {};
 
- function go(target, watermark) {
-   if (target === 'settings' || target === 'character' || target === 'chat' || target === 'conv' || target === 'worldbook' || target === 'story-roster' || target === 'story-chat') {
+function go(target, watermark) {
+   if (target === 'settings' || target === 'character' || target === 'chat' || target === 'conv' || target === 'worldbook' || target === 'story-roster' || target === 'story-chat' || target === 'forum') {
       const map = { 
         settings:  'settings-screen', 
         character: 'character-screen', 
@@ -6372,8 +6403,10 @@ const TOP_SCREENS =['settings-screen', 'character-screen', 'chat-screen', 'conv-
         conv:      'conv-screen', 
         worldbook: 'worldbook-screen',
         'story-roster': 'story-roster-screen',
-        'story-chat': 'story-chat-screen'
+        'story-chat': 'story-chat-screen',
+        forum:     'forum-screen'
       };
+      
       const screenId = map[target];
       TOP_SCREENS.forEach(id => { if (id !== screenId) document.getElementById(id)?.classList.remove('active'); });
       document.getElementById(screenId).classList.add('active');
@@ -6421,11 +6454,12 @@ const TOP_SCREENS =['settings-screen', 'character-screen', 'chat-screen', 'conv-
     TOP_SCREENS.forEach(id => document.getElementById(id)?.classList.remove('active'));
   }
 
-  function _onEnterScreen(target) {
+ function _onEnterScreen(target) {
     if (target === 'character') CharacterModule.renderRoster();
     if (target === 'chat')      ChatModule.onEnter();
     if (target === 'worldbook') WBModule.onEnter();
     if (target === 'story-roster') StoryModule.onEnter();
+    if (target === 'forum')     ForumModule.onEnter(); 
   }
 
   function _onEnterPage(pageId) {
@@ -9285,26 +9319,34 @@ const NotificationModule = (() => {
     }, 5500);
   }
 
- function handleClick() {
+function handleClick() {
     const banner = document.getElementById('global-banner');
     banner.classList.remove('active');
     clearTimeout(_timer);
     
-    // 🌟 新增修复：如果当前停留在日记这种独立遮罩层，强制将其关闭，防止挡住底层跳转
-    if (typeof DiaryModule !== 'undefined') {
-        DiaryModule.close();
-    }
-
     if (_currentData) {
-      // 🌟 核心修复：如果是 Feed 动态，跳转到动态广场
-      if (_currentData.type === 'feed') {
+      if (_currentData.type === 'diary') {
+        // 🌟 新增：如果是日记通知，打开日记模块并穿透到详情页
+        if (typeof DiaryModule !== 'undefined') {
+            DiaryModule.open().then(() => {
+                DiaryModule.openArchive(_currentData.charId);
+                // 稍微延迟一下，等列表页动画渲染完再进详情页
+                setTimeout(() => {
+                    DiaryModule.openDetail(_currentData.diaryId);
+                }, 300);
+            });
+        }
+      } else if (_currentData.type === 'feed') {
+        // 如果是动态广场通知
+        if (typeof DiaryModule !== 'undefined') DiaryModule.close(); // 关闭挡路的日记层
         Router.go('chat');
         const btn = document.querySelector('[data-ch-target="ch-view-sparkle"]');
         if (btn) {
           if (typeof ChatModule !== 'undefined') ChatModule.switchView(btn);
         }
       } else {
-        // 如果是普通消息，弹出半屏快速回复
+        // 如果是普通的聊天消息，弹出半屏快速回复
+        if (typeof DiaryModule !== 'undefined') DiaryModule.close(); // 关闭挡路的日记层
         ConvModule.openQuickReply(_currentData.charId, _currentData.personaId);
       }
     }
@@ -16401,21 +16443,33 @@ const AgentModule = (() => {
                const diaries = await DB.settings.get(`diaries-${char.id}`).catch(()=>[]);
                const lastDiaryTs = diaries && diaries.length > 0 ? diaries[0].timestamp : 0;
                
-               const intervalMs = _cfg.diaryInterval * 60 * 60 * 1000;
+              const intervalMs = _cfg.diaryInterval * 60 * 60 * 1000;
                // 如果超过了设定的时间间隔
                if (now - lastDiaryTs > intervalMs) {
-                   // 加入失败冷却机制（如果刚才失败了，这3分钟内也不会再试）
+                   // 加入失败冷却机制（如果刚才失败了，这5分钟内也不会再试）
                    const lastAttempt = _lastDiaryAttempt[char.id] || 0;
                    if (now - lastAttempt < 5 * 60 * 1000) continue;
 
-                   // 检查一下这段时间内有没有聊够至少 3 条消息
-                   const msgs = await DB.messages.getPage(String(char.id), 0, 20).catch(()=>[]);
-                   const recentMsgs = msgs.filter(m => m.timestamp > lastDiaryTs);
-                   if (recentMsgs.length >= 3) {
+                   // 🌟 抓取近期消息（范围拉大到100条，防止单轮发送过多气泡被截断）
+                   const msgs = await DB.messages.getPage(String(char.id), 0, 100).catch(()=>[]);
+                   // 过滤出上次写日记之后的真实聊天记录
+                   const recentMsgs = msgs.filter(m => m.timestamp > lastDiaryTs && (m.role === 'user' || m.role === 'assistant'));
+                   
+                   // 🌟 精确计算“对话轮数” (User 发言后 AI 回复，记为 1 轮交互)
+                   let rounds = 0;
+                   for (let i = 1; i < recentMsgs.length; i++) {
+                       if (recentMsgs[i-1].role === 'user' && recentMsgs[i].role === 'assistant') {
+                           rounds++;
+                       }
+                   }
+
+                   // 🎯 设定门槛：至少完成 5 轮有来有往的交流，才准写日记
+                   if (rounds >= 5) {
                        _lastDiaryAttempt[char.id] = now; // 记录尝试时间
+                       console.log(`[Agent] 📓 角色【${char.name}】完成了 ${rounds} 轮深度交流，日记引擎触发`);
                        
-                       console.log(`[Agent] 📓 角色【${char.name}】的日记引擎触发`);
-                      await DiaryModule.generateDiary(String(char.id), true);
+                       // 调用写日记接口，传入 true 表示是后台自动触发的
+                       await DiaryModule.generateDiary(String(char.id), true);
                    }
                }
            }
@@ -19136,6 +19190,8 @@ async function init() {
   try { await WBModule.init(); } catch(e) { console.warn('wb init failed', e); }
 // 动态广场初始化
   try { await FeedModule.init(); } catch(e) { console.warn('feed init failed', e); }
+// 论坛
+  try { ForumModule.init(); } catch(e) { console.warn('forum init failed', e); }
 
 // 主题
   try {
