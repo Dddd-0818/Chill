@@ -10,9 +10,14 @@ const ForumModule = (() => {
     let _forumProfile = { name: 'User', avatarKey: '' }; 
     let _eventImgFile = null; // 暂存图片文件
     let _eventImgUrl  = null; // 暂存预览链接
+    let _postToDelete = null;
 
     function init() {
         if (_initialized) return;
+        
+        // 🌟 新增：暴力清理旧节点，防止热更新导致的 DOM 重叠/幽灵点击！
+        const oldScreen = document.getElementById('forum-screen');
+        if (oldScreen) oldScreen.remove();
 
         // 1. 注入专属样式
         const style = document.createElement('style');
@@ -276,6 +281,55 @@ const ForumModule = (() => {
             #forum-screen .fm-img-preview-wrap { position: relative; display: none; width: 100%; height: 160px; border-radius: 4px; overflow: hidden; border: 1px solid var(--fm-line); }
             #forum-screen .fm-img-preview-wrap img { width: 100%; height: 100%; object-fit: cover; }
             #forum-screen .fm-img-remove { position: absolute; top: 8px; right: 8px; width: 28px; height: 28px; border-radius: 50%; background: rgba(0,0,0,0.6); color: #fff; border: 1px solid rgba(255,255,255,0.2); display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 0.9rem; transition: 0.2s; }
+            /* 危险操作警报弹窗 */
+            #forum-screen .fm-modal-overlay {
+                position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+                background: rgba(0,0,0,0.7); backdrop-filter: blur(5px);
+                z-index: 200; display: flex; align-items: center; justify-content: center;
+                opacity: 0; pointer-events: none; transition: opacity 0.3s ease;
+            }
+            #forum-screen .fm-modal-overlay.active {
+                opacity: 1; pointer-events: auto;
+            }
+            #forum-screen .fm-modal {
+                background: var(--fm-surface); border: 1px solid rgba(255, 77, 79, 0.3);
+                border-radius: 12px; padding: 24px; width: 80%; max-width: 320px;
+                transform: translateY(20px) scale(0.95); 
+                transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+                box-shadow: 0 10px 40px rgba(0,0,0,0.8), inset 0 0 20px rgba(255, 77, 79, 0.05);
+                text-align: center;
+            }
+            #forum-screen .fm-modal-overlay.active .fm-modal {
+                transform: translateY(0) scale(1);
+            }
+            #forum-screen .fm-modal-icon {
+                font-size: 2.5rem; color: #ff4d4f; margin-bottom: 12px;
+                animation: fm-pulse 2s infinite;
+            }
+            @keyframes fm-pulse {
+                0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; }
+            }
+            #forum-screen .fm-modal-title {
+                font-family: var(--fm-font-mono); font-size: 1rem; font-weight: 700; 
+                margin-bottom: 8px; text-transform: uppercase; letter-spacing: 2px; color: #ff4d4f;
+            }
+            #forum-screen .fm-modal-desc {
+                font-size: 0.85rem; color: var(--fm-fg-muted); margin-bottom: 24px; line-height: 1.6;
+            }
+            #forum-screen .fm-modal-actions { display: flex; gap: 12px; }
+            #forum-screen .fm-btn {
+                flex: 1; padding: 12px; border-radius: 6px; font-family: var(--fm-font-mono); 
+                font-size: 0.8rem; cursor: pointer; transition: 0.2s; font-weight: 700; 
+                text-transform: uppercase; letter-spacing: 1px;
+            }
+            #forum-screen .fm-btn-cancel {
+                background: transparent; border: 1px solid var(--fm-line); color: var(--fm-fg);
+            }
+            #forum-screen .fm-btn-cancel:active { background: rgba(255,255,255,0.1); }
+            #forum-screen .fm-btn-danger {
+                background: rgba(255, 77, 79, 0.1); border: 1px solid #ff4d4f; color: #ff4d4f;
+            }
+            #forum-screen .fm-btn-danger:active { background: #ff4d4f; color: #fff; }
         `;
         document.head.appendChild(style);
 
@@ -367,6 +421,18 @@ const ForumModule = (() => {
                         </div>
 
                         <button class="btn-primary" onclick="ForumModule.publishPost()">BROADCAST</button>
+                    </div>
+                </div>
+                <!-- 自定义删除确认弹窗 -->
+                <div class="fm-modal-overlay" id="fm-delete-modal">
+                    <div class="fm-modal">
+                        <div class="fm-modal-icon"><i class="ph-fill ph-warning-circle"></i></div>
+                        <div class="fm-modal-title">System Warning</div>
+                        <div class="fm-modal-desc">确认抹除这条数据记录？<br>操作不可逆，空间信号将永久断开。</div>
+                        <div class="fm-modal-actions">
+                            <button class="fm-btn fm-btn-cancel" onclick="ForumModule.cancelDelete()">Cancel</button>
+                            <button class="fm-btn fm-btn-danger" id="fm-confirm-delete-btn">Erase</button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -720,15 +786,50 @@ const ForumModule = (() => {
         } catch(e) { Toast.show('添加失败'); }
     }
 
-    async function deletePost(postId) {
-        if (!confirm('⚠️ 确认抹除这条记录？')) return;
+    // 唤起自定义弹窗
+    function deletePost(postId) {
+        _postToDelete = postId;
+        
+        // 使用更精准的选择器，确保找对当前的弹窗
+        const modal = document.querySelector('#forum-screen #fm-delete-modal');
+        const confirmBtn = document.querySelector('#forum-screen #fm-confirm-delete-btn');
+        
+        if (modal && confirmBtn) {
+            modal.classList.add('active');
+            confirmBtn.onclick = _executeDelete;
+            
+            // 顺便加个用户体验升级：点击弹窗外的黑色半透明遮罩，也能取消删除
+            modal.onclick = function(e) {
+                if (e.target.id === 'fm-delete-modal') cancelDelete();
+            };
+        } else {
+            console.error('[Forum] 弹窗节点丢失，请刷新页面重试');
+            Toast.show('系统空间不稳定，请刷新');
+        }
+    }
+
+    // 关闭弹窗
+    function cancelDelete() {
+        _postToDelete = null;
+        const modal = document.querySelector('#forum-screen #fm-delete-modal');
+        if (modal) modal.classList.remove('active');
+    }
+
+    // 真正执行删除的逻辑
+    async function _executeDelete() {
+        if (!_postToDelete) return;
+        const postId = _postToDelete;
+        cancelDelete(); // 先把弹窗关了
+
         try {
             const post = _posts.find(p => p.id === postId);
             if (post?.imageKey) await Assets.remove(post.imageKey).catch(()=>{});
             await DB.forum.del(postId); 
             await loadPosts(true); // 使用无损刷新防止影响其他开启的楼层
             Toast.show('RECORD ERASED ✦');
-        } catch(e) { Toast.show('删除失败'); }
+        } catch(e) { 
+            Toast.show('删除失败'); 
+        }
     }
 
     function toggleComments(postId) {
@@ -1051,5 +1152,5 @@ ${charProfiles || '无'}
     function _escHtml(str) { return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/\n/g, '<br>'); }
     function _formatDate(ts) { const d = new Date(ts), pad = n => String(n).padStart(2, '0'); return `${d.getFullYear()}.${pad(d.getMonth()+1)}.${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`; }
 
-    return { init, onEnter, filterFeed, toggleComments, addComment, prepareReply, openPanel, closePanel, switchComposeType, publishPost, deletePost, changeForumAvatar, updateForumName, onEventImgSelected, removeEventImg,loadMoreComments };
+    return { init, onEnter, filterFeed, toggleComments, addComment, prepareReply, openPanel, closePanel, switchComposeType, publishPost, deletePost, cancelDelete, changeForumAvatar, updateForumName, onEventImgSelected, removeEventImg,loadMoreComments };
 })();
