@@ -999,8 +999,13 @@ ${charProfiles || '无'}
     }
 
     async function evaluateNewPost(postId) {
-        const post = _posts.find(p => p.id === postId);
-        if (!post) return;
+        // 🌟 核心修复：直接从数据库拉取最新数据，防止后台发帖时内存中尚未加载该帖
+        const allPosts = await DB.forum.getAll().catch(()=>[]);
+        const post = allPosts.find(p => p.id === postId);
+        if (!post) {
+            console.warn(`[Forum AI] 数据库中未找到帖子 ${postId}，放弃评估`);
+            return;
+        }
 
         const activeApi = await DB.api.getActive().catch(()=>null);
         if (!activeApi) return;
@@ -1094,6 +1099,11 @@ ${charProfiles || '无'}
 
             post.comments =[...(post.comments || []), ...newComments];
             await DB.forum.put(post);
+            
+            // 🌟 核心修复：同步更新当前内存，防止正好开着论坛界面时新评论显示脱节
+            const memPost = _posts.find(p => p.id === postId);
+            if (memPost) memPost.comments = post.comments;
+
             console.log(`[Forum AI] 🎯 成功预埋了 ${newComments.length} 条时空错峰评论！`);
             
         } catch(e) {
