@@ -1283,3 +1283,5 @@ ${charProfiles || '无'}
     // 更新 return 暴露
     return { init, onEnter, filterFeed, switchTo, evaluateNewPost, toggleComments, addComment, prepareReply, openPanel, closePanel, switchComposeType, publishPost, deletePost, cancelDelete, changeForumAvatar, updateForumName, onEventImgSelected, removeEventImg, loadMoreComments, saveWorldView, getWorldViewContext };
 })();
+
+window.ForumModule = ForumModule;
