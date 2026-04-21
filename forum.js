@@ -124,38 +124,56 @@ const ForumModule = (() => {
             }
 
             /* Event Card */
-            #forum-screen .event-visual { position: relative; height: 350px; background: var(--fm-surface); overflow: hidden; }
+            #forum-screen .event-visual { 
+                position: relative; 
+                min-height: 350px; 
+                height: auto; /* 🌟 修复：改为自适应高度 */
+                background: var(--fm-surface); 
+                overflow: hidden; 
+                display: flex;
+                flex-direction: column;
+            }
             #forum-screen .event-bg {
                 width: 100%; height: 100%; object-fit: cover;
-                filter: brightness(0.6) contrast(1.1); position: absolute; top: 0; left: 0;
+                filter: brightness(0.6) contrast(1.1); position: absolute; top: 0; left: 0; z-index: 0;
             }
             #forum-screen .event-overlay {
-                position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+                position: relative; z-index: 1; flex: 1;
+                width: 100%; 
                 padding: 20px; display: flex; flex-direction: column; justify-content: space-between;
             }
             #forum-screen .event-title {
                 font-family: var(--fm-font-serif); font-size: 3.5rem; line-height: 0.9;
                 font-style: italic; text-shadow: 2px 2px 10px rgba(0,0,0,0.8); mix-blend-mode: exclusion;
+                /* 🌟 修复：强制纯英文长词换行 */
+                word-wrap: break-word; overflow-wrap: break-word; word-break: break-all; hyphens: auto;
             }
             #forum-screen .event-desc {
                 background: rgba(0,0,0,0.5); backdrop-filter: blur(5px);
                 padding: 12px; border: 1px solid var(--fm-line); border-radius: 8px;
-                font-size: 0.9rem; font-weight: 300; max-width: 80%; margin-top: 10px;
+                font-size: 0.9rem; font-weight: 300; max-width: 90%; margin-top: 10px;
+                line-height: 1.6;
+                /* 🌟 修复：限制最大高度，超长文本可内部滑动，防止卡片被无限撑高 */
+                max-height: 180px; overflow-y: auto; scrollbar-width: none;
             }
+            #forum-screen .event-desc::-webkit-scrollbar { display: none; }
             
             #forum-screen .floating-bubble {
                 position: absolute; padding: 8px 12px; font-size: 0.8rem; font-weight: 700;
                 box-shadow: 0 4px 20px rgba(0,0,0,0.5); z-index: 5; display: flex; align-items: center; gap: 6px;
             }
             #forum-screen .bubble-1 {
-                bottom: 65px; right: 15px; transform: rotate(-5deg);
+                /* 🌟 修复：悬浮气泡定位调整，永远飘在按钮上方防遮挡 */
+                bottom: 60px; right: 15px; transform: rotate(-5deg);
                 background: var(--fm-fg); color: var(--fm-bg); border-radius: 16px 16px 16px 0;
             }
             #forum-screen .bubble-2 {
                 top: 20px; right: 20px; transform: rotate(3deg);
                 background: var(--fm-surface-light); color: var(--fm-fg); border: 1px solid var(--fm-line); border-radius: 16px 16px 0 16px;
             }
-            #forum-screen .inner-interaction { display: flex; gap: 16px; margin-top: auto; position: relative; z-index: 10; }
+            #forum-screen .inner-interaction { 
+                display: flex; gap: 16px; margin-top: 30px; position: relative; z-index: 10; 
+            }
 
             /* Square Card */
             #forum-screen .square-visual { padding: 20px; }
@@ -705,7 +723,7 @@ const ForumModule = (() => {
                     <img src="${eventImgUrl}" class="event-bg">
                     <div class="event-overlay">
                         <div class="meta-data">[WORLD_EVENT] // TIME: ${_formatDate(post.timestamp)}</div>
-                        <div style="margin-bottom: 30px;">
+                        <div style="flex: 1; display: flex; flex-direction: column; justify-content: center; margin: 20px 0;">
                             <div class="event-title">${_escHtml(post.title)}</div>
                             <div class="event-desc">${_escHtml(post.desc)}</div>
                         </div>
