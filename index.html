@@ -3737,7 +3737,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
 
       </div>
     </div>
-    <!-- 🌟 新增：Agent 引擎设置页 -->
+  <!-- 🌟 新增：Agent 引擎设置页 (全自动保存高级版) -->
     <div id="agent-page" class="settings-page">
       <div class="page-watermark">Ag</div>
       <div class="nav-bar">
@@ -3754,7 +3754,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
               <div class="toggle-row-desc">允许角色在后台刷动态、评论及主动发帖</div>
             </div>
             <label class="toggle-switch">
-              <input type="checkbox" id="ag-toggle-enable" checked onchange="AgentModule.toggleEnable(this.checked)">
+              <input type="checkbox" id="ag-toggle-enable" onchange="AgentModule.toggleEnable(this.checked)">
               <div class="toggle-track"></div>
               <div class="toggle-thumb"></div>
             </label>
@@ -3767,7 +3767,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
             <label class="label-text">拟真回复延迟 (秒) / Reaction Delay</label>
             <div style="font-size:0.65rem;color:var(--s-text-secondary);margin-bottom:8px;">模拟真人看到动态后的阅读与打字时间</div>
             <div class="slider-row">
-              <input type="range" id="ag-delay-slider" class="styled-slider" min="1" max="60" step="1" value="10" oninput="document.getElementById('ag-delay-val').textContent=this.value+'s'">
+              <input type="range" id="ag-delay-slider" class="styled-slider" min="1" max="60" step="1" value="10" oninput="document.getElementById('ag-delay-val').textContent=this.value+'s'" onchange="AgentModule.saveSettings()">
               <span class="slider-val" id="ag-delay-val">10s</span>
             </div>
           </div>
@@ -3781,7 +3781,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
               <div class="toggle-row-desc">允许角色在无人干预时自发分享生活</div>
             </div>
             <label class="toggle-switch">
-              <input type="checkbox" id="ag-toggle-proactive" checked>
+              <input type="checkbox" id="ag-toggle-proactive" onchange="AgentModule.saveSettings()">
               <div class="toggle-track"></div>
               <div class="toggle-thumb"></div>
             </label>
@@ -3790,15 +3790,13 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
             <label class="label-text">活跃频率判断 (小时) / Frequency</label>
             <div style="font-size:0.65rem;color:var(--s-text-secondary);margin-bottom:8px;">每隔多久让系统进行一次后台发帖判定</div>
             <div class="slider-row">
-              <input type="range" id="ag-interval-slider" class="styled-slider" min="1" max="24" step="1" value="4" oninput="document.getElementById('ag-interval-val').textContent=this.value+'h'">
+              <input type="range" id="ag-interval-slider" class="styled-slider" min="1" max="24" step="1" value="4" oninput="document.getElementById('ag-interval-val').textContent=this.value+'h'" onchange="AgentModule.saveSettings()">
               <span class="slider-val" id="ag-interval-val">4h</span>
             </div>
           </div>
-         <!-- 🌟 新增：方便测试的摇人按钮 -->
          <button class="btn-outline" style="margin-top:16px; border-style:dashed;" onclick="AgentModule.forceProactivePost()">🎲[Debug] 强制唤醒角色发帖</button>
         </div>
 
-        <!-- 🌟 新增：自动写日记 -->
         <div class="form-section">
           <div class="section-title">私密记录 / Private Diary</div>
           <div class="toggle-row" style="border-bottom:none; padding-bottom:8px;">
@@ -3807,7 +3805,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
               <div class="toggle-row-desc">积攒一定对话后，角色会在后台偷偷写下心事</div>
             </div>
             <label class="toggle-switch">
-              <input type="checkbox" id="ag-toggle-diary" checked>
+              <input type="checkbox" id="ag-toggle-diary" onchange="AgentModule.saveSettings()">
               <div class="toggle-track"></div>
               <div class="toggle-thumb"></div>
             </label>
@@ -3815,15 +3813,35 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
           <div class="input-wrapper">
             <label class="label-text">日记触发间隔 (小时) / Interval</label>
             <div class="slider-row">
-              <input type="range" id="ag-diary-interval-slider" class="styled-slider" min="1" max="72" step="1" value="24" oninput="document.getElementById('ag-diary-interval-val').textContent=this.value+'h'">
+              <input type="range" id="ag-diary-interval-slider" class="styled-slider" min="1" max="72" step="1" value="24" oninput="document.getElementById('ag-diary-interval-val').textContent=this.value+'h'" onchange="AgentModule.saveSettings()">
               <span class="slider-val" id="ag-diary-interval-val">24h</span>
             </div>
           </div>
         </div>
-
-        <div style="margin-top:40px;">
-          <button class="btn-primary" onclick="AgentModule.saveSettings()">保存引擎配置</button>
-        </div>        
+        
+        <div class="form-section">
+          <div class="section-title">论坛生态 / Forum Ecosystem</div>
+          <div class="toggle-row" style="border-bottom:none; padding-bottom:8px;">
+            <div class="toggle-row-info">
+              <div class="toggle-row-label">角色自动发帖</div>
+              <div class="toggle-row-desc">允许角色在后台自主于论坛更新动态</div>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="ag-toggle-forum" onchange="AgentModule.saveSettings()">
+              <div class="toggle-track"></div>
+              <div class="toggle-thumb"></div>
+            </label>
+          </div>
+          <div class="input-wrapper">
+            <label class="label-text">发帖冷却时间 (小时) / Interval</label>
+            <div class="slider-row">
+              <input type="range" id="ag-forum-interval-slider" class="styled-slider" min="1" max="72" step="1" value="12" oninput="document.getElementById('ag-forum-interval-val').textContent=this.value+'h'" onchange="AgentModule.saveSettings()">
+              <span class="slider-val" id="ag-forum-interval-val">12h</span>
+            </div>
+          </div>
+          <button class="btn-outline" style="margin-top:8px; border-style:dashed;" onclick="AgentModule.forceForumPost()">🌐[Debug] 强制角色去论坛发帖</button>
+        </div>
+        
       </div>
     </div>
   </div><!-- #settings-screen -->
@@ -9343,6 +9361,14 @@ function handleClick() {
         const btn = document.querySelector('[data-ch-target="ch-view-sparkle"]');
         if (btn) {
           if (typeof ChatModule !== 'undefined') ChatModule.switchView(btn);
+          }
+       } else if (_currentData.type === 'forum') {
+        // 🌟 新增：如果是论坛通知
+        if (typeof DiaryModule !== 'undefined') DiaryModule.close();
+        Router.go('forum');
+        // 如果论坛模块暴露了分类切换方法，可以自动切过去
+        if (typeof ForumModule !== 'undefined' && ForumModule.switchTo) {
+            ForumModule.switchTo(_currentData.forumType || 'square');
         }
       } else {
         // 如果是普通的聊天消息，弹出半屏快速回复
@@ -16323,8 +16349,10 @@ const AgentModule = (() => {
     reactionDelay: 10,
     proactiveEnabled: true,
     proactiveInterval: 4,
-    diaryEnabled: true,       // 👈 新增日记开关
-    diaryInterval: 24         // 👈 新增日记间隔（小时）
+    diaryEnabled: true,      
+    diaryInterval: 24,
+    forumEnabled: true,
+    forumInterval: 12
   };
   
   // 🌟 新增：后台静默识别图片内容
@@ -16398,12 +16426,11 @@ const AgentModule = (() => {
     _tickTimer = setInterval(_tick, 3000);
   }
 
-  async function _tick() {
+ async function _tick() {
     const now = Date.now();
     
     // ==========================================
     // ⚡️ 1. 轻量级快速心跳 (每 3 秒执行)
-    // 纯内存数组过滤，毫无性能压力。处理需要“秒回”的社交互动
     // ==========================================
     const readyTasks = _taskQueue.filter(t => t.executeAt <= now);
     _taskQueue = _taskQueue.filter(t => t.executeAt > now);
@@ -16420,18 +16447,45 @@ const AgentModule = (() => {
 
     // ==========================================
     // 🐢 2. 重度数据库扫描心跳 (每 3 分钟才放行一次)
-    // 大幅拯救手机性能、发热和电池续航！
     // ==========================================
     if (now - _lastSlowCheckTime < 3 * 60 * 1000) return; // 拦截：不足3分钟直接退下
     _lastSlowCheckTime = now; // 记录本次扫描时间
 
-    // 🌟 检查是否该让角色主动发帖了
+    // 🌟 检查角色主动发动态 (广场)
     if (_cfg.enabled && _cfg.proactiveEnabled) {
-      const intervalMs = _cfg.proactiveInterval * 60 * 60 * 1000;
-      if (now - _lastProactiveTime > intervalMs) {
-        console.log(`[Agent] ⏰ 距离上次主动发帖已超过 ${_cfg.proactiveInterval} 小时，触发摇人机制！`);
-        await forceProactivePost();
+      if (_lastProactiveTime === 0) {
+         // 【修复】：初次运行不发帖，仅打上当前时间戳作为起点
+         _lastProactiveTime = now;
+         await DB.settings.set(KEY_LAST_POST, now);
+      } else {
+         const intervalMs = _cfg.proactiveInterval * 60 * 60 * 1000;
+         if (now - _lastProactiveTime > intervalMs) {
+            console.log(`[Agent] ⏰ 距离上次主动发动态已超 ${_cfg.proactiveInterval} 小时，触发摇人！`);
+            await forceProactivePost();
+         }
       }
+    }
+    
+    // 🌟 检查论坛自治发帖引擎 (个人独立冷却)
+    if (_cfg.enabled && _cfg.forumEnabled) {
+       const chars = await DB.characters.getAll().catch(()=>[]);
+       for (const char of chars) {
+           const lastForumTs = await DB.settings.get(`last-forum-post-${char.id}`);
+           if (!lastForumTs) {
+               // 【修复】：初次运行不发帖，给每个角色打上当前时间+随机错峰的初始烙印
+               const initialOffset = Math.random() * _cfg.forumInterval * 60 * 60 * 1000;
+               await DB.settings.set(`last-forum-post-${char.id}`, now + initialOffset);
+               continue;
+           }
+           
+           const intervalMs = _cfg.forumInterval * 60 * 60 * 1000;
+           if (now - lastForumTs > intervalMs) {
+               const randomOffset = Math.random() * 2 * 60 * 60 * 1000;
+               await DB.settings.set(`last-forum-post-${char.id}`, now + randomOffset);
+               console.log(`[Agent] 🌐 角色【${char.name}】论坛发帖冷却完毕，准备发帖！`);
+               _triggerForumPost(char);
+           }
+       }
     }
 
     // 🌟 检查自动日记引擎
@@ -16439,36 +16493,37 @@ const AgentModule = (() => {
        if (typeof DiaryModule !== 'undefined') {
            const chars = await DB.characters.getAll().catch(()=>[]);
            for (const char of chars) {
-               // 获取最后一次写日记的时间
                const diaries = await DB.settings.get(`diaries-${char.id}`).catch(()=>[]);
-               const lastDiaryTs = diaries && diaries.length > 0 ? diaries[0].timestamp : 0;
+               let lastDiaryTs = diaries && diaries.length > 0 ? diaries[0].timestamp : 0;
                
-              const intervalMs = _cfg.diaryInterval * 60 * 60 * 1000;
-               // 如果超过了设定的时间间隔
+               if (lastDiaryTs === 0) {
+                   // 【修复】：初次运行不写日记，打上当前时间戳作为起点
+                   const initKey = `diary-init-${char.id}`;
+                   const hasInit = await DB.settings.get(initKey);
+                   if (!hasInit) {
+                       await DB.settings.set(initKey, now);
+                       continue;
+                   } else {
+                       lastDiaryTs = hasInit;
+                   }
+               }
+               
+               const intervalMs = _cfg.diaryInterval * 60 * 60 * 1000;
                if (now - lastDiaryTs > intervalMs) {
-                   // 加入失败冷却机制（如果刚才失败了，这5分钟内也不会再试）
                    const lastAttempt = _lastDiaryAttempt[char.id] || 0;
                    if (now - lastAttempt < 5 * 60 * 1000) continue;
 
-                   // 🌟 抓取近期消息（范围拉大到100条，防止单轮发送过多气泡被截断）
                    const msgs = await DB.messages.getPage(String(char.id), 0, 100).catch(()=>[]);
-                   // 过滤出上次写日记之后的真实聊天记录
                    const recentMsgs = msgs.filter(m => m.timestamp > lastDiaryTs && (m.role === 'user' || m.role === 'assistant'));
                    
-                   // 🌟 精确计算“对话轮数” (User 发言后 AI 回复，记为 1 轮交互)
                    let rounds = 0;
                    for (let i = 1; i < recentMsgs.length; i++) {
-                       if (recentMsgs[i-1].role === 'user' && recentMsgs[i].role === 'assistant') {
-                           rounds++;
-                       }
+                       if (recentMsgs[i-1].role === 'user' && recentMsgs[i].role === 'assistant') rounds++;
                    }
 
-                   // 🎯 设定门槛：至少完成 5 轮有来有往的交流，才准写日记
                    if (rounds >= 5) {
-                       _lastDiaryAttempt[char.id] = now; // 记录尝试时间
-                       console.log(`[Agent] 📓 角色【${char.name}】完成了 ${rounds} 轮深度交流，日记引擎触发`);
-                       
-                       // 调用写日记接口，传入 true 表示是后台自动触发的
+                       _lastDiaryAttempt[char.id] = now; 
+                       console.log(`[Agent] 📓 角色【${char.name}】完成了 ${rounds} 轮交流，日记触发`);
                        await DiaryModule.generateDiary(String(char.id), true);
                    }
                }
@@ -17084,6 +17139,142 @@ ${historyText || '（无）'}
       console.error('[Agent] 生成离线呼叫失败', e);
     }
   }
+  
+
+// 🌟 让角色自主决定发论坛的 Creator Brain (增强混排记忆 & 面具版 & 支持强制带图)
+  // 👇 接收强制带图的指令
+  async function _triggerForumPost(char, forceImage = false) {
+    try {
+      const activeApi = await DB.api.getActive().catch(()=>null);
+      if (!activeApi) return;
+
+      const charId = String(char.id);
+      const binding = await DB.bindings.get(charId).catch(()=>null);
+      const personaId = binding ? binding.personaId : (typeof PersonaModule !== 'undefined' ? PersonaModule.getActiveId() : null);
+      const allPersonas = typeof PersonaModule !== 'undefined' ? PersonaModule.getAll() :[];
+      const userPersona = allPersonas.find(p => String(p.id) === String(personaId)) || allPersonas[0] || { name: '用户', bio: '', backstory: '' };
+      const userName = userPersona.name;
+      const userBg = `${userPersona.bio ? '简介：'+userPersona.bio : ''} ${userPersona.backstory ? '背景：'+userPersona.backstory : ''}`;
+
+      let crossWindowMsgs =[];
+      const privateMsgs = await DB.messages.getPage(charId, 0, 40).catch(()=>[]);
+      crossWindowMsgs.push(...privateMsgs.map(m => ({ ...m, _sourceName: '私聊' })));
+
+      if (typeof GroupChatModule !== 'undefined') {
+        const allGCs = GroupChatModule.getAll();
+        for (const gc of allGCs) {
+          if (gc.members.includes(charId)) {
+            const gcMsgs = await DB.messages.getPage(gc.id, 0, 30).catch(()=>[]);
+            crossWindowMsgs.push(...gcMsgs.map(m => ({ ...m, _sourceName: `群聊:${gc.name}` })));
+          }
+        }
+      }
+
+      crossWindowMsgs.sort((a, b) => a.timestamp - b.timestamp);
+      const recentMixedMsgs = crossWindowMsgs.slice(-50);
+      const allChars = await DB.characters.getAll().catch(()=>[]);
+      const charNameMap = {};
+      allChars.forEach(c => charNameMap[String(c.id)] = c.name);
+
+      const historyStr = recentMixedMsgs.filter(m => m.role === 'user' || m.role === 'assistant').map(m => {
+        let senderName = 'Unknown';
+        if (m.role === 'user') senderName = userName;
+        else senderName = m.senderId ? (charNameMap[String(m.senderId)] || '角色') : char.name;
+        let txt = '';
+        if (m.recalled) txt = m.role === 'user' ? m.content : '[此消息已被撤回]';
+        else txt = m.parts?.map(p => p.content || p.text || '').join('') || m.content;
+        return `[${m._sourceName}] ${senderName}: ${txt}`;
+      }).join('\n');
+
+      const now = new Date();
+      const timeStr = `${now.getMonth()+1}月${now.getDate()}日 ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+
+      // 👇 核心修改：动态替换带图指令
+      const imgInstruction = forceImage
+        ? `【加密视觉 / 假图功能（本次强制测试）】：\n必须带图！请强制将 "hasImage" 设为 true，并在 "imageDesc" 中用极其生动、有电影感的中文描写你要配的这张照片的画面内容（例如：“一张失焦的夜景照片，雨滴糊在车窗上，红色的尾灯拉出长长的流光”）。`
+        : `【加密视觉 / 假图功能】：\n如果你觉得这条帖子配上一张照片会更有氛围，请开启 "hasImage": true，并在 "imageDesc" 中用极其优美或生动的中文，描写这张照片的画面感。这会在前端生成一个需要用户点击解密的加密图片组件。`;
+
+      const prompt = `[系统自主任务：角色自发论坛发帖]
+你现在扮演【${char.name}】。
+你的核心人设：${char.persona}
+当前时间：${timeStr}
+
+【关于你的交互对象（用户）】：
+名字：${userName}
+${userBg ? `关于 ta 的背景：${userBg}` : '（无特别背景）'}
+
+【你们最近的跨维度聊天记录（含私聊与群聊）】：
+${historyStr || '（暂无聊天记录）'}
+
+【任务要求】：
+你现在正在浏览一个名叫 Echoes 的暗网高奢论坛。请根据你的人设、当前的时间、你与 ${userName} 或其他人在上述群聊/私聊中发生的故事，自发地发一篇帖子。
+
+你可以自主决定发在哪个板块：
+1. "square" (角色广场)：实名发布。适合发日常、心情、公开喊话。
+2. "treehole" (匿名树洞)：加密匿名发布，别人不知道是你。适合发泄阴暗情绪、吐槽、爆料、倾诉不敢当面对 ${userName} 说的话。
+
+${imgInstruction}
+
+【输出格式】：
+严格且只返回一个 JSON，不要任何其他废话：
+{
+  "type": "square", // 或者 "treehole"
+  "content": "帖子的纯文本正文内容...",
+  "hasImage": true, // 是否带图
+  "imageDesc": "如果带图，用生动优美的中文描写画面内容；不带图则留空"
+}`;
+
+      // （以下代码不变，正常发请求、解析和入库）
+      console.log(`[Agent-Forum] 🧠 开始推演【${char.name}】的论坛发帖... (携带 50 条跨维度记忆 & 面具信息, 强制带图: ${forceImage})`);
+      const response = await ApiHelper.chatCompletion(activeApi,[{ role: 'system', content: prompt }]);
+      const cleaned = response.replace(/```json|```/g, '').trim();
+      const start = cleaned.indexOf('{');
+      const end = cleaned.lastIndexOf('}');
+      if (start === -1 || end === -1) throw new Error('发帖 JSON 解析失败');
+      const result = JSON.parse(cleaned.substring(start, end + 1));
+
+      // ── 4. 组装最终帖子对象 ──
+      const isAnon = result.type === 'treehole';
+      const post = {
+          id: 'fp_' + Date.now(),
+          type: isAnon ? 'treehole' : 'square',
+          timestamp: Date.now(),
+          likes: [],
+          comments:[],
+          author: isAnon ? 'OBS_0x' : char.name,
+          avatarKey: isAnon ? '' : `char-avatar-${char.id}`,
+          content: result.content,
+          hasImage: !!result.hasImage,
+          imageDesc: result.imageDesc || ''
+      };
+
+      // 入库
+      await DB.forum.put(post);
+      console.log(`[Agent-Forum] 📡 【${char.name}】发帖成功:`, post);
+
+      // 触发连环摇人来评论！(直接调用刚才暴漏的 evaluateNewPost)
+      if (typeof ForumModule !== 'undefined' && ForumModule.evaluateNewPost) {
+          ForumModule.evaluateNewPost(post.id);
+      }
+
+      // 弹窗通知
+      const avatar = await Assets.getUrl(`char-avatar-${char.id}`).catch(()=>'');
+      const bannerName = isAnon ? 'CLASSIFIED SIGNAL' : char.name;
+      const bannerMsg = isAnon ? '暗网树洞拦截到一条加密信号' : '在广场发布了一条新动态';
+      
+      NotificationModule.show({
+        charId: char.id,
+        name: bannerName,
+        msg: bannerMsg,
+        avatar: isAnon ? '' : avatar,
+        type: 'forum',
+        forumType: isAnon ? 'treehole' : 'square'
+      });
+
+    } catch (e) {
+      console.error('[Agent-Forum] 角色发帖失败', e);
+    }
+  }
 
  // ── 设置界面相关 ──
   function renderSettings() {
@@ -17109,6 +17300,13 @@ ${historyText || '（无）'}
       elInterval.value = _cfg.proactiveInterval;
       document.getElementById('ag-interval-val').textContent = _cfg.proactiveInterval + 'h';
     }
+  const elForum = document.getElementById('ag-toggle-forum');
+    const elForumInt = document.getElementById('ag-forum-interval-slider');
+    if (elForum) elForum.checked = _cfg.forumEnabled;
+    if (elForumInt) {
+      elForumInt.value = _cfg.forumInterval;
+      document.getElementById('ag-forum-interval-val').textContent = _cfg.forumInterval + 'h';
+    }
   }
 
   async function toggleEnable(val) {
@@ -17124,12 +17322,34 @@ ${historyText || '（无）'}
     _cfg.proactiveInterval = parseInt(document.getElementById('ag-interval-slider').value, 10);
     _cfg.diaryEnabled = document.getElementById('ag-toggle-diary').checked;
     _cfg.diaryInterval = parseInt(document.getElementById('ag-diary-interval-slider').value, 10);
+    _cfg.forumEnabled = document.getElementById('ag-toggle-forum').checked;
+    _cfg.forumInterval = parseInt(document.getElementById('ag-forum-interval-slider').value, 10);
     
     await DB.settings.set(KEY_CFG, _cfg);
     Toast.show('Agent 引擎配置已更新');
   }
 
- return { init, renderSettings, toggleEnable, saveSettings, forceProactivePost };
+// 🌟[Debug] 强制随机抓一个角色去论坛发帖
+  async function forceForumPost() {
+    try {
+      const activeApi = await DB.api.getActive().catch(()=>null);
+      if (!activeApi) { Toast.show('请先配置并激活 API'); return; }
+      const chars = await DB.characters.getAll().catch(()=>[]);
+      if (chars.length === 0) { Toast.show('没有可用的角色档案'); return; }
+      
+      const char = chars[Math.floor(Math.random() * chars.length)];
+      Toast.show(`🎲 正在指派【${char.name}】去暗网论坛发帖...`);
+      
+      // 👇 修改这里：传一个 true 进去，代表强制带图！
+      await _triggerForumPost(char, true);
+      
+    } catch(e) {
+      console.error('[Agent-Debug] 强制发帖失败', e);
+      Toast.show('强制发帖执行失败');
+    }
+  }
+
+  return { init, renderSettings, toggleEnable, saveSettings, forceProactivePost, forceForumPost };
 })();
 
 // ============================================================

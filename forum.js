@@ -330,6 +330,26 @@ const ForumModule = (() => {
                 background: rgba(255, 77, 79, 0.1); border: 1px solid #ff4d4f; color: #ff4d4f;
             }
             #forum-screen .fm-btn-danger:active { background: #ff4d4f; color: #fff; }
+            /* 假装是图片的加密视觉组件 */
+            #forum-screen .fm-fake-img-wrap {
+                position: relative; width: 100%; height: 160px; background: #121212;
+                border: 1px dashed rgba(255,255,255,0.2); border-radius: 8px; margin: 12px 0;
+                cursor: pointer; overflow: hidden; display: flex; align-items: center; justify-content: center;
+                transition: border-color 0.3s;
+            }
+            #forum-screen .fm-fake-img-wrap:active { border-color: var(--fm-fg); }
+            #forum-screen .fm-fake-img-cover {
+                position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+                color: var(--fm-fg-muted); transition: opacity 0.4s ease; z-index: 2; background: #121212;
+            }
+            #forum-screen .fm-fake-img-cover i { font-size: 2rem; margin-bottom: 8px; }
+            #forum-screen .fm-fake-img-cover span { font-family: var(--fm-font-mono); font-size: 0.65rem; text-align: center; letter-spacing: 2px; }
+            #forum-screen .fm-fake-img-desc {
+                opacity: 0; padding: 20px; font-size: 0.85rem; color: #d0d0d0; font-style: italic; line-height: 1.6;
+                text-align: center; transform: translateY(10px); transition: all 0.4s ease; z-index: 1;
+            }
+            #forum-screen .fm-fake-img-wrap.revealed .fm-fake-img-cover { opacity: 0; pointer-events: none; }
+            #forum-screen .fm-fake-img-wrap.revealed .fm-fake-img-desc { opacity: 1; transform: translateY(0); }
         `;
         document.head.appendChild(style);
 
@@ -647,6 +667,19 @@ const ForumModule = (() => {
 
     function renderPostHTML(post, avatarUrl, eventImgUrl) {
         let visualHTML = '', interactionHTML = ''; 
+        // 🌟 新增：在这里生成“加密视觉”组件的HTML
+        let fakeImgHTML = '';
+        if (post.hasImage && post.imageDesc) {
+            // 使用我们刚才在 CSS 里定义好的样式
+            fakeImgHTML = `
+            <div class="fm-fake-img-wrap" onclick="this.classList.toggle('revealed')">
+               <div class="fm-fake-img-cover">
+                   <i class="ph-thin ph-lock-key"></i>
+                   <span>[ ENCRYPTED VISUAL ]<br>TAP TO DECRYPT</span>
+               </div>
+               <div class="fm-fake-img-desc">${_escHtml(post.imageDesc)}</div>
+            </div>`;
+        }
         if (post.type === 'event') {
             visualHTML = `
                 <div class="event-visual">
@@ -666,11 +699,13 @@ const ForumModule = (() => {
                     ${post.comments.length > 0 ? `<div class="floating-bubble bubble-1"><img src="${post.comments[0]._avatarUrl}" style="width:18px;height:18px;border-radius:50%; object-fit:cover; margin-right:4px;"><span style="color:${_getMorandiColor(post.comments[0].author)}">${_escHtml(post.comments[0].author)}</span> 留下了记录</div>` : ''}
                 </div>
             `;
-        } else if (post.type === 'square') {
-            visualHTML = `<div class="square-visual"><div class="sq-header"><div class="sq-user"><img src="${avatarUrl}" class="sq-avatar"><div><div class="sq-name">${_escHtml(post.author)}</div><div class="sq-id">@${_escHtml(post.author.toLowerCase().replace(/\\s/g,'_'))}</div></div></div><div class="meta-data" style="color:var(--fm-fg-muted);"><i class="ph ph-wifi-high"></i> ONLINE</div></div><div class="sq-content">${_escHtml(post.content)}</div><div class="sq-panel"><div class="meta-data" style="writing-mode: vertical-rl; transform: rotate(180deg);">FREQ</div><div class="waveform"></div><div class="sq-toggle"></div></div></div>`;
+        }  else if (post.type === 'square') {
+            // 🌟 修改：在正文(sq-content)和音频面板(sq-panel)之间，插入 fakeImgHTML
+            visualHTML = `<div class="square-visual"><div class="sq-header"><div class="sq-user"><img src="${avatarUrl}" class="sq-avatar"><div><div class="sq-name">${_escHtml(post.author)}</div><div class="sq-id">@${_escHtml(post.author.toLowerCase().replace(/\\s/g,'_'))}</div></div></div><div class="meta-data" style="color:var(--fm-fg-muted);"><i class="ph ph-wifi-high"></i> ONLINE</div></div><div class="sq-content">${_escHtml(post.content)}</div>${fakeImgHTML}<div class="sq-panel"><div class="meta-data" style="writing-mode: vertical-rl; transform: rotate(180deg);">FREQ</div><div class="waveform"></div><div class="sq-toggle"></div></div></div>`;
             interactionHTML = `<div class="interaction-bar"><div class="int-btn" onclick="ForumModule.toggleComments('${post.id}')" id="fm-btn-msg-${post.id}"><i class="ph ph-chat-centered-text"></i> ${post.comments.length}</div><div class="int-btn" onclick="ForumModule.deletePost('${post.id}')"><i class="ph-thin ph-trash"></i></div></div>`;
         } else if (post.type === 'treehole') {
-            visualHTML = `<div class="treehole-visual"><div class="th-badge">CLASSIFIED</div><div class="meta-data" style="margin-bottom: 12px; border-bottom:1px solid var(--fm-line); padding-bottom:8px;"><i class="ph ph-lock-key"></i> ENCRYPTED_LOG // DECRYPT_ON_HOVER</div><div class="th-content">${_escHtml(post.content)}</div></div>`;
+            // 🌟 修改：在正文(th-content)之后，插入 fakeImgHTML
+            visualHTML = `<div class="treehole-visual"><div class="th-badge">CLASSIFIED</div><div class="meta-data" style="margin-bottom: 12px; border-bottom:1px solid var(--fm-line); padding-bottom:8px;"><i class="ph ph-lock-key"></i> ENCRYPTED_LOG // DECRYPT_ON_HOVER</div><div class="th-content">${_escHtml(post.content)}</div>${fakeImgHTML}</div>`;
             interactionHTML = `<div class="interaction-bar"><div class="int-btn" onclick="ForumModule.toggleComments('${post.id}')" id="fm-btn-msg-${post.id}"><i class="ph ph-chat-centered-text"></i> ${post.comments.length}</div><div class="int-btn" onclick="ForumModule.deletePost('${post.id}')"><i class="ph-thin ph-trash"></i></div></div>`;
         }
         return `<div class="post-card">${visualHTML}${interactionHTML}${renderCommentsHTML(post)}</div>`;
@@ -1152,5 +1187,15 @@ ${charProfiles || '无'}
     function _escHtml(str) { return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/\n/g, '<br>'); }
     function _formatDate(ts) { const d = new Date(ts), pad = n => String(n).padStart(2, '0'); return `${d.getFullYear()}.${pad(d.getMonth()+1)}.${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`; }
 
-    return { init, onEnter, filterFeed, toggleComments, addComment, prepareReply, openPanel, closePanel, switchComposeType, publishPost, deletePost, cancelDelete, changeForumAvatar, updateForumName, onEventImgSelected, removeEventImg,loadMoreComments };
+    // 增加一个跳转分类的方法
+    function switchTo(type) {
+        const pills = document.querySelectorAll('#forum-screen .filter-pill');
+        pills.forEach(p => p.classList.remove('active'));
+        const target = Array.from(pills).find(p => p.innerText.includes(type === 'treehole' ? '树洞' : '广场'));
+        if (target) target.classList.add('active');
+        _filterAndRender(type, false);
+    }
+
+    // 更新 return 暴露
+    return { init, onEnter, filterFeed, switchTo, evaluateNewPost, toggleComments, addComment, prepareReply, openPanel, closePanel, switchComposeType, publishPost, deletePost, cancelDelete, changeForumAvatar, updateForumName, onEventImgSelected, removeEventImg,loadMoreComments };
 })();
