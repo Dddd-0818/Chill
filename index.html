@@ -3839,9 +3839,12 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
               <span class="slider-val" id="ag-forum-interval-val">12h</span>
             </div>
           </div>
-          <button class="btn-outline" style="margin-top:8px; border-style:dashed;" onclick="AgentModule.forceForumPost()">🌐[Debug] 强制角色去论坛发帖</button>
-        </div>
-        
+         <div style="display:flex; gap:8px; margin-top:8px;">
+            <button class="btn-outline" style="margin-bottom:0; border-style:dashed; flex:1; padding:12px 0; font-size:0.7rem;" onclick="AgentModule.forceForumPost('square')">测广场</button>
+            <button class="btn-outline" style="margin-bottom:0; border-style:dashed; flex:1; padding:12px 0; font-size:0.7rem;" onclick="AgentModule.forceForumPost('treehole')">测树洞</button>
+            <button class="btn-outline" style="margin-bottom:0; border-style:dashed; flex:1; padding:12px 0; font-size:0.7rem; color:#D32F2F; border-color:rgba(211,47,47,0.4);" onclick="AgentModule.forceForumPost('event')">测事件</button>
+          </div>
+       </div>
       </div>
     </div>
   </div><!-- #settings-screen -->
@@ -17140,13 +17143,19 @@ ${historyText || '（无）'}
     }
   }
   
-
-// 🌟 让角色自主决定发论坛的 Creator Brain (增强混排记忆 & 面具版 & 支持强制带图)
-  // 👇 接收强制带图的指令
-  async function _triggerForumPost(char, forceImage = false) {
+// 🌟 让角色自主决定发论坛的 Creator Brain (支持强制指定板块类型)
+  async function _triggerForumPost(char, forceImage = false, forceType = null) {
     try {
       const activeApi = await DB.api.getActive().catch(()=>null);
       if (!activeApi) return;
+
+      // 🖼️ 内置高奢背景图片池 (给世界事件专用)
+      const EVENT_IMG_URLS =[
+          'https://images.unsplash.com/photo-1518005020951-eccb494ad742?w=800&q=80',
+          'https://images.unsplash.com/photo-1478760329108-5c3ed9d495a0?w=800&q=80',
+          'https://images.unsplash.com/photo-1504333638930-c8787321efa0?w=800&q=80',
+          'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800&q=80'
+      ];
 
       const charId = String(char.id);
       const binding = await DB.bindings.get(charId).catch(()=>null);
@@ -17189,10 +17198,22 @@ ${historyText || '（无）'}
       const now = new Date();
       const timeStr = `${now.getMonth()+1}月${now.getDate()}日 ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
 
-      // 👇 核心修改：动态替换带图指令
+      let worldViewStr = '';
+      if (typeof ForumModule !== 'undefined' && ForumModule.getWorldViewContext) {
+          worldViewStr = await ForumModule.getWorldViewContext();
+      }
+
       const imgInstruction = forceImage
-        ? `【加密视觉 / 假图功能（本次强制测试）】：\n必须带图！请强制将 "hasImage" 设为 true，并在 "imageDesc" 中用极其生动、有电影感的中文描写你要配的这张照片的画面内容（例如：“一张失焦的夜景照片，雨滴糊在车窗上，红色的尾灯拉出长长的流光”）。`
-        : `【加密视觉 / 假图功能】：\n如果你觉得这条帖子配上一张照片会更有氛围，请开启 "hasImage": true，并在 "imageDesc" 中用极其优美或生动的中文，描写这张照片的画面感。这会在前端生成一个需要用户点击解密的加密图片组件。`;
+        ? `【加密视觉 / 假图功能（本次强制测试）】：\n如果是广场或树洞，必须带图！请强制将 "hasImage" 设为 true，并在 "imageDesc" 中描写画面内容。注意：如果是世界事件(event)，系统自带全景配图，无需开启 hasImage。`
+        : `【加密视觉 / 假图功能】：\n如果是广场或树洞，并且你觉得配上一张照片会更有氛围，请开启 "hasImage": true，并在 "imageDesc" 中描写画面内容。注意：如果是世界事件(event)，系统自带全景配图，无需开启 hasImage。`;
+
+      // 👇 这里是精髓：如果有 forceType，直接剥夺 AI 的选择权！
+      const typeInstruction = forceType
+        ? `【⚠️ 最高强制测试指令】：\n本次发帖必须且只能发在 "${forceType}" 板块！请务必在 JSON 的 type 字段返回 "${forceType}"，并严格遵照该板块的规则撰写内容。`
+        : `你可以自主决定发在哪个板块：
+1. "square" (角色广场)：实名发布。适合发日常、心情、公开喊话。
+2. "treehole" (匿名树洞)：加密匿名发布，别人不知道是你。适合发泄阴暗情绪、吐槽、爆料。
+3. "event" (世界事件)：作为全网广播的客观大事件、新闻或异象。必须符合【当前世界观与背景设定】，文风必须是客观陈述或史诗感，绝对不能是私人的闲聊情绪！`;
 
       const prompt = `[系统自主任务：角色自发论坛发帖]
 你现在扮演【${char.name}】。
@@ -17203,72 +17224,91 @@ ${historyText || '（无）'}
 名字：${userName}
 ${userBg ? `关于 ta 的背景：${userBg}` : '（无特别背景）'}
 
+${worldViewStr ? `【当前世界观与背景设定（非常重要，发世界事件时必须遵循）】：\n${worldViewStr}\n` : ''}
 【你们最近的跨维度聊天记录（含私聊与群聊）】：
 ${historyStr || '（暂无聊天记录）'}
 
 【任务要求】：
-你现在正在浏览一个名叫 Echoes 的暗网高奢论坛。请根据你的人设、当前的时间、你与 ${userName} 或其他人在上述群聊/私聊中发生的故事，自发地发一篇帖子。
+你现在正在浏览一个名叫 Echoes 的暗网论坛。请根据你的人设、当前的时间、世界观背景、以及发生的故事，自发地发一篇帖子。
 
-你可以自主决定发在哪个板块：
-1. "square" (角色广场)：实名发布。适合发日常、心情、公开喊话。
-2. "treehole" (匿名树洞)：加密匿名发布，别人不知道是你。适合发泄阴暗情绪、吐槽、爆料、倾诉不敢当面对 ${userName} 说的话。
+${typeInstruction}
 
 ${imgInstruction}
 
 【输出格式】：
 严格且只返回一个 JSON，不要任何其他废话：
 {
-  "type": "square", // 或者 "treehole"
-  "content": "帖子的纯文本正文内容...",
-  "hasImage": true, // 是否带图
-  "imageDesc": "如果带图，用生动优美的中文描写画面内容；不带图则留空"
+  "type": "square", // 或者 "treehole", "event"
+  "content": "广场或树洞的正文内容（如果 type 是 event 则留空）",
+  "title": "如果 type 是 event，请填写事件的核心标题（简短，如：CITY BLACKOUT）",
+  "desc": "如果 type 是 event，请填写事件的详细客观描述",
+  "hasImage": true, // 是否带假图（event 会无视此项因为系统自带，但需返回布尔值）
+  "imageDesc": "如果带图且不是 event，用生动优美的中文描写画面内容；不带图则留空"
 }`;
 
-      // （以下代码不变，正常发请求、解析和入库）
-      console.log(`[Agent-Forum] 🧠 开始推演【${char.name}】的论坛发帖... (携带 50 条跨维度记忆 & 面具信息, 强制带图: ${forceImage})`);
+      console.log(`[Agent-Forum] 🧠 开始推演【${char.name}】的论坛发帖... (板块: ${forceType || 'AI随机'}, 强制带图: ${forceImage})`);
       const response = await ApiHelper.chatCompletion(activeApi,[{ role: 'system', content: prompt }]);
+      
       const cleaned = response.replace(/```json|```/g, '').trim();
       const start = cleaned.indexOf('{');
       const end = cleaned.lastIndexOf('}');
       if (start === -1 || end === -1) throw new Error('发帖 JSON 解析失败');
       const result = JSON.parse(cleaned.substring(start, end + 1));
 
-      // ── 4. 组装最终帖子对象 ──
+      // ── 组装最终帖子对象 ──
       const isAnon = result.type === 'treehole';
+      const isEvent = result.type === 'event';
+      
       const post = {
           id: 'fp_' + Date.now(),
-          type: isAnon ? 'treehole' : 'square',
+          type: isEvent ? 'event' : (isAnon ? 'treehole' : 'square'),
           timestamp: Date.now(),
           likes: [],
           comments:[],
           author: isAnon ? 'OBS_0x' : char.name,
-          avatarKey: isAnon ? '' : `char-avatar-${char.id}`,
-          content: result.content,
-          hasImage: !!result.hasImage,
-          imageDesc: result.imageDesc || ''
+          avatarKey: isAnon ? '' : `char-avatar-${char.id}`
       };
+
+      if (isEvent) {
+          post.title = result.title || 'UNNAMED EVENT';
+          post.desc = result.desc || result.content || '...';
+          // 🎲 随机抽取内置高奢背景 URL
+          post.image = EVENT_IMG_URLS[Math.floor(Math.random() * EVENT_IMG_URLS.length)];
+      } else {
+          post.content = result.content;
+          post.hasImage = !!result.hasImage;
+          post.imageDesc = result.imageDesc || '';
+      }
 
       // 入库
       await DB.forum.put(post);
       console.log(`[Agent-Forum] 📡 【${char.name}】发帖成功:`, post);
 
-      // 触发连环摇人来评论！(直接调用刚才暴漏的 evaluateNewPost)
+      // 触发连环摇人来评论
       if (typeof ForumModule !== 'undefined' && ForumModule.evaluateNewPost) {
           ForumModule.evaluateNewPost(post.id);
       }
 
       // 弹窗通知
       const avatar = await Assets.getUrl(`char-avatar-${char.id}`).catch(()=>'');
-      const bannerName = isAnon ? 'CLASSIFIED SIGNAL' : char.name;
-      const bannerMsg = isAnon ? '暗网树洞拦截到一条加密信号' : '在广场发布了一条新动态';
       
+      let bannerName = char.name;
+      let bannerMsg = '在广场发布了一条新动态';
+      if (isAnon) {
+          bannerName = 'CLASSIFIED SIGNAL';
+          bannerMsg = '暗网树洞拦截到一条加密信号';
+      } else if (isEvent) {
+          bannerName = 'WORLD EVENT';
+          bannerMsg = `触发了新的世界事件：${post.title}`;
+      }
+
       NotificationModule.show({
         charId: char.id,
         name: bannerName,
         msg: bannerMsg,
-        avatar: isAnon ? '' : avatar,
+        avatar: (isAnon || isEvent) ? '' : avatar,
         type: 'forum',
-        forumType: isAnon ? 'treehole' : 'square'
+        forumType: isEvent ? 'event' : (isAnon ? 'treehole' : 'square')
       });
 
     } catch (e) {
@@ -17329,19 +17369,27 @@ ${imgInstruction}
     Toast.show('Agent 引擎配置已更新');
   }
 
-// 🌟[Debug] 强制随机抓一个角色去论坛发帖
-  async function forceForumPost() {
+// 🌟[Debug] 强制随机抓一个角色去论坛发帖（接收指令）
+async function forceForumPost(forceType = null) {
     try {
       const activeApi = await DB.api.getActive().catch(()=>null);
       if (!activeApi) { Toast.show('请先配置并激活 API'); return; }
       const chars = await DB.characters.getAll().catch(()=>[]);
       if (chars.length === 0) { Toast.show('没有可用的角色档案'); return; }
       
+      // 随机摇一个幸运儿
       const char = chars[Math.floor(Math.random() * chars.length)];
-      Toast.show(`🎲 正在指派【${char.name}】去暗网论坛发帖...`);
       
-      // 👇 修改这里：传一个 true 进去，代表强制带图！
-      await _triggerForumPost(char, true);
+      // 根据类型动态反馈
+      let typeLabel = '随机板块';
+      if (forceType === 'square') typeLabel = '【角色广场】';
+      if (forceType === 'treehole') typeLabel = '【匿名树洞】';
+      if (forceType === 'event') typeLabel = '【世界事件】';
+
+      Toast.show(`🎲 指派【${char.name}】去发一篇 ${typeLabel} ...`);
+      
+      // 直接调用大脑函数 (强制带假图设为 true，并传入板块类型)
+      await _triggerForumPost(char, true, forceType);
       
     } catch(e) {
       console.error('[Agent-Debug] 强制发帖失败', e);

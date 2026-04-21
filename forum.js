@@ -350,6 +350,11 @@ const ForumModule = (() => {
             }
             #forum-screen .fm-fake-img-wrap.revealed .fm-fake-img-cover { opacity: 0; pointer-events: none; }
             #forum-screen .fm-fake-img-wrap.revealed .fm-fake-img-desc { opacity: 1; transform: translateY(0); }
+            /* World Panel Switch */
+            #forum-screen .fm-switch { width: 36px; height: 20px; border-radius: 10px; background: rgba(255,255,255,0.1); position: relative; cursor: pointer; transition: background 0.3s; }
+            #forum-screen .fm-switch.on { background: var(--fm-fg); }
+            #forum-screen .fm-switch-knob { width: 14px; height: 14px; background: #fff; border-radius: 50%; position: absolute; left: 3px; top: 3px; transition: transform 0.3s; }
+            #forum-screen .fm-switch.on .fm-switch-knob { transform: translateX(16px); background: var(--fm-bg); }
         `;
         document.head.appendChild(style);
 
@@ -394,7 +399,20 @@ const ForumModule = (() => {
                         <div class="icon-btn" onclick="ForumModule.closePanel('fm-world-panel')"><i class="ph ph-x"></i></div>
                     </div>
                     <div class="panel-body">
-                        <div style="color:var(--fm-fg-muted);font-size:0.8rem;text-align:center;padding-top:40px;">[ 正在桥接 WorldBook 引擎... ]<br><br>稍后开放</div>
+                        <div class="form-group">
+                            <label class="form-label">World View / 世界观设定</label>
+                            <textarea id="fm-wv-text" class="form-textarea" placeholder="输入当前的世界观或背景设定，这将指导角色自动发布符合背景设定的「世界事件」..."></textarea>
+                        </div>
+                        <div class="form-group" style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--fm-line); padding-top: 16px;">
+                            <div>
+                                <label class="form-label" style="margin-bottom: 2px;">Link WorldBook / 桥接全局世界书</label>
+                                <div style="font-size: 0.6rem; color: var(--fm-fg-muted);">静默读取无角色绑定的全局词条（无视触发词并长期注入）</div>
+                            </div>
+                            <div class="fm-switch" id="fm-wv-toggle" onclick="this.classList.toggle('on')">
+                                <div class="fm-switch-knob"></div>
+                            </div>
+                        </div>
+                        <button class="btn-primary" style="margin-top: 10px;" onclick="ForumModule.saveWorldView()">SAVE CONFIG</button>
                     </div>
                 </div>
 
@@ -518,6 +536,7 @@ const ForumModule = (() => {
             const url = _forumProfile.avatarKey ? await Assets.getUrl(_forumProfile.avatarKey).catch(()=>'') : '';
             document.getElementById('fm-user-avatar').src = url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=80;q=80';
         } catch(e) { console.warn('[ForumModule] Load profile error', e); }
+        await loadWorldView();
         await loadPosts();
     }
 
@@ -1185,6 +1204,46 @@ ${charProfiles || '无'}
             if (btn) { btn.textContent = '[ DECRYPTION FAILED ]'; }
         }
     }
+    
+    async function loadWorldView() {
+        try {
+            const config = await DB.settings.get('forum-worldview');
+            if (config) {
+                document.getElementById('fm-wv-text').value = config.text || '';
+                if (config.useWorldBook) document.getElementById('fm-wv-toggle').classList.add('on');
+            }
+        } catch(e) {}
+    }
+
+    async function saveWorldView() {
+        const text = document.getElementById('fm-wv-text').value.trim();
+        const useWorldBook = document.getElementById('fm-wv-toggle').classList.contains('on');
+        try {
+            await DB.settings.set('forum-worldview', { text, useWorldBook });
+            if(typeof Toast !== 'undefined') Toast.show('世界架构配置已更新 ✦');
+            closePanel('fm-world-panel');
+        } catch(e) { if(typeof Toast !== 'undefined') Toast.show('保存失败'); }
+    }
+
+    // 暴露给大模型提取背景的超级接口
+    async function getWorldViewContext() {
+        let context = '';
+        try {
+            const config = await DB.settings.get('forum-worldview');
+            if (config) {
+                if (config.text) context += `【手动设定的世界观】：\n${config.text}\n\n`;
+                if (config.useWorldBook) {
+                    const allWBs = await DB.worldInfo.getAll().catch(()=>[]);
+                    // 只筛出没有绑定任何角色（即纯全局）的世界书词条
+                    const globalWBs = allWBs.filter(wb => !wb.characterIds || wb.characterIds.length === 0);
+                    if (globalWBs.length > 0) {
+                        context += `【全局世界书背景】：\n${globalWBs.map(wb => wb.content).join('\n')}\n`;
+                    }
+                }
+            }
+        } catch(e) {}
+        return context;
+    }
 
     function openPanel(id) { document.getElementById(id).classList.add('active'); }
     function closePanel(id) { document.getElementById(id).classList.remove('active'); }
@@ -1207,5 +1266,4 @@ ${charProfiles || '无'}
     }
 
     // 更新 return 暴露
-    return { init, onEnter, filterFeed, switchTo, evaluateNewPost, toggleComments, addComment, prepareReply, openPanel, closePanel, switchComposeType, publishPost, deletePost, cancelDelete, changeForumAvatar, updateForumName, onEventImgSelected, removeEventImg,loadMoreComments };
-})();
+    return { init, onEnter, filterFeed, switchTo, evaluateNewPost, toggleComments, addComment, prepareReply, openPanel, closePanel, switchComposeType, publishPost, deletePost, cancelDelete, changeForumAvatar, updateForumName, onEventImgSelected, removeEventImg, loadMoreComments, saveWorldView, getWorldViewContext };
