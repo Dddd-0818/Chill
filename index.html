@@ -14,15 +14,16 @@
 <script src="https://unpkg.com/fflate@0.8.2/umd/index.js"></script>
 <script src="https://unpkg.com/mammoth@1.6.0/mammoth.browser.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="music.js"></script>
-<script src="chill-meet-bundle.js"></script>
-<script src="diary.js"></script>
-<script src="forum.js"></script>
 <script src="https://unpkg.com/vconsole@latest/dist/vconsole.min.js"></script>
 <script>
   // 初始化 VConsole
   var vConsole = new VConsole();
 </script>
+<script src="music.js"></script>
+<script src="chill-meet-bundle.js"></script>
+<script src="diary.js"></script>
+<script src="forum.js"></script>
+<script src="lifestyle.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Noto+Sans+SC:wght@300;400;500;700&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,700&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Inter:wght@300;400;500;700;900&family=Cinzel:wght@500;700&family=Noto+Serif+SC:wght@500;700;900&family=Libre+Barcode+39+Text&display=swap" rel="stylesheet">
@@ -91,6 +92,38 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
 .header{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:24px;padding:0 4px;}
 .date-box h1{font-size:2.1333rem;font-weight:400;font-style:italic;line-height:1;margin-bottom:4px;}
 .date-time-line{display:flex;align-items:center;gap:8px;color:var(--text-sub);font-size:0.8rem;letter-spacing:1px;text-transform:uppercase;}
+/* ============================================================
+   桌面分页 (Home Swiper)
+   ============================================================ */
+.home-swiper {
+    display: flex;
+    width: calc(100% + 40px); /* 抵消外层 20px padding，实现无缝边缘滑动 */
+    margin-left: -20px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+    scroll-behavior: smooth;
+}
+.home-swiper::-webkit-scrollbar { display: none; }
+.home-page {
+    flex: 0 0 100%;
+    width: 100%;
+    scroll-snap-align: center;
+    padding: 0 20px; /* 加回 padding 保证内容对齐 */
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+}
+.home-dots {
+    display: flex; justify-content: center; align-items: center; gap: 8px;
+    margin-top: 10px; margin-bottom: 10px;
+}
+.home-dot {
+    width: 5px; height: 5px; border-radius: 50%; background: rgba(0,0,0,0.15); transition: 0.3s cubic-bezier(0.19, 1, 0.22, 1);
+}
+[data-theme="dark"] .home-dot { background: rgba(255,255,255,0.15); }
+.home-dot.active { background: var(--text-main); transform: scale(1.5); }
 /* ================== 杂志编辑部标签：深浅色切换 ================== */
 .theme-switch {
   font-family: 'Space Mono', monospace;
@@ -2400,9 +2433,36 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
 .cv-call-timer { font-family: 'Space Mono', monospace; font-size: 0.9rem; font-weight: 700; color: #fff; text-shadow: 0 2px 4px rgba(0,0,0,0.8); margin-right: 12px; }
 .cv-call-minimize { width: 32px; height: 32px; border-radius: 50%; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.2); color: #fff; display: flex; justify-content: center; align-items: center; cursor: pointer; transition: 0.2s; }
 .cv-call-minimize:active { transform: scale(0.9); }
+/* 顶栏控制条：确保层级最高，不被任何东西遮挡 */
+.cv-call-top { 
+    padding: max(env(safe-area-inset-top, 20px), 20px) 20px 0; 
+    display: flex; 
+    justify-content: space-between; 
+    align-items: flex-start; 
+    position: relative;
+    z-index: 100; /* 提升层级 */
+}
 
-/* 用户小窗 */
-.cv-call-user-cam { position: absolute; top: 60px; right: 20px; width: 90px; height: 130px; border: 1px solid rgba(255,255,255,0.3); padding: 4px; border-radius: 8px; background: rgba(0,0,0,0.2); backdrop-filter: blur(4px); z-index: 35; }
+/* 用户小窗：向下挪动 60px，并增加拖拽手势感 */
+.cv-call-user-cam { 
+    position: absolute; 
+    top: 100px;
+    right: 20px; 
+    width: 90px; 
+    height: 130px; 
+    border: 1px solid rgba(255,255,255,0.3); 
+    padding: 4px; 
+    border-radius: 8px; 
+    background: rgba(0,0,0,0.2); 
+    backdrop-filter: blur(4px); 
+    z-index: 35; 
+    transition: transform 0.3s cubic-bezier(0.19, 1, 0.22, 1);
+}
+
+/* 装饰性细节：给小窗加个微弱的阴影，更有悬浮感 */
+.cv-call-user-cam {
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+}
 .cv-call-user-cam img { width: 100%; height: 100%; object-fit: cover; border-radius: 4px; filter: contrast(1.1) brightness(0.9); }
 .cv-cam-cross { position: absolute; color: rgba(255,255,255,0.5); font-size: 8px; line-height: 1; }
 .cv-cam-cross.tl { top: -2px; left: -2px; } .cv-cam-cross.tr { top: -2px; right: -2px; }
@@ -3169,6 +3229,64 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
 }
 #story-chat-screen .cv-btn-confirm:active { transform: scale(0.96); }
 
+/* ── 论坛分享卡片 (嵌入在聊天内 - 高定画报风) ── */
+#conv-screen .cv-forum-share {
+    background: #FAFAFA; color: #121212;
+    border: 0.5px solid rgba(0,0,0,0.1);
+    border-radius: 2px 16px 2px 16px; /* 优雅的不对称切割 */
+    padding: 18px 20px; max-width: 270px; width: fit-content;
+    box-shadow: 0 12px 30px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.02);
+    position: relative; overflow: hidden; cursor: pointer;
+    transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.4s;
+    text-align: left;
+}
+/* 我(用户)发出的卡片，底色稍微带一点暖调的米色，区分阵营 */
+#conv-screen .cv-msg-row.user .cv-forum-share {
+    background: #F4F2EE; 
+}
+#conv-screen .cv-forum-share:active {
+    transform: scale(0.97); box-shadow: 0 5px 15px rgba(0,0,0,0.04);
+}
+/* 巨型背景水印 */
+#conv-screen .cv-forum-share::after {
+    content: 'ECHOES'; position: absolute; top: -5px; right: -10px;
+    font-family: 'Playfair Display', serif; font-style: italic;
+    font-size: 55px; color: rgba(0,0,0,0.03); pointer-events: none; z-index: 0;
+}
+#conv-screen .cv-fs-type {
+    font-family: 'Space Mono', monospace; font-size: 9px; color: #888;
+    text-transform: uppercase; margin-bottom: 12px; letter-spacing: 2px;
+    display: flex; align-items: center; gap: 6px; position: relative; z-index: 1;
+    border-bottom: 1px solid rgba(0,0,0,0.06); padding-bottom: 8px;
+}
+#conv-screen .cv-fs-type i { font-size: 14px; color: #121212; }
+/* 杂志风标题 */
+#conv-screen .cv-fs-title {
+    font-family: 'Cormorant Garamond', 'Noto Serif SC', serif; font-size: 18px; font-weight: 600;
+    color: #121212; margin-bottom: 6px; line-height: 1.2; position: relative; z-index: 1;
+}
+#conv-screen .cv-fs-content {
+    font-family: 'Inter', 'Noto Sans SC', sans-serif; font-size: 12px; line-height: 1.6;
+    color: #666; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+    overflow: hidden; margin-bottom: 16px; position: relative; z-index: 1;
+}
+#conv-screen .cv-fs-comment {
+    font-size: 10px; color: #888; background: rgba(0,0,0,0.03); border-radius: 6px;
+    padding: 8px 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    display: flex; align-items: center; gap: 6px; position: relative; z-index: 1;
+    font-family: 'Inter', 'Noto Sans SC', sans-serif;
+}
+
+/* ── 论坛分享选择弹窗 ── */
+#forum-screen .fm-share-item {
+    display: flex; align-items: center; gap: 12px; padding: 14px;
+    border-bottom: 1px solid var(--fm-line); cursor: pointer; transition: 0.2s;
+}
+#forum-screen .fm-share-item:hover { background: rgba(255,255,255,0.05); }
+#forum-screen .fm-share-item:last-child { border-bottom: none; }
+#forum-screen .fm-share-item i { font-size: 1.4rem; color: var(--fm-fg-muted); }
+#forum-screen .fm-share-item span { font-size: 0.9rem; font-weight: 500; }
+
 </style>
 <body>
 <div class="device">
@@ -3207,6 +3325,9 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
           <div class="date-time-line"><p id="date-main">OCT 24</p><span>•</span><p id="time-main">09:41</p></div>
         </div>
        <div class="theme-switch" id="theme-btn">MODE: DAY</div></div>
+       
+       <div class="home-swiper" id="home-swiper" onscroll="updateHomeDots(this)">
+    <div class="home-page"> <!-- 第一页开始 -->
        
       <div class="profile-card">
         <div class="avatar-wrap" id="avatar-wrap">
@@ -3270,7 +3391,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
 
       <div class="grid-icons" id="grid-icons">
         <div class="icon-cell">
-          <div class="icon-box" data-icon-id="0"><i class="ph-fill ph-cards"></i></div>
+         <div class="icon-box" data-icon-id="0"><i class="ph-fill ph-coffee"></i></div>
           <span class="icon-label">遇见</span>
         </div>
        <div class="icon-cell">
@@ -3305,6 +3426,22 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
         </div>
       </div>
     </div>
+
+    <div class="home-page"> <!-- 第二页开始 -->
+        <!-- 下面这个是一个好看的占位框，你可以先把组件往这里面塞 -->
+        <div style="flex: 1; min-height: 480px; display: flex; flex-direction: column; align-items: center; justify-content: center; border: 1px dashed var(--border-line); border-radius: 24px; background: rgba(0,0,0,0.02); margin-top: 10px;">
+            <i class="ph-thin ph-layout" style="font-size: 3rem; color: var(--text-sub); opacity: 0.5;"></i>
+            <div style="font-family: var(--font-mono2); font-size: 0.7rem; letter-spacing: 3px; color: var(--text-main); text-transform: uppercase; margin-top: 16px;">Space Tier 02</div>
+            <div style="font-size: 0.65rem; color: var(--text-sub); margin-top: 8px; letter-spacing: 1px;">等待装载组件...</div>
+        </div>
+    </div>
+</div>
+
+<!-- 加上分页的小圆点指示器 -->
+<div class="home-dots">
+    <div class="home-dot active"></div>
+    <div class="home-dot"></div>
+</div>
 
     <div class="overlay" id="overlay" onclick="closePanel()"></div>
     <div class="details-panel" id="panel">
@@ -5744,7 +5881,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
 // ============================================================
 const DB = (() => {
   const DB_NAME    = 'chillOS';
-  const DB_VERSION = 10;
+  const DB_VERSION =11;
   let _db = null;
 
   function open() {
@@ -5810,6 +5947,16 @@ const DB = (() => {
        if (old < 10) {
           if (!db.objectStoreNames.contains('forum_posts')) {
             db.createObjectStore('forum_posts', { keyPath: 'id' });
+          }
+        }
+        if (old < 11) {
+          if (!db.objectStoreNames.contains('routines')) {
+            db.createObjectStore('routines', { keyPath: 'charId' });
+          }
+          if (!db.objectStoreNames.contains('schedules')) {
+            const sch = db.createObjectStore('schedules', { keyPath: 'id' });
+            // 复合索引，方便按 角色+日期 查询
+            sch.createIndex('charId_date', ['charId', 'date'], { unique: true });
           }
         }
     };
@@ -6267,6 +6414,44 @@ async function msgDel(id) {
       req.onerror   = e => reject(e.target.error);
     });
   }
+  
+  // ---- routines ----
+  async function routineGet(charId) {
+    await open();
+    return new Promise((resolve, reject) => {
+      const req = tx('routines').get(String(charId));
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror   = e => reject(e.target.error);
+    });
+  }
+  async function routinePut(data) {
+    await open();
+    return new Promise((resolve, reject) => {
+      const req = tx('routines', 'readwrite').put(data);
+      req.onsuccess = () => resolve();
+      req.onerror   = e => reject(e.target.error);
+    });
+  }
+
+  // ---- schedules ----
+  async function scheduleGet(charId, dateStr) {
+    await open();
+    return new Promise((resolve, reject) => {
+      const idx = _db.transaction('schedules', 'readonly').objectStore('schedules').index('charId_date');
+      const req = idx.get([String(charId), dateStr]);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror   = e => reject(e.target.error);
+    });
+  }
+  async function schedulePut(data) {
+    await open();
+    return new Promise((resolve, reject) => {
+      const req = tx('schedules', 'readwrite').put(data);
+      req.onsuccess = () => resolve();
+      req.onerror   = e => reject(e.target.error);
+    });
+  }
+  
   return {
     VERSION: DB_VERSION,
     settings:   { get: settingsGet, set: settingsSet, del: settingsDel },
@@ -6281,10 +6466,13 @@ async function msgDel(id) {
     worldInfo:  { getAll: wiGetAll, put: wiPut, add: wiAdd, del: wiDel },
     feed: { getAll: feedGetAll, put: feedPut, del: feedDel },
     forum: { getAll: forumGetAll, put: forumPut, del: forumDel },
+    routines:   { get: routineGet, put: routinePut },
+    schedules:  { get: scheduleGet, put: schedulePut },
     clearAll,
     init: open,
   };
 })();
+window.DB = DB;
 // ============================================================
 // Assets — Blob 读写 + Object URL 管理 + 缓存拦截 (修复版)
 // ============================================================
@@ -6411,12 +6599,11 @@ const Toast = (() => {
 // ============================================================
 const Router = (() => {
   // 顶层 screen id 列表
-const TOP_SCREENS =['settings-screen', 'character-screen', 'chat-screen', 'conv-screen', 'worldbook-screen', 'story-roster-screen', 'story-chat-screen', 'forum-screen'];
+const TOP_SCREENS =['settings-screen', 'character-screen', 'chat-screen', 'conv-screen', 'worldbook-screen', 'story-roster-screen', 'story-chat-screen', 'forum-screen','lifestyle-screen'];
   // 改为数组栈，支持多级子页导航
   const _subStack = {};
-
 function go(target, watermark) {
-   if (target === 'settings' || target === 'character' || target === 'chat' || target === 'conv' || target === 'worldbook' || target === 'story-roster' || target === 'story-chat' || target === 'forum') {
+    if (target === 'settings' || target === 'character' || target === 'chat' || target === 'conv' || target === 'worldbook' || target === 'story-roster' || target === 'story-chat' || target === 'forum' || target === 'lifestyle') {
       const map = { 
         settings:  'settings-screen', 
         character: 'character-screen', 
@@ -6425,7 +6612,8 @@ function go(target, watermark) {
         worldbook: 'worldbook-screen',
         'story-roster': 'story-roster-screen',
         'story-chat': 'story-chat-screen',
-        forum:     'forum-screen'
+        forum:     'forum-screen',
+        lifestyle: 'lifestyle-screen'
       };
       
       const screenId = map[target];
@@ -6481,6 +6669,7 @@ function go(target, watermark) {
     if (target === 'worldbook') WBModule.onEnter();
     if (target === 'story-roster') StoryModule.onEnter();
     if (target === 'forum')     ForumModule.onEnter(); 
+    if (target === 'lifestyle') LifestyleModule.onEnter();
   }
 
   function _onEnterPage(pageId) {
@@ -6757,7 +6946,7 @@ const ProfileModule = (() => {
 // UIModule — 壁纸 & 图标
 // ============================================================
 const ICON_DEFAULTS = [
-  'ph ph-image','ph ph-book-open-text','ph ph-music-note','ph ph-calendar-blank',
+  'ph-fill ph-coffee','ph ph-book-open-text','ph ph-music-note','ph ph-calendar-blank',
   'ph ph-gear','ph ph-bell','ph ph-mask-happy','ph ph-cloud'
 ];
 
@@ -6890,6 +7079,16 @@ function updateTime() {
 setInterval(updateTime, 10000);
 updateTime();
 // ============================================================
+// 桌面分页指示器联动
+// ============================================================
+function updateHomeDots(el) {
+    const index = Math.round(el.scrollLeft / el.clientWidth);
+    const dots = document.querySelectorAll('.home-dot');
+    dots.forEach((dot, i) => {
+        dot.classList.toggle('active', i === index);
+    });
+}
+// ============================================================
 // 主题切换
 // ============================================================
 let _isDark = false;
@@ -7009,6 +7208,10 @@ document.getElementById('icon-diary').addEventListener('click', () => {
   if (typeof DiaryModule !== 'undefined') {
     DiaryModule.open();
   }
+});
+// 【行程图标】
+document.querySelector('[data-icon-id="3"]').addEventListener('click', () => {
+  Router.go('lifestyle');
 });
 
 // ============================================================
@@ -11150,13 +11353,14 @@ const ConvModule = (() => {
     _persona = allPersonas.find(p => String(p.id) === String(personaId)) || allPersonas[0] || null;
     await _loadPersonaAvatar();
 
-   // ── 头部显示 ──
+  // ── 头部显示 ──
     const nameEl   = document.getElementById('cv-header-name');
     const avatarEl = document.getElementById('cv-header-avatar');
+    const statusEl = document.querySelector('#conv-screen .cv-header-status'); // 🌟 新增：获取状态栏元素
 
     if (_isGroup) {
       if (nameEl) nameEl.textContent = _gcMeta.name;
-      // 🌟 核心修改：群聊头像使用专属保存的，或者默认图
+      // 群聊头像使用专属保存的，或者默认图
       if (avatarEl) {
         if (_gcMeta.avatarKey) {
           const url = await Assets.getUrl(_gcMeta.avatarKey).catch(() => '');
@@ -11167,14 +11371,18 @@ const ConvModule = (() => {
         avatarEl.style.cursor = 'pointer'; // 提示可点击
         avatarEl.title = '点击更换群头像';
       }
+      // 🌟 新增：如果是群聊，固定显示群频道
+      if (statusEl) statusEl.textContent = 'GROUP CHANNEL';
+      
     } else {
       let useAlias = false;
       try { useAlias = (await DB.settings.get(`alias-mode-${charId}`)) === true; } catch(e) {}
       if (useAlias && (!_char || !_char.title || !_char.title.trim())) useAlias = false;
       if (nameEl) nameEl.textContent = useAlias ? _char.title : (_char?.name || '—');
-     if (avatarEl) {
+      
+      if (avatarEl) {
         avatarEl.src = _charImgUrl;
-        avatarEl.style.cursor = 'pointer'; // 改为 pointer
+        avatarEl.style.cursor = 'pointer'; 
         avatarEl.title = '窥探心声';
         
         // 绑定点击事件，打开心声模块
@@ -11183,6 +11391,21 @@ const ConvModule = (() => {
             MonologueModule.open(_charId);
           }
         };
+      }
+
+      // 🌟🌟 核心接入点：生活系统联动 🌟🌟
+      if (statusEl) {
+        statusEl.textContent = 'SYNCING...'; // 先显示加载中
+        if (typeof LifestyleModule !== 'undefined') {
+          // 异步去生活系统里拉取当前时间的作息状态
+          LifestyleModule.getCurrentStatus(_charId).then(st => {
+            statusEl.textContent = st || 'ACTIVE RECORD';
+          }).catch(() => {
+            statusEl.textContent = 'ACTIVE RECORD';
+          });
+        } else {
+          statusEl.textContent = 'ACTIVE RECORD';
+        }
       }
     }
 
@@ -12619,6 +12842,29 @@ function _renderImgPreviewBar() {
         row.innerHTML = `${avatarHtml}<div class="cv-html-widget">${part.content}</div>`;
         return row;
       }
+    if (part.type === 'forum_share') {
+          const fd = part.data;
+          const typeStr = fd.type === 'event' ? 'WORLD EVENT' : (fd.type === 'treehole' ? 'CLASSIFIED SIGNAL' : 'SQUARE POST');
+          const icon = fd.type === 'event' ? 'ph-warning-circle' : (fd.type === 'treehole' ? 'ph-lock-key' : 'ph-users');
+          // 巧妙清洗大模型生成的标题换行符，并采用独立标签渲染
+          const titleHtml = fd.title ? `<div class="cv-fs-title">${_escHtml(fd.title.replace(/\n/g, ' '))}</div>` : '';
+          
+          const cardHtml = `
+              <div class="cv-forum-share">
+                  <div class="cv-fs-type"><i class="ph-fill ${icon}"></i> ${typeStr}</div>
+                  ${titleHtml}
+                  <div class="cv-fs-content">${_escHtml(fd.content)}</div>
+                  ${fd.topComment ? `<div class="cv-fs-comment"><i class="ph-fill ph-chat-circle-dots"></i> <span>${_escHtml(fd.topComment)}</span></div>` : ''}
+              </div>`;
+              
+          // 根据你在哪个代码块，如果是单独 part 则用 row.innerHTML；如果在 map 里，直接 return cardHtml
+          if (typeof row !== 'undefined') {
+              row.innerHTML = `${avatarHtml}${cardHtml}`;
+              return row;
+          } else {
+              return cardHtml;
+          }
+        }
       // text（可能带 quoteRef）
       const quoteHtml = part.quoteRef ? _buildQuoteRefHtml(part.quoteRef) : '';
       const needsTranslate = !isUser && _isNonChinese(part.content);
@@ -12627,7 +12873,7 @@ function _renderImgPreviewBar() {
       row.innerHTML = `${avatarHtml}<div class="cv-bubble${transClass}">${senderNameHtml}${quoteHtml}${_escHtml(part.content)}${transHtml}</div>`;
       return row;
     }
-
+   
     // 多 part：用 bubbles-wrap 包裹
     const bubblesHtml = parts.map(part => {
       if (part.type === 'audio')         return _buildAudioHtml(part, msg.id, msg.role);
@@ -12636,6 +12882,29 @@ function _renderImgPreviewBar() {
       if (part.type === 'user_transfer') return _buildUserTransferHtml(part, msg.id);
       if (part.type === 'image')         return _buildImgHtml(part, msg.id);
       if (part.type === 'html')          return `<div class="cv-html-widget">${part.content}</div>`;
+    if (part.type === 'forum_share') {
+          const fd = part.data;
+          const typeStr = fd.type === 'event' ? 'WORLD EVENT' : (fd.type === 'treehole' ? 'CLASSIFIED SIGNAL' : 'SQUARE POST');
+          const icon = fd.type === 'event' ? 'ph-warning-circle' : (fd.type === 'treehole' ? 'ph-lock-key' : 'ph-users');
+          // 巧妙清洗大模型生成的标题换行符，并采用独立标签渲染
+          const titleHtml = fd.title ? `<div class="cv-fs-title">${_escHtml(fd.title.replace(/\n/g, ' '))}</div>` : '';
+          
+          const cardHtml = `
+              <div class="cv-forum-share">
+                  <div class="cv-fs-type"><i class="ph-fill ${icon}"></i> ${typeStr}</div>
+                  ${titleHtml}
+                  <div class="cv-fs-content">${_escHtml(fd.content)}</div>
+                  ${fd.topComment ? `<div class="cv-fs-comment"><i class="ph-fill ph-chat-circle-dots"></i> <span>${_escHtml(fd.topComment)}</span></div>` : ''}
+              </div>`;
+              
+          // 根据你在哪个代码块，如果是单独 part 则用 row.innerHTML；如果在 map 里，直接 return cardHtml
+          if (typeof row !== 'undefined') {
+              row.innerHTML = `${avatarHtml}${cardHtml}`;
+              return row;
+          } else {
+              return cardHtml;
+          }
+        }
       const quoteHtml = part.quoteRef ? _buildQuoteRefHtml(part.quoteRef) : '';
       const needsTranslate = !isUser && _isNonChinese(part.content);
       const transClass = needsTranslate ? ' translatable' : '';
@@ -14066,6 +14335,12 @@ ${dialogueFlow.trim()}
       if (p.type === 'redenvelope') {
         const claimInfo = (p.claims || []).map(c => `${c.name}:¥${c.amount.toFixed(2)}`).join(', ');
         return `[红包 ¥${p.amount}: ${p.memo}${claimInfo ? '，已领取: ' + claimInfo : ''}]`;
+      }
+      if (p.type === 'forum_share') {
+          return `[我分享了一篇论坛帖子给你：${p.data.type === 'event' ? '世界大事件' : (p.data.type === 'treehole' ? '匿名树洞' : '广场动态')}]
+发帖人：${p.data.author}
+内容提要：${p.data.title ? '【'+p.data.title+'】' : ''}${p.data.content.slice(0, 80)}...
+（提示：你可以根据这篇帖子的内容跟我展开讨论，或者发表你的看法、吐槽）`;
       }
       if (p.type === 'transfer')      return `[转账 ¥${p.amount}: ${p.memo}，状态:${p.status === 'collected' ? '已收款' : '待收款'}]`;
       if (p.type === 'user_transfer') return `[我给你转账 ¥${p.amount}: ${p.memo}，状态:${p.status === 'accepted' ? '你已接受' : p.status === 'rejected' ? '你已拒绝' : '待你决定'}]`;
@@ -17159,10 +17434,95 @@ ${historyText || '（无）'}
 
       // 🖼️ 内置高奢背景图片池 (给世界事件专用)
       const EVENT_IMG_URLS =[
-          'https://images.unsplash.com/photo-1518005020951-eccb494ad742?w=800&q=80',
-          'https://images.unsplash.com/photo-1478760329108-5c3ed9d495a0?w=800&q=80',
-          'https://images.unsplash.com/photo-1504333638930-c8787321efa0?w=800&q=80',
-          'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800&q=80'
+'https://i.postimg.cc/0y1sf8MY/IMG_7337.jpg', 
+
+'https://i.postimg.cc/KjjgHtqz/IMG_9877.jpg',
+
+  'https://i.postimg.cc/2yyBKnc5/IMG_9878.jpg', 
+
+'https://i.postimg.cc/Y0PmKjZB/IMG_9879.jpg',
+
+'https://i.postimg.cc/rsstP5hb/IMG_9880.jpg',
+
+'https://i.postimg.cc/brr2B16K/IMG_9881.jpg',
+                
+'https://i.postimg.cc/mkkF57dn/IMG_9882.jpg', 
+
+'https://i.postimg.cc/prrn6K06/IMG_9883.jpg',
+
+'https://i.postimg.cc/0jjJB7tc/IMG_9884.jpg', 
+
+'https://i.postimg.cc/PJJ8R16M/IMG_9887.jpg',
+
+'https://i.postimg.cc/900qnyxp/IMG_9888.jpg', 
+
+'https://i.postimg.cc/RFXHdgTy/IMG_9889.jpg',
+
+'https://i.postimg.cc/gJNZsgKM/IMG_9890.jpg', 
+
+'https://i.postimg.cc/pTqFCsBC/IMG_9891.jpg',
+
+'https://i.postimg.cc/0QcwnVCZ/IMG_9892.jpg', 
+
+'https://i.postimg.cc/bJ3tgmRT/IMG_9893.jpg',
+
+'https://i.postimg.cc/qRj3w1GK/IMG_9894.jpg',
+
+'https://i.postimg.cc/Sxbhry2r/IMG_6675.jpg',
+
+'https://i.postimg.cc/yNbVybJd/IMG-9967.jpg',
+
+'https://i.postimg.cc/XJBnHkF7/IMG-9968.jpg',
+
+'https://i.postimg.cc/V60zGWMs/IMG-9969.jpg',
+
+'https://i.postimg.cc/j5nRg4Nt/IMG-9970.jpg',
+
+'https://i.postimg.cc/V60zGWMN/IMG-9971.jpg',
+
+'https://i.postimg.cc/HLhp9hJT/IMG-9972.jpg',
+
+'https://i.postimg.cc/hG5S15JS/IMG-9973.jpg',
+
+'https://i.postimg.cc/yNbVybJ1/IMG-9975.jpg',
+
+'https://i.postimg.cc/d0xqjx7Q/IMG-9976.jpg',
+
+'https://i.postimg.cc/6Qm9fm78/IMG-9977.jpg',
+
+'https://i.postimg.cc/XvzVkzZY/IMG-9978.jpg',
+
+'https://i.postimg.cc/7LWxnWC4/IMG-9979.jpg',
+
+'https://i.postimg.cc/1zj9rjgQ/IMG-9980.jpg',
+
+'https://i.postimg.cc/q75kx5td/IMG-9981.jpg',
+
+'https://i.postimg.cc/hG5S15JR/IMG-9982.jpg',
+
+'https://i.postimg.cc/W43Nrv1x/IMG-9983.jpg',
+
+'https://i.postimg.cc/Gp2LYCmZ/IMG-9984.jpg',
+
+'https://i.postimg.cc/q7RJnTvj/IMG-9985.jpg',
+
+'https://i.postimg.cc/MTfzPmRH/IMG-9986.jpg',
+
+'https://i.postimg.cc/C1nwPsD1/IMG-9987.jpg',
+
+'https://i.postimg.cc/q7RJnTvD/IMG-9988.jpg',
+
+'https://i.postimg.cc/W43Nrv1B/IMG-9989.jpg',
+
+'https://i.postimg.cc/Jh2152s6/IMG-9990.jpg',
+
+'https://i.postimg.cc/0NB80Bzt/IMG-9991.jpg',
+
+'https://i.postimg.cc/yNbVybJ4/IMG-9992.jpg',
+
+'https://i.postimg.cc/yNbVybD5/IMG-9993.jpg',
+
+'https://i.postimg.cc/SKvyfvnP/IMG-9994.jpg'
       ];
 
       const charId = String(char.id);
@@ -18647,11 +19007,17 @@ ${scriptHistory || '（电影开场，暂无前文）'}
         screen.style.setProperty('--sc-u-inn', _textColors.uInn);
     }
 
-    async function changeColor(key, colorHex) {
+  async function changeColor(key, colorHex, isNativePicker = false) {
         _textColors[key] = colorHex;
         _applyColorsToDOM(); 
-        await DB.settings.set(`sc-colors-${_storyCharId}`, _textColors); 
-        openColorModal(); 
+        
+        // 🌟 核心修复 1：丢进后台静默保存，千万不要加 await 阻塞线程，保证滑块 60fps 丝滑
+        DB.settings.set(`sc-colors-${_storyCharId}`, _textColors).catch(()=>{}); 
+        
+        // 🌟 核心修复 2：如果是原生拾色器在拖动，坚决不允许重绘 DOM！
+        if (!isNativePicker) {
+            openColorModal(); 
+        }
     }
 
     function openColorModal() {
@@ -18708,13 +19074,13 @@ ${scriptHistory || '（电影开场，暂无前文）'}
                          style="width:24px; height:24px; border-radius:50%; flex-shrink:0; background:${c}; cursor:pointer; border: 2px solid ${currentHex.toLowerCase() === c.toLowerCase() ? '#fff' : 'transparent'}; box-shadow: ${currentHex.toLowerCase() === c.toLowerCase() ? '0 0 0 1.5px #121212' : 'none'}; transition:0.2s;">
                     </div>`).join('');
                 
-                const isCustom = !MORANDI_COLORS.includes(currentHex.toUpperCase()) && !MORANDI_COLORS.includes(currentHex.toLowerCase());
+              const isCustom = !MORANDI_COLORS.includes(currentHex.toUpperCase()) && !MORANDI_COLORS.includes(currentHex.toLowerCase());
                 const customPicker = `
                     <div style="position:relative; width:24px; height:24px; border-radius:50%; flex-shrink:0; cursor:pointer; background: conic-gradient(#f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00); box-shadow: ${isCustom ? '0 0 0 1.5px #121212' : 'none'};">
                         <input type="color" value="${currentHex}" 
-                               oninput="StoryChatModule.changeColor('${item.key}', this.value)" 
-                               style="position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer;">
-                        <div style="position:absolute; inset:3px; border-radius:50%; background:${currentHex}; border:1px solid rgba(255,255,255,0.4);"></div>
+                               oninput="StoryChatModule.changeColor('${item.key}', this.value, true); this.nextElementSibling.style.background=this.value; this.parentElement.style.boxShadow='0 0 0 1.5px #121212';" 
+                               style="position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer; z-index:2;">
+                        <div style="position:absolute; inset:3px; border-radius:50%; background:${currentHex}; border:1px solid rgba(255,255,255,0.4); pointer-events:none;"></div>
                     </div>`;
 
                 html += `
@@ -19468,6 +19834,8 @@ async function init() {
   try { await FeedModule.init(); } catch(e) { console.warn('feed init failed', e); }
 // 论坛
   try { ForumModule.init(); } catch(e) { console.warn('forum init failed', e); }
+  // 行程生活系统
+  try { LifestyleModule.init(); } catch(e) { console.warn('lifestyle init failed', e); }
 
 // 主题
   try {
