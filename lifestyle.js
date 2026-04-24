@@ -832,29 +832,28 @@ function _maybeShuffleSmallWindow(events, profile) {
         }
 
       // 💥【今日推演核心】如果正是今天！呼叫大模型拉取记录并排期
-        try {
-            const activeApi = await DB.api.getActive();
-            if (!activeApi) throw new Error('未配置 API');
+            try {
+                const activeApi = await DB.api.getActive();
+                if (!activeApi) throw new Error('未配置 API');
 
-            const char = await DB.characters.get(Number(charId)).catch(() => null);
-            
-            // 🌟 修复 1：拉取 50 条消息，并提供完整的 YYYY-MM-DD HH:MM 时间戳
-            const rawMsgs = await DB.messages.getPage(String(charId), 0, 50).catch(() =>[]);
-            const historyText = rawMsgs.reverse().map(m => {
-                const d = new Date(m.timestamp);
-                const year = d.getFullYear();
-                const month = String(d.getMonth() + 1).padStart(2, '0');
-                const date = String(d.getDate()).padStart(2, '0');
-                const hour = String(d.getHours()).padStart(2, '0');
-                const min = String(d.getMinutes()).padStart(2, '0');
+                const char = await DB.characters.get(Number(charId)).catch(() => null);
                 
-                const fullTimeStr = `${year}-${month}-${date} ${hour}:${min}`;
-                const role = m.role === 'user' ? '用户' : (char?.name || '角色');
-                const txt = m.parts?.map(p => p.content || p.text || '').join('') || m.content;
-                return `[${fullTimeStr}][${role}]: ${txt}`;
-            }).join('\n');
+                const rawMsgs = await DB.messages.getPage(String(charId), 0, 50).catch(() =>[]);
+                const historyText = rawMsgs.reverse().map(m => {
+                    const d = new Date(m.timestamp);
+                    const year = d.getFullYear();
+                    const month = String(d.getMonth() + 1).padStart(2, '0');
+                    const date = String(d.getDate()).padStart(2, '0');
+                    const hour = String(d.getHours()).padStart(2, '0');
+                    const min = String(d.getMinutes()).padStart(2, '0');
+                    
+                    const fullTimeStr = `${year}-${month}-${date} ${hour}:${min}`;
+                    const role = m.role === 'user' ? '用户' : (char?.name || '角色');
+                    const txt = m.parts?.map(p => p.content || p.text || '').join('') || m.content;
+                    return `[${fullTimeStr}][${role}]: ${txt}`;
+                }).join('\n');
 
-            const prompt = `[系统指令：时空轨迹动态合成引擎]
+                const prompt = `[系统指令：时空轨迹动态合成引擎]
 你现在需要为角色【${char?.name || '角色'}】合成今天的24小时行动轨迹。
 【当前物理时间】：${todayStr} (今天)
 
@@ -893,57 +892,62 @@ ${historyText || '（暂无记录）'}
   ]
 }`;
 
-            // 调用 AI
-            const response = await ApiHelper.chatCompletion(activeApi,[{ role: 'system', content: prompt }]);
-            
-            // 解析 JSON
-            const cleaned = response.replace(/```json|```/g, '').trim();
-            const start = cleaned.indexOf('{');
-            const end = cleaned.lastIndexOf('}');
-            if (start === -1 || end === -1) throw new Error('AI返回数据异常');
-            
-            const aiData = JSON.parse(cleaned.substring(start, end + 1));
-            
-            // 处理事件
-            let seqCounter = 1;
-            const newEvents = (aiData.events ||[]).map(ev => ({
-                id: `ev_${Date.now()}_${Math.floor(Math.random()*10000)}`,
-                no: `SEQ-${String(seqCounter++).padStart(2, '0')}`,
-                time: ev.time,
-                title: ev.title,
-                location: ev.location || '未知',
-                icon: _guessIcon(ev.title, ev.type), 
-                state: ev.isDeviation ? 'deviation' : 'future', 
-                description: ev.description || '',
-                type: ev.type || '日常',
-                devText: ev.devText || ''
-            }));
+                console.groupCollapsed(`[Lifestyle] 🚀 阶段 2: 今日动态推演 (Schedule) - 日期: ${todayStr}`);
+                console.log(`%c【提取聊天记录】共 ${rawMsgs.length} 条`, "color:#d84315; font-weight:bold;");
+                console.log("%c【System Prompt】", "color:#9c2b2b; font-weight:bold;", "\n" + prompt);
 
-            newEvents.sort((a, b) => a.time.localeCompare(b.time));
-            newEvents.forEach((ev, i) => ev.no = `SEQ-${String(i + 1).padStart(2, '0')}`);
+                const response = await ApiHelper.chatCompletion(activeApi,[{ role: 'system', content: prompt }]);
+                
+                console.log("%c【AI 原始输出】", "color:#2d6a4a; font-weight:bold;", "\n" + response);
 
-            const newSchedule = {
-                id: schedId,
-                charId: String(charId),
-                date: dateStr,
-                version: SCHEDULE_VERSION,
-                dayProfile: {
-                    mode: aiData.dayProfile?.mode || 'workday',
-                    mood: aiData.dayProfile?.mood || 'steady',
-                    isWeekend: false
-                },
-                events: newEvents
-            };
+                const cleaned = response.replace(/```json|```/g, '').trim();
+                const start = cleaned.indexOf('{');
+                const end = cleaned.lastIndexOf('}');
+                if (start === -1 || end === -1) throw new Error('AI返回数据异常');
+                
+                const aiData = JSON.parse(cleaned.substring(start, end + 1));
+                console.log("%c【解析成功】", "color:#1976d2; font-weight:bold;", aiData);
+                console.groupEnd();
+                
+                let seqCounter = 1;
+                const newEvents = (aiData.events ||[]).map(ev => ({
+                    id: `ev_${Date.now()}_${Math.floor(Math.random()*10000)}`,
+                    no: `SEQ-${String(seqCounter++).padStart(2, '0')}`,
+                    time: ev.time,
+                    title: ev.title,
+                    location: ev.location || '未知',
+                    icon: _guessIcon(ev.title, ev.type), 
+                    state: ev.isDeviation ? 'deviation' : 'future', 
+                    description: ev.description || '',
+                    type: ev.type || '日常',
+                    devText: ev.devText || ''
+                }));
 
-            await DB.schedules.put(newSchedule);
-            console.log(`[Lifestyle] 📅 今日动态行程已由大模型根据50条记忆推演完成!`);
-            return newSchedule;
+                newEvents.sort((a, b) => a.time.localeCompare(b.time));
+                newEvents.forEach((ev, i) => ev.no = `SEQ-${String(i + 1).padStart(2, '0')}`);
 
-        } catch(e) {
-            console.warn('[Lifestyle] LLM 智能推演失败，执行本地Fallback:', e.message);
-            return _generateMathSchedule(charId, dateStr, routine, schedId);
-        }
-     }
+                const newSchedule = {
+                    id: schedId,
+                    charId: String(charId),
+                    date: dateStr,
+                    version: SCHEDULE_VERSION,
+                    dayProfile: {
+                        mode: aiData.dayProfile?.mode || 'workday',
+                        mood: aiData.dayProfile?.mood || 'steady',
+                        isWeekend: false
+                    },
+                    events: newEvents
+                };
+
+                await DB.schedules.put(newSchedule);
+                return newSchedule;
+
+            } catch(e) {
+                console.groupEnd();
+                console.warn('[Lifestyle] LLM 智能推演失败，执行本地Fallback:', e.message);
+                return await _generateMathSchedule(charId, dateStr, routine, schedId);
+            }
+         }
 
     function _evaluateScheduleState(schedule, isToday) {
         if (!schedule || !schedule.events) return;
@@ -1265,7 +1269,7 @@ anomalyText = deviations.map(d => d.devText || `[${d.title}] 发生突发变动`
     }
 
     // ==========================================
-    // AI 唤醒作息引擎 (The Genesis)
+    // AI 唤醒作息引擎 (The Genesis - 阶段 1)
     // ==========================================
     async function generateRoutine() {
         if (!_currentDetailCharId) return;
@@ -1273,9 +1277,11 @@ anomalyText = deviations.map(d => d.devText || `[${d.title}] 发生突发变动`
         if (!char) return;
 
         const btn = document.querySelector('.ls-init-btn');
-        const originalText = btn.innerHTML;
-        btn.innerHTML = `<i class="ph-bold ph-spinner" style="animation: spin 1s linear infinite;"></i> SYNCING...`;
-        btn.style.pointerEvents = 'none';
+        if (btn) {
+            btn.dataset.origText = btn.innerHTML;
+            btn.innerHTML = `<i class="ph-bold ph-spinner" style="animation: spin 1s linear infinite;"></i> SYNCING...`;
+            btn.style.pointerEvents = 'none';
+        }
 
         try {
             const activeApi = await DB.api.getActive();
@@ -1301,19 +1307,29 @@ ${char.mbti ? 'MBTI：' + char.mbti : ''}
   ]
 }`;
 
+            console.groupCollapsed(`[Lifestyle] 🧠 阶段 1: 基础作息推演 (Routine) - ${char.name}`);
+            console.log("%c【System Prompt】", "color:#9c2b2b; font-weight:bold;", "\n" + prompt);
+
             const response = await ApiHelper.chatCompletion(activeApi,[{ role: 'system', content: prompt }]);
+            
+            console.log("%c【AI 原始输出】", "color:#2d6a4a; font-weight:bold;", "\n" + response);
+
             const cleaned = response.replace(/```json|```/g, '').trim();
             const start = cleaned.indexOf('{');
             const end = cleaned.lastIndexOf('}');
             if (start === -1 || end === -1) throw new Error('AI返回数据异常');
             
             const routineData = JSON.parse(cleaned.substring(start, end + 1));
+            
+            console.log("%c【解析成功】", "color:#1976d2; font-weight:bold;", routineData);
+            console.groupEnd();
+
             routineData.charId = String(_currentDetailCharId);
             routineData.updatedAt = Date.now();
 
             await DB.routines.put(routineData);
             Toast.show('作息时间轴已成功推演 ✦');
-            document.getElementById('ls-emptyState').classList.remove('active');
+            document.getElementById('ls-emptyState')?.classList.remove('active');
             
             _currentWeekData = await _buildWeekData();
             _renderTemporalAxis();
@@ -1322,14 +1338,16 @@ ${char.mbti ? 'MBTI：' + char.mbti : ''}
             openRoutineConfig();
 
         } catch (e) {
+            console.groupEnd(); // 防止报错时日志没闭合
             console.error('[Lifestyle] generateRoutine Error:', e);
             Toast.show('引擎唤醒失败：' + e.message);
         } finally {
-            btn.innerHTML = originalText;
-            btn.style.pointerEvents = 'auto';
+            if (btn && btn.dataset.origText) {
+                btn.innerHTML = btn.dataset.origText;
+                btn.style.pointerEvents = 'auto';
+            }
         }
     }
-
     // ==========================================
     // 作息管理面板 (Routine Config)
     // ==========================================
