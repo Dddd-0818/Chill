@@ -1,7 +1,7 @@
 'use strict';
 
 // ============================================================
-// LifestyleModule — 角色行程与生活系统 (动态时空推演版)
+// LifestyleModule — 角色行程与生活系统 (动态时空推演版 - 修复)
 // ============================================================
 const LifestyleModule = (() => {
     let _initialized = false;
@@ -11,9 +11,9 @@ const LifestyleModule = (() => {
     let _selectedDateIndex = 0;
     
     // UI 内部状态
-    let _activeItiId = null; // 当前展开的行程卡片ID
-    let _syncedItiIds =[];  // 已经同步到聊天的行程ID
-    let _currentSchedule = null; // 当前正在查看的完整行程数据实例
+    let _activeItiId = null; 
+    let _syncedItiIds =[];  // 🌟 之前这里名字声明带了 Iti，下面用的时候拼错了，已修复
+    let _currentSchedule = null; 
 
     function init() {
         if (_initialized) return;
@@ -58,7 +58,7 @@ const LifestyleModule = (() => {
             #ls-detailView { z-index: 20; transform: translateX(100%); background: #F4F4F6; color: #111111; font-family: 'Inter', 'Noto Sans SC', sans-serif; }
             #ls-detailView.active { transform: translateX(0); }
 
-            /* 新增：第三层视图 - 具体动线页 (Itinerary Log) */
+            /* 第三层视图 - 具体动线页 */
             #ls-itineraryView { z-index: 30; transform: translateX(100%); background: #F4F4F6; color: #111111; font-family: 'Inter', 'Noto Sans SC', sans-serif; }
             #ls-itineraryView.active { transform: translateX(0); }
 
@@ -539,7 +539,7 @@ const LifestyleModule = (() => {
     function _addRandomOffset(timeStr) {
         const [h, m] = timeStr.split(':').map(Number);
         let totalMins = h * 60 + m;
-        // 随机偏移 -15 到 +15 分钟，体现活人感
+        // 随机偏移 -15 到 +15 分钟
         const offset = Math.floor(Math.random() * 31) - 15; 
         totalMins += offset;
         if (totalMins < 0) totalMins = 0;
@@ -559,7 +559,7 @@ const LifestyleModule = (() => {
         if (t.includes('影') || t.includes('片') || t.includes('剧')) return 'ph-fill ph-film-strip';
         if (t.includes('音乐') || t.includes('听') || t.includes('唱片')) return 'ph-fill ph-disc';
         if (t.includes('睡') || t.includes('息')) return 'ph-fill ph-bed';
-        return 'ph-fill ph-wind'; // 默认松弛感风向标
+        return 'ph-fill ph-wind'; 
     }
 
     async function _getOrCreateSchedule(charId, dateStr) {
@@ -571,14 +571,12 @@ const LifestyleModule = (() => {
 
         if (sched) return sched;
 
-        // 如果没有今日具体行程，查 routine 生成一份
         const routine = await DB.routines.get(String(charId));
-        if (!routine) return null; // 连基底作息都没有，返回 null
+        if (!routine) return null;
 
         const newEvents =[];
         let seqCounter = 1;
 
-        // 起床事件
         if (routine.wakeUp) {
             newEvents.push({
                 id: `ev_${Date.now()}_${seqCounter}`,
@@ -587,13 +585,12 @@ const LifestyleModule = (() => {
                 title: '晨间苏醒',
                 location: '住处',
                 icon: 'ph-fill ph-sun-horizon',
-                state: 'future', // 初始默认，之后按当前时间重算
+                state: 'future', 
                 description: '一日之计的开始，准备迎接新的一天。',
                 type: '日常'
             });
         }
 
-        // 常规事件
         (routine.events ||[]).forEach(ev => {
             newEvents.push({
                 id: `ev_${Date.now()}_${seqCounter}`,
@@ -608,7 +605,6 @@ const LifestyleModule = (() => {
             });
         });
 
-        // 睡觉事件
         if (routine.sleep) {
             newEvents.push({
                 id: `ev_${Date.now()}_${seqCounter}`,
@@ -623,9 +619,7 @@ const LifestyleModule = (() => {
             });
         }
 
-        // 按真实偏移后的时间排序
         newEvents.sort((a, b) => a.time.localeCompare(b.time));
-        // 重新编排 SEQ 序号
         newEvents.forEach((ev, i) => ev.no = `SEQ-${String(i+1).padStart(2,'0')}`);
 
         const newSchedule = {
@@ -639,13 +633,10 @@ const LifestyleModule = (() => {
         return newSchedule;
     }
 
-    // ── 根据当前真实时间，评判事件状态 ──
     function _evaluateScheduleState(schedule, isToday) {
         if (!schedule || !schedule.events) return;
         
         if (!isToday) {
-            // 如果看的不是今天，直接全标过去或未来（这里简单处理为，不是今天就是过去的存档）
-            // 真实逻辑可对比日期，若是明后天则标 future
             schedule.events.forEach(ev => {
                 if (ev.state !== 'deviation') ev.state = 'past';
             });
@@ -655,7 +646,6 @@ const LifestyleModule = (() => {
         const now = new Date();
         const nowTimeStr = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
         
-        // 寻找当前激活的事件（时间最近且早于等于现在的事件）
         let activeIndex = -1;
         for (let i = schedule.events.length - 1; i >= 0; i--) {
             if (schedule.events[i].time <= nowTimeStr) {
@@ -665,7 +655,7 @@ const LifestyleModule = (() => {
         }
 
         schedule.events.forEach((ev, i) => {
-            if (ev.state === 'deviation') return; // 偏差状态锁定，不随时间自动覆盖
+            if (ev.state === 'deviation') return; 
             if (i < activeIndex) ev.state = 'past';
             else if (i === activeIndex) ev.state = 'active';
             else ev.state = 'future';
@@ -687,7 +677,6 @@ const LifestyleModule = (() => {
             const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
             const isToday = d.toDateString() === today.toDateString();
 
-            // 🌟 尝试去取这一天的真实日程实例
             let eventCount = 0;
             let hasAnomaly = false;
             let anomalyText = '';
@@ -712,7 +701,7 @@ const LifestyleModule = (() => {
                 fullDate: dateStr,
                 isToday: isToday,
                 events: eventCount,
-                duration: eventCount > 0 ? Math.floor(eventCount * 2.5) : 0, // 简易估算耗时
+                duration: eventCount > 0 ? Math.floor(eventCount * 2.5) : 0, 
                 load: eventCount >= 6 ? 'HIGH LOAD' : (eventCount >= 3 ? 'NORMAL' : (eventCount > 0 ? 'CHILL' : 'VOID')),
                 hasAnomaly: hasAnomaly,
                 anomalyText: anomalyText
@@ -739,17 +728,14 @@ const LifestyleModule = (() => {
         }
         document.getElementById('ls-parallaxImg').src = avatarUrl;
 
-        // 检查基础作息是否存在
         const routine = await DB.routines.get(charId).catch(() => null);
         const emptyOverlay = document.getElementById('ls-emptyState');
         
         if (!routine) {
             emptyOverlay.classList.add('active');
-            // 如果没有作息，无法生成 week data，先用个假的顶住 UI，等用户点击初始化
             _currentWeekData = _buildFakeWeekData(); 
         } else {
             emptyOverlay.classList.remove('active');
-            // 如果有作息，触发真实推演
             _currentWeekData = await _buildWeekData();
         }
 
@@ -775,7 +761,6 @@ const LifestyleModule = (() => {
         _currentDetailCharId = null;
     }
 
-    // ── 渲染概览轴与数据 ──
     function _renderTemporalAxis() {
         const track = document.getElementById('ls-axisTrack');
         track.innerHTML = '';
@@ -855,16 +840,12 @@ const LifestyleModule = (() => {
         const data = _currentWeekData[_selectedDateIndex];
         if (!data || !data.fullDate) return;
 
-        // 1. 获取或生成 Schedule 实例
         const schedule = await _getOrCreateSchedule(_currentDetailCharId, data.fullDate);
         if (!schedule) { Toast.show('行程数据丢失'); return; }
         
-        // 2. 根据系统时间评判状态
         _evaluateScheduleState(schedule, data.isToday);
-        // 保存算好状态的数据供后续渲染使用
         _currentSchedule = schedule;
 
-        // 3. 更新页面头部数据
         const dObj = new Date(data.fullDate);
         const dayNames =['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
         const monthNames =['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
@@ -873,14 +854,11 @@ const LifestyleModule = (() => {
         document.getElementById('iti-dayName').textContent = dayNames[dObj.getDay()];
         document.getElementById('iti-dateStr').textContent = `${monthNames[dObj.getMonth()]} ${dObj.getDate()}, ${dObj.getFullYear()}`;
         
-        // 4. 找到当前正在 active 的卡片，默认展开
         const activeEv = schedule.events.find(e => e.state === 'active');
         _activeItiId = activeEv ? activeEv.id : null;
         
-        // 5. 渲染轨道
         _renderItineraryTrack();
 
-        // 6. 滑入视图
         document.getElementById('ls-itineraryView').classList.add('active');
     }
 
@@ -889,7 +867,6 @@ const LifestyleModule = (() => {
         _currentSchedule = null;
     }
 
-    // ── 渲染具体的行程时间轴卡片 ──
     function _renderItineraryTrack() {
         const track = document.getElementById('iti-scheduleTrack');
         if (!_currentSchedule || !_currentSchedule.events) {
@@ -931,7 +908,7 @@ const LifestyleModule = (() => {
                                 <button class="iti-action-btn" onclick="event.stopPropagation(); alert('此功能筹备中: 主动制造事件偏差')">DEVIATION</button>
                             </div>
                             
-                            <button class="iti-sync-btn ${_syncedIds.includes(item.id) ? 'is-synced' : ''}" onclick="LifestyleModule.syncToChat(event, '${item.id}')">
+                            <button class="iti-sync-btn ${_syncedItiIds.includes(item.id) ? 'is-synced' : ''}" onclick="LifestyleModule.syncToChat(event, '${item.id}')">
                                 <div class="iti-eq-visualizer">
                                     <div class="iti-eq-bar"></div><div class="iti-eq-bar"></div><div class="iti-eq-bar"></div>
                                 </div>
@@ -950,12 +927,13 @@ const LifestyleModule = (() => {
         _renderItineraryTrack();
     }
 
+    // 🌟 已修复：变量名 _syncedItiIds
     function syncToChat(e, id) {
         e.stopPropagation();
-        if (_syncedIds.includes(id)) {
-            _syncedIds = _syncedIds.filter(i => i !== id);
+        if (_syncedItiIds.includes(id)) {
+            _syncedItiIds = _syncedItiIds.filter(i => i !== id);
         } else {
-            _syncedIds.push(id);
+            _syncedItiIds.push(id);
             Toast.show('【系统预留钩子】此行程点已被标记，将同步到聊天流系统提示中。');
         }
         _renderItineraryTrack();
@@ -990,7 +968,7 @@ ${char.mbti ? 'MBTI：' + char.mbti : ''}
   "wakeUp": "HH:MM", // 起床时间
   "sleep": "HH:MM", // 就寝时间
   "mainActivity": "核心身份与主线活动（如：独立插画师 / 医学生），10个字以内",
-  "tags": ["夜猫子", "工作狂", "规律作息"], // 描述生活状态的3个短标签
+  "tags":["夜猫子", "工作狂", "规律作息"], // 描述生活状态的3个短标签
   "events":[
     // 请提供 5-8 个关键的时间锚点事件，贯穿起床到睡觉
     { "time": "08:00", "title": "手冲咖啡与晨读", "location": "家里阳台", "status": "正在喝咖啡", "type": "日常" },
@@ -1012,7 +990,6 @@ ${char.mbti ? 'MBTI：' + char.mbti : ''}
             Toast.show('作息时间轴已成功推演 ✦');
             document.getElementById('ls-emptyState').classList.remove('active');
             
-            // 重新加载 weekData 以便能生成 schedule
             _currentWeekData = await _buildWeekData();
             _renderTemporalAxis();
             _updateBriefingData();
@@ -1077,7 +1054,6 @@ ${char.mbti ? 'MBTI：' + char.mbti : ''}
     // ==========================================
     async function getCurrentStatus(charId) {
         try {
-            // 优先查今天的 schedule (带波动和突发的真实数据)
             const now = new Date();
             const dateStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
             const sched = await DB.schedules.get(`sch_${charId}_${dateStr}`).catch(()=>null);
@@ -1085,7 +1061,6 @@ ${char.mbti ? 'MBTI：' + char.mbti : ''}
             const nowTimeStr = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
             
             if (sched && sched.events) {
-                // 有真实行程，找最近的一个
                 let currentEvent = sched.events[0];
                 for (let i = sched.events.length - 1; i >= 0; i--) {
                     if (sched.events[i].time <= nowTimeStr) {
@@ -1093,12 +1068,10 @@ ${char.mbti ? 'MBTI：' + char.mbti : ''}
                         break;
                     }
                 }
-                // 如果是偏差事件，可以在聊天页顶栏显示红色的特殊状态！
                 if (currentEvent.state === 'deviation') return `⚠ 突发：${currentEvent.title}`;
-                return currentEvent ? currentEvent.title : 'ACTIVE RECORD'; // 用 title 代替 status 更具场景感
+                return currentEvent ? currentEvent.title : 'ACTIVE RECORD'; 
             }
 
-            // 没有 schedule，降级查 base routine
             const routine = await DB.routines.get(String(charId));
             if (!routine || !routine.events) return null;
             
@@ -1113,10 +1086,48 @@ ${char.mbti ? 'MBTI：' + char.mbti : ''}
         }
     }
 
+    
+    // 🌟 新增：提取今日生活轨迹，喂给大模型的 System Prompt
+    async function getPromptContext(charId) {
+        try {
+            const now = new Date();
+            const dateStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+            
+            // 获取今天的真实行程（带随机波动的）
+            const sched = await _getOrCreateSchedule(charId, dateStr);
+            if (!sched || !sched.events || sched.events.length === 0) return '';
+
+            let text = '\n# 你的今日生活轨迹 (Today\'s Schedule)\n（请将此作为你今天的既定背景。不要生硬汇报，但在聊天中可极其自然地顺口提及你刚做完/正在做/接下来要去做的事，展现真实生活感。）\n';
+            
+            const nowTimeStr = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+            let currentEvent = sched.events[0];
+
+            sched.events.forEach(ev => {
+                const devMark = ev.state === 'deviation' ? '[突发变更] ' : '';
+                text += `- ${ev.time} ${devMark}${ev.title} @ ${ev.location}\n`;
+                if (ev.time <= nowTimeStr) currentEvent = ev; // 找到当前时间段的事件
+            });
+
+            if (currentEvent) {
+                text += `\n**此刻（${nowTimeStr}）你的状态：** 正在【${currentEvent.location}】进行「${currentEvent.title}」。`;
+                if (currentEvent.state === 'deviation') {
+                    text += `（⚠️ 注意：此行程为突发状况：${currentEvent.devText || '计划变更'}，请在回复中表现出相应的反应）`;
+                }
+                text += '\n';
+            }
+
+            return text;
+        } catch (e) {
+            console.error('[Lifestyle] getPromptContext error', e);
+            return '';
+        }
+    }
+
     return { 
         init, onEnter, openDetail, closeDetail, 
         generateRoutine, getCurrentStatus, 
         openRoutineConfig, closeRoutineConfig, rebuildRoutine,
-        openItinerary, closeItinerary, toggleItiCard, syncToChat
+        openItinerary, closeItinerary, toggleItiCard, syncToChat,
+        getPromptContext
     };
 })();

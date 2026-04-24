@@ -10779,6 +10779,11 @@ const CallModule = (() => {
         const txt = m.parts?.map(p => p.content || p.text || '').join('') || m.content;
         return `[${role}]: ${txt}`;
       }).join('\n');
+      
+       let scheduleContext = '';
+      if (typeof LifestyleModule !== 'undefined') {
+          scheduleContext = await LifestyleModule.getPromptContext(charId);
+      }
 
       // 组装完整系统提示词
       const systemPrompt = `你正在与我进行一场实时的视频通话。你的名字是【${charName}】。
@@ -10786,6 +10791,7 @@ const CallModule = (() => {
 【你的角色核心档案】：
 ${char?.persona || '无'}
 ${char?.mbti ? 'MBTI: ' + char.mbti : ''}
+${scheduleContext}
 
 【关于我(用户)】：
 名字：${userPersona.name || '用户'}
@@ -13436,6 +13442,13 @@ function _renderImgPreviewBar() {
           if (matched.length) worldBookBlock = matched.map(e => e.content.trim()).join('\n\n');
         }
       } catch(e) {}
+      
+      const schedulesMap = {};
+      if (typeof LifestyleModule !== 'undefined') {
+          for (const member of _gcMembers) {
+              schedulesMap[member.id] = await LifestyleModule.getPromptContext(member.id);
+          }
+      }
 
       // 时间感知
       let timeGapPrompt = '';
@@ -13479,8 +13492,8 @@ function _renderImgPreviewBar() {
       } catch(e) {}
 
      // ── 组装群聊 System Prompt（一次性，包含所有角色） ──
-      const systemPrompt = _buildGroupSystemPromptAll(gcMeta, histMsgs, worldBookBlock, timeGapPrompt, crossWindowMsgs);
-
+     const systemPrompt = _buildGroupSystemPromptAll(gcMeta, histMsgs, worldBookBlock, timeGapPrompt, crossWindowMsgs, schedulesMap);
+     
       // 🌟 核心修复：彻底抛弃重复的 apiMessages 拼接！
      
       const apiMessages = [
@@ -13814,6 +13827,12 @@ function _renderImgPreviewBar() {
         }
       } catch(wbErr) {}
       
+       // 🌟 【新增】：获取角色今日生活轨迹
+      let scheduleContext = '';
+      if (typeof LifestyleModule !== 'undefined') {
+          scheduleContext = await LifestyleModule.getPromptContext(sessionCharId);
+      }
+      
       let timePerceptionOn = true;
       try {
         const tpVal = await DB.settings.get(`time-perception-${sessionCharId}`);
@@ -13863,7 +13882,8 @@ function _renderImgPreviewBar() {
         }
       } catch(e) { console.warn('[ConvModule] 跨窗口混排失败', e); }
 
-      const systemPrompt = _buildSystemPrompt(histMsgs, novelImgOnForPrompt, worldBookBlock, timePerceptionOn, timeGapPrompt, memorySummary, crossWindowMsgs);
+// 🌟 修改参数传递
+      const systemPrompt = _buildSystemPrompt(histMsgs, novelImgOnForPrompt, worldBookBlock, timePerceptionOn, timeGapPrompt, memorySummary, crossWindowMsgs, scheduleContext);
       const apiMessages  = await _buildApiMessages(histMsgs, activeApi, currentRound);
       
       // 🖨️ [DEBUG] 华丽折叠版：打印完整上下文与系统提示词
@@ -14427,7 +14447,8 @@ ${dialogueFlow.trim()}
   }
 
   // ── 群聊专用：一次性组装所有角色的 System Prompt ──
-  function _buildGroupSystemPromptAll(gcMeta, histMsgs, worldBookBlock, timeGapPrompt, crossWindowMsgs = []) {
+ function _buildGroupSystemPromptAll(gcMeta, histMsgs, worldBookBlock, timeGapPrompt, crossWindowMsgs =[], schedulesMap = {}) {
+ 
     const userBg = _persona ? `用户的名字是${_persona.name}${_persona.bio ? '，个人简介/签名：' + _persona.bio : ''}${_persona.backstory ? '\n背景：' + _persona.backstory : ''}` : '';
 
     const now = new Date();
@@ -14438,6 +14459,7 @@ ${dialogueFlow.trim()}
     // ── 所有角色档案 ──
     const charProfiles = _gcMembers.map(m => {
       const c = m.char;
+      const sched = schedulesMap[m.id] ? schedulesMap[m.id] : '';
       return `---
 角色名：${m.name}
 ${c?.persona || '（无详细设定）'}
@@ -14604,8 +14626,8 @@ ${emoteBlock}
   }
 
   // ── 组装 System Prompt ──
- function _buildSystemPrompt(histMsgs, novelImgOn = false, worldBookBlock = '', timePerceptionOn = true, timeGapPrompt = '', memorySummary = '', crossWindowMsgs = []) {
-    
+
+function _buildSystemPrompt(histMsgs, novelImgOn = false, worldBookBlock = '', timePerceptionOn = true, timeGapPrompt = '', memorySummary = '', crossWindowMsgs =[], scheduleContext = '') {
     let timeCtx = '';
     if (timePerceptionOn) {
        const now = new Date();
@@ -14626,6 +14648,8 @@ ${emoteBlock}
     const worldLoreSection = worldBookBlock
       ? `\n# 世界背景知识 (World Lore · Active Injection)\n以下是与当前对话相关的世界设定，请将其作为你已知的背景事实自然融入表演，无需刻意引用：\n\n${worldBookBlock}\n`
       : '';
+      
+       const lifestyleSection = scheduleContext ? scheduleContext : '';
 
     const novelBehaviorBlock = novelImgOn
       ? `# 高级行为：NovelAI 配图（本对话已开启）
@@ -14707,6 +14731,7 @@ ${timeCtx}
 ${charPersona}
 ${charMbti}
 ${worldLoreSection}
+${lifestyleSection}
 # 关于我
 ${userBg}
 ${memorySummarySection}
@@ -18603,6 +18628,11 @@ const StoryChatModule = (() => {
         }
         
         const timeCtx = `# 剧本时间轴 (Timeline)\n当前现实/系统时间是 ${fmtTimeFull(now)}。${timeGapPrompt}`;
+        
+        let scheduleContext = '';
+        if (typeof LifestyleModule !== 'undefined') {
+            scheduleContext = await LifestyleModule.getPromptContext(_realCharId);
+        }
 
         let worldBookBlock = '';
         if (_cfgMountedWBs.length > 0) {
@@ -18644,6 +18674,7 @@ const StoryChatModule = (() => {
   姓名：${_char.name}
   ${_char.mbti ? 'MBTI：' + _char.mbti + '\n' : ''}
   设定：${_char.persona}
+  ${scheduleContext}
 - ## 2. 你眼中的“主角” (Your Perception of the Protagonist)
   姓名：${_storyPersona.name || 'User'}
   简介：${_storyPersona.bio || '无详细简介'}
