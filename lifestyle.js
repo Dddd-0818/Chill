@@ -172,7 +172,7 @@ const LifestyleModule = (() => {
 
             /* 空状态阻断 */
             .ls-empty-state-overlay {
-                position: fixed; inset: 0; z-index: 40;
+                position: absolute; inset: 0; z-index: 40;
                 background: rgba(244, 244, 246, 0.85); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
                 display: flex; flex-direction: column; align-items: center; justify-content: center;
                 padding: 32px; text-align: center; opacity: 0; pointer-events: none; transition: opacity 0.5s ease;
@@ -193,7 +193,7 @@ const LifestyleModule = (() => {
                Routine Config 面板样式
                ========================================= */
             .ls-modal-overlay {
-                position: fixed; inset: 0; z-index: 500; background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(5px);
+                position: absolute; inset: 0; z-index: 500; background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(5px);
                 opacity: 0; pointer-events: none; transition: opacity 0.4s ease;
             }
             .ls-modal-overlay.active { opacity: 1; pointer-events: auto; }
@@ -228,7 +228,8 @@ const LifestyleModule = (() => {
             .ls-rt-title { font-family: 'Noto Serif SC', serif; font-size: 15px; font-weight: 600; color: #111; margin-bottom: 4px; }
             .ls-rt-loc { font-family: 'Space Mono', monospace; font-size: 9px; color: #888; letter-spacing: 1px; display: flex; align-items: center; gap: 8px;}
             
-            .ls-modal-footer { padding: 16px 24px 32px; border-top: 1px solid rgba(0,0,0,0.08); background: #fff; }
+            /* 【底部安全区修复】动态补偿 iPhone 底部白条，避免 UI 贴底 */
+            .ls-modal-footer { padding: 16px 24px calc(16px + env(safe-area-inset-bottom, 16px)); border-top: 1px solid rgba(0,0,0,0.08); background: #fff; }
             .ls-btn-rebuild { width: 100%; background: transparent; border: 1px solid #111; color: #111; padding: 14px; border-radius: 8px; font-family: 'Space Mono', monospace; font-size: 10px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 8px;}
             .ls-btn-rebuild:active { background: #111; color: #fff; transform: scale(0.98); }
 
@@ -401,48 +402,7 @@ const LifestyleModule = (() => {
                         </button>
                     </div>
                 </section>
-
-                <!-- 作息可视化面板 (Bottom Sheet) -->
-                <div class="ls-modal-overlay" id="ls-routineModal" onclick="LifestyleModule.closeRoutineConfig()">
-                    <div class="ls-modal-sheet" onclick="event.stopPropagation()">
-                        <div class="ls-modal-header">
-                            <span class="ls-modal-title">Routine Archival</span>
-                            <button class="ls-modal-close" onclick="LifestyleModule.closeRoutineConfig()"><i class="ph-thin ph-x"></i></button>
-                        </div>
-                        <div class="ls-modal-body" id="ls-routineContent"></div>
-                        <div class="ls-modal-footer">
-                            <button class="ls-btn-rebuild" onclick="LifestyleModule.rebuildRoutine()">
-                                <i class="ph-bold ph-arrows-clockwise"></i> RE-GENERATE ROUTINE
-                            </button>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- MODAL LAYER 2: 高定确认弹窗 (取代系统 confirm) -->
-            <div class="ls-modal-overlay" id="ls-confirmOverlay" style="z-index: 600; display: flex; align-items: center; justify-content: center;">
-                <div class="ls-modal-sheet" style="position: relative; bottom: auto; width: 85%; max-width: 320px; border-radius: 24px; transform: scale(0.9); transition: transform 0.3s ease; display: block;" onclick="event.stopPropagation()">
-                    <div class="ls-modal-header" style="justify-content: center; padding-top: 28px;">
-                        <span class="ls-modal-title" style="font-size: 14px; color: #111;">TEMPORAL RESET</span>
-                    </div>
-                    <div class="ls-modal-body" style="text-align: center; padding: 24px 20px 32px;">
-                        <p style="font-size: 13px; line-height: 1.6; color: #555; margin-bottom: 0;">
-                            确认要重新推演该角色的作息规律吗？<br>
-                            <span style="font-size: 9px; color: #aaa; text-transform: uppercase; letter-spacing: 1px; display: block; margin-top: 8px;">
-                                Current archives will be overwritten.
-                            </span>
-                        </p>
-                    </div>
-                    <div class="ls-modal-footer" style="display: flex; gap: 10px; padding: 0 20px 28px; border-top: none;">
-                        <button class="ls-btn-rebuild" style="flex: 1; border: 1px solid #ddd; background: transparent; color: #888; font-size: 9px; padding: 12px 0;" onclick="document.getElementById('ls-confirmOverlay').classList.remove('active')">
-                            CANCEL
-                        </button>
-                        <button class="ls-btn-rebuild" style="flex: 1; background: #111; color: #fff; border: none; font-size: 9px; padding: 12px 0;" id="ls-btn-confirm-exec">
-                            CONFIRM
-                        </button>
-                    </div>
-                </div>
             </div>
-          </div>
 
             <!-- View 3: 具体动线页 (Itinerary Log) -->
             <div class="ls-view" id="ls-itineraryView">
@@ -467,6 +427,49 @@ const LifestyleModule = (() => {
 
                     <div class="iti-schedule-track" id="iti-scheduleTrack">
                         <!-- 动态渲染区 -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- 【修复核心：将所有的 Modal 弹窗直接挂载到外层屏幕根节点，脱离滚动流，避免跟随内容滚动产生错位和空隙】 -->
+
+            <!-- 作息可视化面板 (Bottom Sheet) -->
+            <div class="ls-modal-overlay" id="ls-routineModal" onclick="LifestyleModule.closeRoutineConfig()">
+                <div class="ls-modal-sheet" onclick="event.stopPropagation()">
+                    <div class="ls-modal-header">
+                        <span class="ls-modal-title">Routine Archival</span>
+                        <button class="ls-modal-close" onclick="LifestyleModule.closeRoutineConfig()"><i class="ph-thin ph-x"></i></button>
+                    </div>
+                    <div class="ls-modal-body" id="ls-routineContent"></div>
+                    <div class="ls-modal-footer">
+                        <button class="ls-btn-rebuild" onclick="LifestyleModule.rebuildRoutine()">
+                            <i class="ph-bold ph-arrows-clockwise"></i> RE-GENERATE ROUTINE
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- MODAL LAYER 2: 高定确认弹窗 (取代系统 confirm) -->
+            <div class="ls-modal-overlay" id="ls-confirmOverlay" style="z-index: 600; display: flex; align-items: center; justify-content: center;">
+                <div class="ls-modal-sheet" style="position: relative; bottom: auto; width: 85%; max-width: 320px; border-radius: 24px; transform: scale(0.9); transition: transform 0.3s ease; display: block;" onclick="event.stopPropagation()">
+                    <div class="ls-modal-header" style="justify-content: center; padding-top: 28px;">
+                        <span class="ls-modal-title" style="font-size: 14px; color: #111;">TEMPORAL RESET</span>
+                    </div>
+                    <div class="ls-modal-body" style="text-align: center; padding: 24px 20px 32px;">
+                        <p style="font-size: 13px; line-height: 1.6; color: #555; margin-bottom: 0;">
+                            确认要重新推演该角色的作息规律吗？<br>
+                            <span style="font-size: 9px; color: #aaa; text-transform: uppercase; letter-spacing: 1px; display: block; margin-top: 8px;">
+                                Current archives will be overwritten.
+                            </span>
+                        </p>
+                    </div>
+                    <div class="ls-modal-footer" style="display: flex; gap: 10px; padding: 0 20px 28px; border-top: none; background: transparent;">
+                        <button class="ls-btn-rebuild" style="flex: 1; border: 1px solid #ddd; background: transparent; color: #888; font-size: 9px; padding: 12px 0;" onclick="document.getElementById('ls-confirmOverlay').classList.remove('active')">
+                            CANCEL
+                        </button>
+                        <button class="ls-btn-rebuild" style="flex: 1; background: #111; color: #fff; border: none; font-size: 9px; padding: 12px 0;" id="ls-btn-confirm-exec">
+                            CONFIRM
+                        </button>
                     </div>
                 </div>
             </div>
@@ -643,7 +646,7 @@ function _getDayProfile(charId, dateStr, routine) {
     }
 
     const moodPool = isWeekend
-        ? ['lazy', 'social', 'relaxed', 'late']
+        ?['lazy', 'social', 'relaxed', 'late']
         : ['steady', 'busy', 'quiet', 'tired'];
 
     mood = _pick(rng, moodPool) || mood;
@@ -670,23 +673,23 @@ function _buildVariationEvent(charId, dateStr, profile) {
     const { rng, mode } = profile;
 
     const pools = {
-        workday: [
+        workday:[
             { time: '10:30', title: '临时补咖啡', location: '咖啡店' },
             { time: '13:10', title: '顺手处理杂事', location: '街区' },
             { time: '19:20', title: '下班后慢慢回家', location: '路上' }
         ],
 
-        weekend: [
+        weekend:[
             { time: '11:00', title: '睡到自然醒', location: '住处' },
             { time: '15:30', title: '出门散步', location: '附近街区' },
             { time: '18:40', title: '随便找地方吃饭', location: '餐馆' }
         ],
 
-        quiet: [
+        quiet:[
             { time: '14:20', title: '午睡 / 发呆', location: '住处' }
         ],
 
-        social: [
+        social:[
             { time: '20:00', title: '晚间小聚', location: '外面' }
         ]
     };
@@ -717,7 +720,7 @@ function _maybeShuffleSmallWindow(events, profile) {
     if (!events || events.length <= 1) return events;
     const { rng, volatility } = profile;
     
-    let result = [...events];
+    let result =[...events];
     for (let i = 0; i < result.length - 1; i++) {
         // 根据当天的波动率，有概率交换相邻且时间相差不到一小时的事件顺序（模拟真实生活中的小变数）
         if (rng() < volatility * 0.5) {
@@ -809,7 +812,7 @@ function _maybeShuffleSmallWindow(events, profile) {
         const schedId = `sch_${charId}_${dateStr}`;
         let sched = null;
 
-        try { sched = await DB.schedules.get(schedId); } catch (e) {}
+        try { sched = await DB.schedules.get(String(charId), dateStr); } catch (e) {}
 
         const routine = await DB.routines.get(String(charId));
         if (!routine) return null;
@@ -891,7 +894,7 @@ ${historyText || '（暂无记录）'}
 }`;
 
             // 调用 AI
-            const response = await ApiHelper.chatCompletion(activeApi, [{ role: 'system', content: prompt }]);
+            const response = await ApiHelper.chatCompletion(activeApi,[{ role: 'system', content: prompt }]);
             
             // 解析 JSON
             const cleaned = response.replace(/```json|```/g, '').trim();
@@ -1401,7 +1404,7 @@ ${char.mbti ? 'MBTI：' + char.mbti : ''}
 
         let schedule = null;
         try {
-            schedule = await DB.schedules.get(`sch_${charId}_${dateStr}`);
+            schedule = await DB.schedules.get(String(charId), dateStr);
         } catch (e) {}
 
         // 1) 优先读当天 schedule
