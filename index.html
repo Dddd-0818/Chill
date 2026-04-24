@@ -6452,6 +6452,15 @@ async function msgDel(id) {
     });
   }
   
+  async function scheduleDel(id) {
+    await open();
+    return new Promise((resolve, reject) => {
+      const req = tx('schedules', 'readwrite').delete(id);
+      req.onsuccess = () => resolve();
+      req.onerror   = e => reject(e.target.error);
+    });
+  }
+  
   return {
     VERSION: DB_VERSION,
     settings:   { get: settingsGet, set: settingsSet, del: settingsDel },
@@ -6467,7 +6476,7 @@ async function msgDel(id) {
     feed: { getAll: feedGetAll, put: feedPut, del: feedDel },
     forum: { getAll: forumGetAll, put: forumPut, del: forumDel },
     routines:   { get: routineGet, put: routinePut },
-    schedules:  { get: scheduleGet, put: schedulePut },
+    schedules:  { get: scheduleGet, put: schedulePut, del: scheduleDel },
     clearAll,
     init: open,
   };
