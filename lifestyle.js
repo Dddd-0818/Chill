@@ -12,7 +12,6 @@ const LifestyleModule = (() => {
     
     // UI 内部状态
     let _activeItiId = null; 
-    let _syncedItiIds =[];  // 🌟 之前这里名字声明带了 Iti，下面用的时候拼错了，已修复
     let _currentSchedule = null; 
 
     function init() {
@@ -173,7 +172,7 @@ const LifestyleModule = (() => {
 
             /* 空状态阻断 */
             .ls-empty-state-overlay {
-                position: absolute; inset: 0; z-index: 40;
+                position: fixed; inset: 0; z-index: 40;
                 background: rgba(244, 244, 246, 0.85); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
                 display: flex; flex-direction: column; align-items: center; justify-content: center;
                 padding: 32px; text-align: center; opacity: 0; pointer-events: none; transition: opacity 0.5s ease;
@@ -194,7 +193,7 @@ const LifestyleModule = (() => {
                Routine Config 面板样式
                ========================================= */
             .ls-modal-overlay {
-                position: absolute; inset: 0; z-index: 500; background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(5px);
+                position: fixed; inset: 0; z-index: 500; background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(5px);
                 opacity: 0; pointer-events: none; transition: opacity 0.4s ease;
             }
             .ls-modal-overlay.active { opacity: 1; pointer-events: auto; }
@@ -418,7 +417,32 @@ const LifestyleModule = (() => {
                         </div>
                     </div>
                 </div>
+                
+                <!-- MODAL LAYER 2: 高定确认弹窗 (取代系统 confirm) -->
+            <div class="ls-modal-overlay" id="ls-confirmOverlay" style="z-index: 600; display: flex; align-items: center; justify-content: center;">
+                <div class="ls-modal-sheet" style="position: relative; bottom: auto; width: 85%; max-width: 320px; border-radius: 24px; transform: scale(0.9); transition: transform 0.3s ease; display: block;" onclick="event.stopPropagation()">
+                    <div class="ls-modal-header" style="justify-content: center; padding-top: 28px;">
+                        <span class="ls-modal-title" style="font-size: 14px; color: #111;">TEMPORAL RESET</span>
+                    </div>
+                    <div class="ls-modal-body" style="text-align: center; padding: 24px 20px 32px;">
+                        <p style="font-size: 13px; line-height: 1.6; color: #555; margin-bottom: 0;">
+                            确认要重新推演该角色的作息规律吗？<br>
+                            <span style="font-size: 9px; color: #aaa; text-transform: uppercase; letter-spacing: 1px; display: block; margin-top: 8px;">
+                                Current archives will be overwritten.
+                            </span>
+                        </p>
+                    </div>
+                    <div class="ls-modal-footer" style="display: flex; gap: 10px; padding: 0 20px 28px; border-top: none;">
+                        <button class="ls-btn-rebuild" style="flex: 1; border: 1px solid #ddd; background: transparent; color: #888; font-size: 9px; padding: 12px 0;" onclick="document.getElementById('ls-confirmOverlay').classList.remove('active')">
+                            CANCEL
+                        </button>
+                        <button class="ls-btn-rebuild" style="flex: 1; background: #111; color: #fff; border: none; font-size: 9px; padding: 12px 0;" id="ls-btn-confirm-exec">
+                            CONFIRM
+                        </button>
+                    </div>
+                </div>
             </div>
+          </div>
 
             <!-- View 3: 具体动线页 (Itinerary Log) -->
             <div class="ls-view" id="ls-itineraryView">
@@ -536,18 +560,27 @@ const LifestyleModule = (() => {
     // ==========================================
     // 时间演算引擎核心 (Routine -> Schedule)
     // ==========================================
-    function _addRandomOffset(timeStr) {
-        const [h, m] = timeStr.split(':').map(Number);
-        let totalMins = h * 60 + m;
-        // 随机偏移 -15 到 +15 分钟
-        const offset = Math.floor(Math.random() * 31) - 15; 
-        totalMins += offset;
-        if (totalMins < 0) totalMins = 0;
-        if (totalMins > 23 * 60 + 59) totalMins = 23 * 60 + 59;
-        const nh = Math.floor(totalMins / 60);
-        const nm = totalMins % 60;
-        return `${String(nh).padStart(2,'0')}:${String(nm).padStart(2,'0')}`;
-    }
+    function _addRandomOffset(timeStr, rng = Math.random, minOffset = -15, maxOffset = 15) {
+
+    const [h, m] = timeStr.split(':').map(Number);
+    let totalMins = h * 60 + m;
+
+    const rand = typeof rng === 'function' ? rng() : Math.random();
+
+    const offset =
+        Math.floor(rand * (maxOffset - minOffset + 1))
+        + minOffset;
+
+    totalMins += offset;
+
+    if (totalMins < 0) totalMins = 0;
+    if (totalMins > 1439) totalMins = 1439;
+
+    const nh = Math.floor(totalMins / 60);
+    const nm = totalMins % 60;
+
+    return `${String(nh).padStart(2, '0')}:${String(nm).padStart(2, '0')}`;
+}
 
     function _guessIcon(title, type) {
         const t = (title + type).toLowerCase();
@@ -561,77 +594,353 @@ const LifestyleModule = (() => {
         if (t.includes('睡') || t.includes('息')) return 'ph-fill ph-bed';
         return 'ph-fill ph-wind'; 
     }
+    
+    // ===== 日变化系统 START =====
 
+const SCHEDULE_VERSION = 2;
+
+// 稳定随机（同一天固定，不同天变化）
+function _hashString(str) {
+    let h = 2166136261;
+    for (let i = 0; i < str.length; i++) {
+        h ^= str.charCodeAt(i);
+        h = Math.imul(h, 16777619);
+    }
+    return h >>> 0;
+}
+
+function _makeRng(seedStr) {
+    let seed = _hashString(seedStr) || 1;
+    return function () {
+        seed = (seed * 1664525 + 1013904223) >>> 0;
+        return seed / 4294967296;
+    };
+}
+
+function _pick(rng, arr) {
+    if (!arr || arr.length === 0) return null;
+    return arr[Math.floor(rng() * arr.length)];
+}
+
+// 每天抽一个“当天状态”
+function _getDayProfile(charId, dateStr, routine) {
+    const rng = _makeRng(`${charId}_${dateStr}`);
+
+    const d = new Date(`${dateStr}T00:00:00`);
+    const day = d.getDay();
+
+    const isWeekend = day === 0 || day === 6;
+
+    let mode = 'workday';
+    let mood = 'steady';
+    let volatility = 0.18;
+
+    if (isWeekend) {
+        mode = rng() < 0.5 ? 'weekend' : 'social';
+        volatility = 0.28;
+    } else {
+        mode = rng() < 0.2 ? 'quiet' : 'workday';
+    }
+
+    const moodPool = isWeekend
+        ? ['lazy', 'social', 'relaxed', 'late']
+        : ['steady', 'busy', 'quiet', 'tired'];
+
+    mood = _pick(rng, moodPool) || mood;
+
+    return {
+        rng,
+        mode,
+        mood,
+        volatility,
+        isWeekend
+    };
+}
+
+function _shouldInsertVariation(profile) {
+    const { rng, volatility } = profile;
+    return rng() < Math.max(0.15, volatility);
+}
+
+// 每天随机插一个生活碎片
+function _buildVariationEvent(charId, dateStr, profile) {
+
+    if (!_shouldInsertVariation(profile)) return null;
+
+    const { rng, mode } = profile;
+
+    const pools = {
+        workday: [
+            { time: '10:30', title: '临时补咖啡', location: '咖啡店' },
+            { time: '13:10', title: '顺手处理杂事', location: '街区' },
+            { time: '19:20', title: '下班后慢慢回家', location: '路上' }
+        ],
+
+        weekend: [
+            { time: '11:00', title: '睡到自然醒', location: '住处' },
+            { time: '15:30', title: '出门散步', location: '附近街区' },
+            { time: '18:40', title: '随便找地方吃饭', location: '餐馆' }
+        ],
+
+        quiet: [
+            { time: '14:20', title: '午睡 / 发呆', location: '住处' }
+        ],
+
+        social: [
+            { time: '20:00', title: '晚间小聚', location: '外面' }
+        ]
+    };
+
+    const pool = pools[mode] || pools.workday;
+
+    const chosen = _pick(rng, pool);
+    if (!chosen) return null;
+
+    return {
+        id: `ev_${Date.now()}_${Math.floor(rng() * 10000)}`,
+        no: 'SEQ-00',
+        time: chosen.time,
+        title: chosen.title,
+        location: chosen.location,
+        icon: 'ph-fill ph-wind',
+        state: 'future',
+        description: '',
+        type: '日常',
+        devText: ''
+    };
+}
+
+// ===== 日变化系统 END =====
+
+    // ===== 补全缺失的轻微扰动函数 =====
+function _maybeShuffleSmallWindow(events, profile) {
+    if (!events || events.length <= 1) return events;
+    const { rng, volatility } = profile;
+    
+    let result = [...events];
+    for (let i = 0; i < result.length - 1; i++) {
+        // 根据当天的波动率，有概率交换相邻且时间相差不到一小时的事件顺序（模拟真实生活中的小变数）
+        if (rng() < volatility * 0.5) {
+            const t1 = result[i].time.split(':').map(Number);
+            const t2 = result[i+1].time.split(':').map(Number);
+            const mins1 = t1[0] * 60 + t1[1];
+            const mins2 = t2[0] * 60 + t2[1];
+            
+            if (Math.abs(mins2 - mins1) < 60) {
+                const temp = result[i];
+                result[i] = result[i+1];
+                result[i+1] = temp;
+                i++; // 避免连续交换
+            }
+        }
+    }
+    return result;
+}
+
+    // ==========================================
+    // 拆分1：纯本地代码算法推演 (用于生成过去日子的临时假数据)
+    // ==========================================
+    async function _generateMathSchedule(charId, dateStr, routine, schedId) {
+        const profile = _getDayProfile(charId, dateStr, routine);
+        const rng = profile.rng;
+
+        let newEvents =[];
+        let seqCounter = 1;
+
+        if (routine.wakeUp) {
+            const wakeTitles =[
+                { title: '晨间苏醒', desc: '一日之计的开始，准备迎接新的一天。' },
+                { title: '慢慢醒来', desc: '今天醒得不算快，先缓一会儿。' },
+                { title: '拖延起床', desc: '还想再赖一会儿床，但还是起来了。' }
+            ];
+            const wakePick = _pick(rng, wakeTitles) || wakeTitles[0];
+            newEvents.push({ id: `ev_${Date.now()}_${seqCounter}`, no: `SEQ-${String(seqCounter++).padStart(2, '0')}`, time: _addRandomOffset(routine.wakeUp, rng, -12, 18), title: wakePick.title, location: '住处', icon: 'ph-fill ph-sun-horizon', state: 'future', description: wakePick.desc, type: '日常', devText: '' });
+        }
+
+        (routine.events ||[]).forEach(ev => {
+            const isWorkLike = /工作|会议|处理|上班|通勤/.test(`${ev.title}${ev.location}${ev.type}`);
+            let extraJitter = 15;
+            if (profile.isWeekend) extraJitter += 8;
+            if (profile.mode === 'social') extraJitter += 6;
+            if (profile.mode === 'quiet') extraJitter -= 5;
+            if (profile.mode === 'late') extraJitter += 10;
+            if (profile.mood === 'tired') extraJitter += 8;
+            if (isWorkLike && profile.isWeekend) extraJitter += 10;
+            if (!isWorkLike && profile.mode === 'workday') extraJitter -= 2;
+            extraJitter = Math.max(6, Math.min(35, extraJitter));
+
+            newEvents.push({ id: `ev_${Date.now()}_${seqCounter}`, no: `SEQ-${String(seqCounter++).padStart(2, '0')}`, time: _addRandomOffset(ev.time, rng, -extraJitter, extraJitter), title: ev.title, location: ev.location || '未知', icon: _guessIcon(ev.title, ev.type), state: 'future', description: `预定于 ${ev.location} 进行 ${ev.title}。`, type: ev.type || '日常', devText: '' });
+        });
+
+        const variationEvent = _buildVariationEvent(charId, dateStr, profile);
+        if (variationEvent) newEvents.push(variationEvent);
+
+        if (routine.sleep) {
+            const sleepTitles =[
+                { title: '夜间休眠', desc: '结束一天的日程，进入休息状态。' },
+                { title: '准备入睡', desc: '今天差不多该收尾了。' },
+                { title: '夜里安静下来', desc: '把今天最后一点事情放下。' }
+            ];
+            const sleepPick = _pick(rng, sleepTitles) || sleepTitles[0];
+            newEvents.push({ id: `ev_${Date.now()}_${seqCounter}`, no: `SEQ-${String(seqCounter++).padStart(2, '0')}`, time: _addRandomOffset(routine.sleep, rng, -10, 25), title: sleepPick.title, location: '住处', icon: 'ph-fill ph-moon', state: 'future', description: sleepPick.desc, type: '日常', devText: '' });
+        }
+
+        newEvents.sort((a, b) => a.time.localeCompare(b.time));
+        if (typeof _maybeShuffleSmallWindow === 'function') {
+            newEvents = _maybeShuffleSmallWindow(newEvents, profile);
+        }
+        newEvents.sort((a, b) => a.time.localeCompare(b.time));
+
+        newEvents.forEach((ev, i) => ev.no = `SEQ-${String(i + 1).padStart(2, '0')}`);
+
+        const newSchedule = {
+            id: schedId, charId: String(charId), date: dateStr, version: SCHEDULE_VERSION,
+            dayProfile: { mode: profile.mode, mood: profile.mood, isWeekend: profile.isWeekend },
+            events: newEvents
+        };
+        await DB.schedules.put(newSchedule);
+        return newSchedule;
+    }
+
+    // ==========================================
+    // 拆分2：引擎总调度 (大模型接入 + 时空迷雾拦截)
+    // ==========================================
     async function _getOrCreateSchedule(charId, dateStr) {
         const schedId = `sch_${charId}_${dateStr}`;
         let sched = null;
-        try {
-            sched = await DB.schedules.get(schedId);
-        } catch(e) {}
 
-        if (sched) return sched;
+        try { sched = await DB.schedules.get(schedId); } catch (e) {}
 
         const routine = await DB.routines.get(String(charId));
         if (!routine) return null;
 
-        const newEvents =[];
-        let seqCounter = 1;
+        // 如果数据库已经有算好的排期表，直接返回
+        if (sched && sched.version === SCHEDULE_VERSION) return sched;
 
-        if (routine.wakeUp) {
-            newEvents.push({
-                id: `ev_${Date.now()}_${seqCounter}`,
-                no: `SEQ-${String(seqCounter++).padStart(2,'0')}`,
-                time: _addRandomOffset(routine.wakeUp),
-                title: '晨间苏醒',
-                location: '住处',
-                icon: 'ph-fill ph-sun-horizon',
-                state: 'future', 
-                description: '一日之计的开始，准备迎接新的一天。',
-                type: '日常'
-            });
+        const today = new Date();
+        const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+
+        // 🛡️ 时空迷雾拦截：如果是未来的日子，不排期，直接返回 null
+        if (dateStr > todayStr) return null;
+
+        // 🔄 过去的日子：我们先用假算法填补（后续再换成真实归档提取）
+        if (dateStr < todayStr) {
+            return _generateMathSchedule(charId, dateStr, routine, schedId);
         }
 
-        (routine.events ||[]).forEach(ev => {
-            newEvents.push({
-                id: `ev_${Date.now()}_${seqCounter}`,
-                no: `SEQ-${String(seqCounter++).padStart(2,'0')}`,
-                time: _addRandomOffset(ev.time),
+      // 💥【今日推演核心】如果正是今天！呼叫大模型拉取记录并排期
+        try {
+            const activeApi = await DB.api.getActive();
+            if (!activeApi) throw new Error('未配置 API');
+
+            const char = await DB.characters.get(Number(charId)).catch(() => null);
+            
+            // 🌟 修复 1：拉取 50 条消息，并提供完整的 YYYY-MM-DD HH:MM 时间戳
+            const rawMsgs = await DB.messages.getPage(String(charId), 0, 50).catch(() =>[]);
+            const historyText = rawMsgs.reverse().map(m => {
+                const d = new Date(m.timestamp);
+                const year = d.getFullYear();
+                const month = String(d.getMonth() + 1).padStart(2, '0');
+                const date = String(d.getDate()).padStart(2, '0');
+                const hour = String(d.getHours()).padStart(2, '0');
+                const min = String(d.getMinutes()).padStart(2, '0');
+                
+                const fullTimeStr = `${year}-${month}-${date} ${hour}:${min}`;
+                const role = m.role === 'user' ? '用户' : (char?.name || '角色');
+                const txt = m.parts?.map(p => p.content || p.text || '').join('') || m.content;
+                return `[${fullTimeStr}][${role}]: ${txt}`;
+            }).join('\n');
+
+            const prompt = `[系统指令：时空轨迹动态合成引擎]
+你现在需要为角色【${char?.name || '角色'}】合成今天的24小时行动轨迹。
+【当前物理时间】：${todayStr} (今天)
+
+【基础作息模板（仅作为基本行为逻辑参考）】：
+起床：${routine.wakeUp || '08:00'} / 就寝：${routine.sleep || '23:00'}
+常规事件：${JSON.stringify(routine.events ||[])}
+
+【50条跨次元聊天存证（含精确时间戳，请仔细分析日期）】：
+${historyText || '（暂无记录）'}
+
+【推演逻辑与禁令】：
+1. **日期敏感性**：请仔细比对聊天记录中的[日期]与当前日期[${todayStr}]。如果记录中的日期在今天之前，除非是约定好了“明天（即今天）”要做的事，否则之前的闲聊不应干扰今天的行程。
+2. **变数定义 (isDeviation)**：
+   - 必须是切实发生的“突发状况”或“用户约定”。
+   - 如果昨晚聊太晚（超过午夜），今天起床时间必须逻辑性推迟。
+   - 严禁把“讨论了某事”、“说了某话”这种非物理层面的互动当作行程！
+3. **文案规范 (devText)**：
+   - **绝对禁止**使用：“聊天记录提到”、“用户要求”、“根据记录”等任何破坏沉浸感的废话。
+   - 必须使用【干练的行事历/备忘录】口吻。
+   - 示例：若约了喝茶，填“临时约见：与用户喝茶”；若起晚了，填“昨晚熬夜导致补觉”。
+4. **排序**：生成的 events 必须严格按 time 从 00:00 到 23:59 排序。
+
+【输出要求】：严格返回 JSON 格式，不含Markdown代码块标签。
+{
+  "dayProfile": { "mode": "workday/weekend", "mood": "性格描述" },
+  "events":[
+    { 
+      "time": "HH:MM", 
+      "title": "事件简述", 
+      "location": "地点", 
+      "type": "工作/日常/社交", 
+      "description": "第一人称感性叙述", 
+      "isDeviation": true/false,
+      "devText": "仅当isDeviation为true时填入简短变动备注"
+    }
+  ]
+}`;
+
+            // 调用 AI
+            const response = await ApiHelper.chatCompletion(activeApi, [{ role: 'system', content: prompt }]);
+            
+            // 解析 JSON
+            const cleaned = response.replace(/```json|```/g, '').trim();
+            const start = cleaned.indexOf('{');
+            const end = cleaned.lastIndexOf('}');
+            if (start === -1 || end === -1) throw new Error('AI返回数据异常');
+            
+            const aiData = JSON.parse(cleaned.substring(start, end + 1));
+            
+            // 处理事件
+            let seqCounter = 1;
+            const newEvents = (aiData.events ||[]).map(ev => ({
+                id: `ev_${Date.now()}_${Math.floor(Math.random()*10000)}`,
+                no: `SEQ-${String(seqCounter++).padStart(2, '0')}`,
+                time: ev.time,
                 title: ev.title,
                 location: ev.location || '未知',
-                icon: _guessIcon(ev.title, ev.type),
-                state: 'future',
-                description: `预定于 ${ev.location} 进行 ${ev.title}。`,
-                type: ev.type || '日常'
-            });
-        });
+                icon: _guessIcon(ev.title, ev.type), 
+                state: ev.isDeviation ? 'deviation' : 'future', 
+                description: ev.description || '',
+                type: ev.type || '日常',
+                devText: ev.devText || ''
+            }));
 
-        if (routine.sleep) {
-            newEvents.push({
-                id: `ev_${Date.now()}_${seqCounter}`,
-                no: `SEQ-${String(seqCounter++).padStart(2,'0')}`,
-                time: _addRandomOffset(routine.sleep),
-                title: '夜间休眠',
-                location: '住处',
-                icon: 'ph-fill ph-moon',
-                state: 'future',
-                description: '结束一天的日程，进入休息状态。',
-                type: '日常'
-            });
+            newEvents.sort((a, b) => a.time.localeCompare(b.time));
+            newEvents.forEach((ev, i) => ev.no = `SEQ-${String(i + 1).padStart(2, '0')}`);
+
+            const newSchedule = {
+                id: schedId,
+                charId: String(charId),
+                date: dateStr,
+                version: SCHEDULE_VERSION,
+                dayProfile: {
+                    mode: aiData.dayProfile?.mode || 'workday',
+                    mood: aiData.dayProfile?.mood || 'steady',
+                    isWeekend: false
+                },
+                events: newEvents
+            };
+
+            await DB.schedules.put(newSchedule);
+            console.log(`[Lifestyle] 📅 今日动态行程已由大模型根据50条记忆推演完成!`);
+            return newSchedule;
+
+        } catch(e) {
+            console.warn('[Lifestyle] LLM 智能推演失败，执行本地Fallback:', e.message);
+            return _generateMathSchedule(charId, dateStr, routine, schedId);
         }
-
-        newEvents.sort((a, b) => a.time.localeCompare(b.time));
-        newEvents.forEach((ev, i) => ev.no = `SEQ-${String(i+1).padStart(2,'0')}`);
-
-        const newSchedule = {
-            id: schedId,
-            charId: String(charId),
-            date: dateStr,
-            events: newEvents
-        };
-
-        await DB.schedules.put(newSchedule);
-        return newSchedule;
-    }
+     }
 
     function _evaluateScheduleState(schedule, isToday) {
         if (!schedule || !schedule.events) return;
@@ -664,6 +973,7 @@ const LifestyleModule = (() => {
 
     async function _buildWeekData() {
         const today = new Date();
+        today.setHours(0, 0, 0, 0); // 抹平具体时间，只比较日期
         const currentDayOfWeek = today.getDay() || 7; 
         const monday = new Date(today);
         monday.setDate(today.getDate() - currentDayOfWeek + 1);
@@ -674,14 +984,18 @@ const LifestyleModule = (() => {
         for (let i = 0; i < 7; i++) {
             const d = new Date(monday);
             d.setDate(monday.getDate() + i);
+            d.setHours(0, 0, 0, 0); // 对齐时间基准
+            
             const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-            const isToday = d.toDateString() === today.toDateString();
+            const isToday = d.getTime() === today.getTime();
+            const isFuture = d.getTime() > today.getTime(); // 👈 核心：判断是否是还没到的未来
 
             let eventCount = 0;
             let hasAnomaly = false;
             let anomalyText = '';
             
-            if (_currentDetailCharId) {
+            // 只有“过去”和“今天”才会去推演/读取详细行程
+            if (_currentDetailCharId && !isFuture) {
                 try {
                     const sch = await _getOrCreateSchedule(_currentDetailCharId, dateStr);
                     if (sch && sch.events) {
@@ -689,7 +1003,8 @@ const LifestyleModule = (() => {
                         const deviations = sch.events.filter(e => e.state === 'deviation');
                         if (deviations.length > 0) {
                             hasAnomaly = true;
-                            anomalyText = deviations.map(d => d.devText || `[${d.title}] 发生偏差`).join('；');
+                            // 用更具设计感的双斜杠分隔，而不是分号
+anomalyText = deviations.map(d => d.devText || `[${d.title}] 发生突发变动`).join(' // ');
                         }
                     }
                 } catch(e) {}
@@ -700,9 +1015,11 @@ const LifestyleModule = (() => {
                 date: String(d.getDate()).padStart(2, '0'),
                 fullDate: dateStr,
                 isToday: isToday,
+                isFuture: isFuture, // 把未来标识传下去
                 events: eventCount,
                 duration: eventCount > 0 ? Math.floor(eventCount * 2.5) : 0, 
-                load: eventCount >= 6 ? 'HIGH LOAD' : (eventCount >= 3 ? 'NORMAL' : (eventCount > 0 ? 'CHILL' : 'VOID')),
+                // 未来显示 UNKNOWN，其余按数量显示负载
+                load: isFuture ? 'UNKNOWN' : (eventCount >= 6 ? 'HIGH LOAD' : (eventCount >= 3 ? 'NORMAL' : (eventCount > 0 ? 'CHILL' : 'VOID'))),
                 hasAnomaly: hasAnomaly,
                 anomalyText: anomalyText
             });
@@ -796,7 +1113,12 @@ const LifestyleModule = (() => {
         const data = _currentWeekData[_selectedDateIndex];
         if (!data) return;
 
-        document.getElementById('ls-briefLabel').textContent = data.isToday ? "TODAY'S BRIEF" : "ARCHIVE BRIEF";
+        // 1. 修复顶部小标签：未来不能叫“归档”
+        let labelText = "ARCHIVE BRIEF";
+        if (data.isToday) labelText = "TODAY'S BRIEF";
+        else if (data.isFuture) labelText = "TEMPORAL FOG // 迷雾";
+        document.getElementById('ls-briefLabel').textContent = labelText;
+
         document.getElementById('ls-briefDate').textContent = `${data.day}, ${data.date}`;
         document.getElementById('ls-briefStatus').textContent = data.load;
         document.getElementById('ls-valEvents').textContent = String(data.events).padStart(2, '0');
@@ -812,12 +1134,23 @@ const LifestyleModule = (() => {
 
         const btn = document.getElementById('ls-btnEnterItinerary');
         const btnText = document.getElementById('ls-btnEnterText');
-        if (data.events > 0) {
+        const configBtn = document.querySelector('.ls-config-action'); // 获取底部的 ROUTINE CONFIG 按钮
+
+        if (data.isFuture) {
+            // 是未来：阻断进入，并把底下的 Routine Config 完全隐藏
+            btn.classList.add('is-disabled');
+            btnText.textContent = 'AWAITING SYNC... (时空迷雾)';
+            if (configBtn) configBtn.style.display = 'none'; 
+        } else if (data.events > 0) {
+            // 正常有行程：恢复显示
             btn.classList.remove('is-disabled');
             btnText.textContent = 'ENTER ITINERARY LOG';
+            if (configBtn) configBtn.style.display = 'flex';
         } else {
+            // 过去的空缺天数：恢复显示
             btn.classList.add('is-disabled');
-            btnText.textContent = 'NO EVENTS SCHEDULED';
+            btnText.textContent = 'NO EVENTS ARCHIVED';
+            if (configBtn) configBtn.style.display = 'flex';
         }
     }
 
@@ -908,12 +1241,13 @@ const LifestyleModule = (() => {
                                 <button class="iti-action-btn" onclick="event.stopPropagation(); alert('此功能筹备中: 主动制造事件偏差')">DEVIATION</button>
                             </div>
                             
-                            <button class="iti-sync-btn ${_syncedItiIds.includes(item.id) ? 'is-synced' : ''}" onclick="LifestyleModule.syncToChat(event, '${item.id}')">
-                                <div class="iti-eq-visualizer">
-                                    <div class="iti-eq-bar"></div><div class="iti-eq-bar"></div><div class="iti-eq-bar"></div>
-                                </div>
-                                SYNC
-                            </button>
+                            <!-- 改为纯展示的自动同步指示器，不可点击 -->
+<div class="iti-sync-btn" style="color: #D93A3A; cursor: default; pointer-events: none;">
+    <div class="iti-eq-visualizer">
+        <div class="iti-eq-bar"></div><div class="iti-eq-bar"></div><div class="iti-eq-bar"></div>
+    </div>
+    AUTO-SYNCED
+</div>
                         </div>
                     </div>
                 </div>
@@ -924,18 +1258,6 @@ const LifestyleModule = (() => {
 
     function toggleItiCard(id) {
         _activeItiId = (_activeItiId === id) ? null : id;
-        _renderItineraryTrack();
-    }
-
-    // 🌟 已修复：变量名 _syncedItiIds
-    function syncToChat(e, id) {
-        e.stopPropagation();
-        if (_syncedItiIds.includes(id)) {
-            _syncedItiIds = _syncedItiIds.filter(i => i !== id);
-        } else {
-            _syncedItiIds.push(id);
-            Toast.show('【系统预留钩子】此行程点已被标记，将同步到聊天流系统提示中。');
-        }
         _renderItineraryTrack();
     }
 
@@ -1041,51 +1363,92 @@ ${char.mbti ? 'MBTI：' + char.mbti : ''}
         document.getElementById('ls-routineModal').classList.remove('active');
     }
 
-    function rebuildRoutine() {
-        if (confirm('确认要重新推演角色的作息规律吗？\n当前生成的时刻表将被覆盖。')) {
-            closeRoutineConfig(); 
+    async function rebuildRoutine() {
+        const confirmOverlay = document.getElementById('ls-confirmOverlay');
+        const execBtn = document.getElementById('ls-btn-confirm-exec');
+        
+        // 显示确认弹窗
+        confirmOverlay.classList.add('active');
+        
+        // 绑定一次性点击事件
+        execBtn.onclick = async () => {
+            confirmOverlay.classList.remove('active');
+            closeRoutineConfig(); // 关闭底部的配置面板
+
+            // 🌟 重要：清理今天该角色的排期缓存，迫使系统使用 50 条消息新逻辑重新推理
+            if (_currentDetailCharId) {
+                try {
+                    const today = new Date();
+                    const dateStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+                    await DB.schedules.del(`sch_${_currentDetailCharId}_${dateStr}`);
+                } catch(e) {}
+            }
+
+            // 显示“空状态”进行重新生成
             document.getElementById('ls-emptyState').classList.add('active');
             generateRoutine(); 
-        }
+        };
     }
 
     // ==========================================
     // 暴露给 ChatModule 顶栏的状态接口
     // ==========================================
     async function getCurrentStatus(charId) {
+    try {
+        const now = new Date();
+        const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+        const nowTimeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+        let schedule = null;
         try {
-            const now = new Date();
-            const dateStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
-            const sched = await DB.schedules.get(`sch_${charId}_${dateStr}`).catch(()=>null);
-            
-            const nowTimeStr = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
-            
-            if (sched && sched.events) {
-                let currentEvent = sched.events[0];
-                for (let i = sched.events.length - 1; i >= 0; i--) {
-                    if (sched.events[i].time <= nowTimeStr) {
-                        currentEvent = sched.events[i];
-                        break;
-                    }
+            schedule = await DB.schedules.get(`sch_${charId}_${dateStr}`);
+        } catch (e) {}
+
+        // 1) 优先读当天 schedule
+        if (schedule && Array.isArray(schedule.events) && schedule.events.length > 0) {
+            let currentEvent = schedule.events[0];
+
+            for (let i = schedule.events.length - 1; i >= 0; i--) {
+                if (schedule.events[i].time <= nowTimeStr) {
+                    currentEvent = schedule.events[i];
+                    break;
                 }
-                if (currentEvent.state === 'deviation') return `⚠ 突发：${currentEvent.title}`;
-                return currentEvent ? currentEvent.title : 'ACTIVE RECORD'; 
             }
 
-            const routine = await DB.routines.get(String(charId));
-            if (!routine || !routine.events) return null;
-            
-            let currentEv = routine.events[0];
-            for (const ev of routine.events) {
-                if (ev.time <= nowTimeStr) currentEv = ev;
-                else break;
+            if (currentEvent.state === 'deviation') {
+                return currentEvent.devText
+                    ? `⚠ ${currentEvent.devText}`
+                    : `⚠ ${currentEvent.title}`;
             }
-            return currentEv ? currentEv.status : 'ACTIVE RECORD';
-        } catch(e) {
-            return null;
+
+            if (currentEvent.state === 'active') {
+                return currentEvent.title || currentEvent.status || 'ACTIVE RECORD';
+            }
+
+            if (currentEvent.state === 'past') {
+                return currentEvent.title ? `刚结束 ${currentEvent.title}` : 'ACTIVE RECORD';
+            }
+
+            return currentEvent.title || currentEvent.status || 'ACTIVE RECORD';
         }
-    }
 
+        // 2) 没有当天 schedule，就回退到 routine
+        const routine = await DB.routines.get(String(charId));
+        if (!routine || !Array.isArray(routine.events) || routine.events.length === 0) {
+            return 'ACTIVE RECORD';
+        }
+
+        let currentEv = routine.events[0];
+        for (const ev of routine.events) {
+            if (ev.time <= nowTimeStr) currentEv = ev;
+            else break;
+        }
+
+        return currentEv.title || currentEv.status || 'ACTIVE RECORD';
+    } catch (e) {
+        return 'ACTIVE RECORD';
+    }
+}
     
     // 🌟 新增：提取今日生活轨迹，喂给大模型的 System Prompt
     async function getPromptContext(charId) {
@@ -1127,7 +1490,7 @@ ${char.mbti ? 'MBTI：' + char.mbti : ''}
         init, onEnter, openDetail, closeDetail, 
         generateRoutine, getCurrentStatus, 
         openRoutineConfig, closeRoutineConfig, rebuildRoutine,
-        openItinerary, closeItinerary, toggleItiCard, syncToChat,
+        openItinerary, closeItinerary, toggleItiCard, 
         getPromptContext
     };
 })();
