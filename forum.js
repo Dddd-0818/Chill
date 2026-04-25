@@ -11,6 +11,7 @@ const ForumModule = (() => {
     let _eventImgFile = null; // 暂存图片文件
     let _eventImgUrl  = null; // 暂存预览链接
     let _postToDelete = null;
+    let _postToShare = null;
 
     function init() {
         if (_initialized) return;
@@ -370,6 +371,9 @@ const ForumModule = (() => {
             #forum-screen .fm-switch.on { background: var(--fm-fg); }
             #forum-screen .fm-switch-knob { width: 14px; height: 14px; background: #fff; border-radius: 50%; position: absolute; left: 3px; top: 3px; transition: transform 0.3s; }
             #forum-screen .fm-switch.on .fm-switch-knob { transform: translateX(16px); background: var(--fm-bg); }
+              #forum-screen .fm-wb-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px dashed rgba(255,255,255,0.05); }
+            #forum-screen .fm-wb-row:last-child { border-bottom: none; }
+            #forum-screen .fm-wb-title { font-size: 0.85rem; color: var(--fm-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px; font-weight: 500; }
         `;
         document.head.appendChild(style);
 
@@ -393,6 +397,8 @@ const ForumModule = (() => {
                             <img src="" id="fm-user-avatar" class="fm-profile-avatar" onclick="document.getElementById('fm-upload-avatar-profile').click()" title="更换论坛头像">
                             <input type="text" id="fm-user-name" class="fm-profile-name" onchange="ForumModule.updateForumName(this.value)" title="修改论坛昵称">
                         </div>
+                         <div class="icon-btn" id="fm-refresh-btn" onclick="ForumModule.refreshNPCFeed()" title="刷新路人信号"><i class="ph ph-arrows-clockwise"></i></div>
+                        
                         <div class="icon-btn" onclick="ForumModule.openPanel('fm-world-panel')"><i class="ph ph-globe-hemisphere-west"></i></div>
                         <div class="icon-btn" onclick="ForumModule.openPanel('fm-compose-panel')"><i class="ph ph-pen-nib"></i></div>
                     </div>
@@ -418,13 +424,13 @@ const ForumModule = (() => {
                             <label class="form-label">World View / 世界观设定</label>
                             <textarea id="fm-wv-text" class="form-textarea" placeholder="输入当前的世界观或背景设定，这将指导角色自动发布符合背景设定的「世界事件」..."></textarea>
                         </div>
-                        <div class="form-group" style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--fm-line); padding-top: 16px;">
-                            <div>
-                                <label class="form-label" style="margin-bottom: 2px;">Link WorldBook / 桥接全局世界书</label>
-                                <div style="font-size: 0.6rem; color: var(--fm-fg-muted);">静默读取无角色绑定的全局词条（无视触发词并长期注入）</div>
-                            </div>
-                            <div class="fm-switch" id="fm-wv-toggle" onclick="this.classList.toggle('on')">
-                                <div class="fm-switch-knob"></div>
+                        <div class="form-group" style="border-top: 1px solid var(--fm-line); padding-top: 16px;">
+                            <label class="form-label" style="margin-bottom: 2px;">Link WorldBook / 桥接全局世界书</label>
+                            <div style="font-size: 0.6rem; color: var(--fm-fg-muted); margin-bottom: 12px; line-height: 1.4;">勾选你需要注入到世界背景中的全局词条（仅显示无角色绑定的全局词条）：</div>
+                            
+                            <!-- 👇 🌟 新增：用于动态渲染世界书列表的容器 -->
+                            <div id="fm-wb-list" style="max-height: 180px; overflow-y: auto; scrollbar-width: none; background: rgba(0,0,0,0.2); border: 1px solid var(--fm-line); border-radius: 8px; padding: 0 12px;">
+                                <!-- JS 会动态塞入列表 -->
                             </div>
                         </div>
                         <button class="btn-primary" style="margin-top: 10px;" onclick="ForumModule.saveWorldView()">SAVE CONFIG</button>
@@ -489,6 +495,17 @@ const ForumModule = (() => {
                     </div>
                 </div>
             </div>
+            
+            <!-- 分享对象选择弹窗 -->
+                <div class="fm-modal-overlay" id="fm-share-modal">
+                    <div class="fm-modal" style="text-align:left; padding: 24px; max-height: 70vh; display:flex; flex-direction:column; max-width: 320px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 16px;">
+                            <div class="fm-modal-title" style="margin:0; letter-spacing:1px;">Share To...</div>
+                            <i class="ph-thin ph-x" style="cursor:pointer; font-size:1.2rem; color:var(--fm-fg);" onclick="ForumModule.closeShareModal()"></i>
+                        </div>
+                        <div id="fm-share-list" style="overflow-y:auto; flex:1; display:flex; flex-direction:column; scrollbar-width:none;"></div>
+                    </div>
+                </div>
         `;
         document.querySelector('.device').appendChild(screen);
 
@@ -726,6 +743,8 @@ const ForumModule = (() => {
                         </div>
                         <div class="inner-interaction">
                             <div class="int-btn" onclick="ForumModule.toggleComments('${post.id}')" id="fm-btn-msg-${post.id}"><i class="ph ph-chat-centered-text"></i> ${post.comments.length} RESPONSES</div>
+                            <!-- 👇 新增的分享按钮 -->
+                            <div class="int-btn" onclick="ForumModule.openShareModal('${post.id}')"><i class="ph ph-share-network"></i> SHARE</div>
                             <div class="int-btn" onclick="ForumModule.deletePost('${post.id}')" style="margin-left:auto;"><i class="ph-thin ph-trash"></i> DELETE</div>
                         </div>
                     </div>
@@ -734,13 +753,13 @@ const ForumModule = (() => {
                 </div>
             `;
         }  else if (post.type === 'square') {
-            // 🌟 修改：在正文(sq-content)和音频面板(sq-panel)之间，插入 fakeImgHTML
             visualHTML = `<div class="square-visual"><div class="sq-header"><div class="sq-user"><img src="${avatarUrl}" class="sq-avatar"><div><div class="sq-name">${_escHtml(post.author)}</div><div class="sq-id">@${_escHtml(post.author.toLowerCase().replace(/\\s/g,'_'))}</div></div></div><div class="meta-data" style="color:var(--fm-fg-muted);"><i class="ph ph-wifi-high"></i> ONLINE</div></div><div class="sq-content">${_escHtml(post.content)}</div>${fakeImgHTML}<div class="sq-panel"><div class="meta-data" style="writing-mode: vertical-rl; transform: rotate(180deg);">FREQ</div><div class="waveform"></div><div class="sq-toggle"></div></div></div>`;
-            interactionHTML = `<div class="interaction-bar"><div class="int-btn" onclick="ForumModule.toggleComments('${post.id}')" id="fm-btn-msg-${post.id}"><i class="ph ph-chat-centered-text"></i> ${post.comments.length}</div><div class="int-btn" onclick="ForumModule.deletePost('${post.id}')"><i class="ph-thin ph-trash"></i></div></div>`;
+            // 👇 新增的分享按钮
+            interactionHTML = `<div class="interaction-bar"><div style="display:flex;gap:20px;"><div class="int-btn" onclick="ForumModule.toggleComments('${post.id}')" id="fm-btn-msg-${post.id}"><i class="ph ph-chat-centered-text"></i> ${post.comments.length}</div><div class="int-btn" onclick="ForumModule.openShareModal('${post.id}')"><i class="ph ph-share-network"></i></div></div><div class="int-btn" onclick="ForumModule.deletePost('${post.id}')"><i class="ph-thin ph-trash"></i></div></div>`;
         } else if (post.type === 'treehole') {
-            // 🌟 修改：在正文(th-content)之后，插入 fakeImgHTML
             visualHTML = `<div class="treehole-visual"><div class="th-badge">CLASSIFIED</div><div class="meta-data" style="margin-bottom: 12px; border-bottom:1px solid var(--fm-line); padding-bottom:8px;"><i class="ph ph-lock-key"></i> ENCRYPTED_LOG // DECRYPT_ON_HOVER</div><div class="th-content">${_escHtml(post.content)}</div>${fakeImgHTML}</div>`;
-            interactionHTML = `<div class="interaction-bar"><div class="int-btn" onclick="ForumModule.toggleComments('${post.id}')" id="fm-btn-msg-${post.id}"><i class="ph ph-chat-centered-text"></i> ${post.comments.length}</div><div class="int-btn" onclick="ForumModule.deletePost('${post.id}')"><i class="ph-thin ph-trash"></i></div></div>`;
+            // 👇 新增的分享按钮
+            interactionHTML = `<div class="interaction-bar"><div style="display:flex;gap:20px;"><div class="int-btn" onclick="ForumModule.toggleComments('${post.id}')" id="fm-btn-msg-${post.id}"><i class="ph ph-chat-centered-text"></i> ${post.comments.length}</div><div class="int-btn" onclick="ForumModule.openShareModal('${post.id}')"><i class="ph ph-share-network"></i></div></div><div class="int-btn" onclick="ForumModule.deletePost('${post.id}')"><i class="ph-thin ph-trash"></i></div></div>`;
         }
         return `<div class="post-card">${visualHTML}${interactionHTML}${renderCommentsHTML(post)}</div>`;
     }
@@ -905,6 +924,80 @@ const ForumModule = (() => {
         const section = document.getElementById(`fm-comments-${postId}`), btn = document.getElementById(`fm-btn-msg-${postId}`);
         if (section?.classList.contains('expanded')) { section.classList.remove('expanded'); btn.classList.remove('active'); }
         else { section?.classList.add('expanded'); btn?.classList.add('active'); setTimeout(() => document.getElementById(`fm-input-${postId}`)?.focus(), 50); }
+    }
+
+    async function openShareModal(postId) {
+        _postToShare = postId;
+        const listEl = document.getElementById('fm-share-list');
+        listEl.innerHTML = '<div style="text-align:center; padding: 20px; color:#888;">LOADING CONTACTS...</div>';
+        document.getElementById('fm-share-modal').classList.add('active');
+
+        let chars = await DB.characters.getAll().catch(()=>[]);
+        let groups = typeof GroupChatModule !== 'undefined' ? GroupChatModule.getAll() :[];
+
+        let html = '';
+        // 渲染群聊
+        groups.forEach(g => {
+            html += `<div class="fm-share-item" onclick="ForumModule.executeShare('${g.id}', true)">
+                <i class="ph-fill ph-users"></i> <span>${_escHtml(g.name)}</span>
+            </div>`;
+        });
+        // 渲染私聊
+        chars.forEach(c => {
+            html += `<div class="fm-share-item" onclick="ForumModule.executeShare('${c.id}', false)">
+                <i class="ph-fill ph-user"></i> <span>${_escHtml(c.name)}</span>
+            </div>`;
+        });
+        listEl.innerHTML = html || '<div style="text-align:center;color:#888;">NO CONTACTS AVAILABLE</div>';
+    }
+
+    function closeShareModal() {
+        _postToShare = null;
+        document.getElementById('fm-share-modal').classList.remove('active');
+    }
+
+    async function executeShare(targetId, isGroup) {
+        const post = _posts.find(p => p.id === _postToShare);
+        if(!post) return;
+        closeShareModal();
+
+        // 构造要分享的高奢数据卡片负载
+        const shareData = {
+            postId: post.id,
+            type: post.type,
+            author: post.type === 'treehole' ? 'CLASSIFIED' : post.author,
+            title: post.title || '',
+            content: post.desc || post.content || '',
+            topComment: post.comments && post.comments.length > 0 ? `${post.comments[0].author}: ${post.comments[0].text}` : ''
+        };
+
+        const msgPart = { type: 'forum_share', data: shareData };
+        const msg = {
+            charId: String(targetId),
+            role: 'user',
+            parts: [msgPart],
+            content: '[分享了一篇论坛帖子]',
+            timestamp: Date.now(),
+            senderId: 'user',
+            perceivers: isGroup && typeof GroupChatModule !== 'undefined' ? GroupChatModule.get(targetId)?.members.slice() : undefined
+        };
+
+        await DB.messages.add(msg);
+        if(typeof Toast !== 'undefined') Toast.show('分享成功 ✦ 正在连接信号...');
+
+        // 自动跳转到对应的聊天界面，并强制模拟点击“闪光”按钮唤醒 AI 回复！
+        setTimeout(() => {
+            if (isGroup) {
+                if (typeof GroupChatModule !== 'undefined') GroupChatModule.enterGroupChat(targetId);
+            } else {
+                if (typeof ChatModule !== 'undefined') ChatModule.startChat(targetId);
+            }
+            // 等待聊天页渲染完成，模拟点击 AI 回复按钮
+            setTimeout(() => {
+                const aiBtn = document.getElementById('cv-btn-ai');
+                if (aiBtn) aiBtn.click();
+            }, 600);
+        }, 300);
     }
     
     // --- 🤖 AI 群像大脑引擎 ---
@@ -1225,21 +1318,24 @@ ${charProfiles || '无'}
             const config = await DB.settings.get('forum-worldview');
             if (config) {
                 document.getElementById('fm-wv-text').value = config.text || '';
-                if (config.useWorldBook) document.getElementById('fm-wv-toggle').classList.add('on');
             }
         } catch(e) {}
+        await renderWorldBooksForForum();
     }
 
     async function saveWorldView() {
         const text = document.getElementById('fm-wv-text').value.trim();
-        const useWorldBook = document.getElementById('fm-wv-toggle').classList.contains('on');
+        // 🌟 核心：收集所有处于 'on' 状态的开关，提取它们的世界书 ID
+        const switches = document.querySelectorAll('#fm-wb-list .fm-switch.on');
+        const linkedWorldBooks = Array.from(switches).map(el => String(el.dataset.wbid));
+        
         try {
-            await DB.settings.set('forum-worldview', { text, useWorldBook });
+            await DB.settings.set('forum-worldview', { text, linkedWorldBooks });
             if(typeof Toast !== 'undefined') Toast.show('世界架构配置已更新 ✦');
             closePanel('fm-world-panel');
         } catch(e) { if(typeof Toast !== 'undefined') Toast.show('保存失败'); }
     }
-
+    
     // 暴露给大模型提取背景的超级接口
     async function getWorldViewContext() {
         let context = '';
@@ -1247,21 +1343,182 @@ ${charProfiles || '无'}
             const config = await DB.settings.get('forum-worldview');
             if (config) {
                 if (config.text) context += `【手动设定的世界观】：\n${config.text}\n\n`;
-                if (config.useWorldBook) {
+                // 🌟 核心：只注入被用户明确勾选的那些世界书词条
+                if (config.linkedWorldBooks && config.linkedWorldBooks.length > 0) {
                     const allWBs = await DB.worldInfo.getAll().catch(()=>[]);
-                    // 只筛出没有绑定任何角色（即纯全局）的世界书词条
-                    const globalWBs = allWBs.filter(wb => !wb.characterIds || wb.characterIds.length === 0);
-                    if (globalWBs.length > 0) {
-                        context += `【全局世界书背景】：\n${globalWBs.map(wb => wb.content).join('\n')}\n`;
+                    const linkedWBs = allWBs.filter(wb => config.linkedWorldBooks.includes(String(wb.id)));
+                    if (linkedWBs.length > 0) {
+                        context += `【全局世界书背景】：\n${linkedWBs.map(wb => wb.content).join('\n')}\n`;
                     }
                 }
             }
         } catch(e) {}
         return context;
     }
+    
+    // 🌟 路人 NPC 信号刷新引擎 (仅限世界事件与匿名树洞)
+    async function refreshNPCFeed() {
+        const btn = document.getElementById('fm-refresh-btn');
+        if (!btn || btn.style.pointerEvents === 'none') return;
 
-    function openPanel(id) { document.getElementById(id).classList.add('active'); }
+        const activeApi = await DB.api.getActive().catch(()=>null);
+        if (!activeApi) {
+            if(typeof Toast !== 'undefined') Toast.show('请先配置并激活 API');
+            return;
+        }
+
+        btn.style.pointerEvents = 'none';
+        const icon = btn.querySelector('i');
+        if (icon) icon.style.animation = 'char-spin 1s linear infinite';
+        if(typeof Toast !== 'undefined') Toast.show('正在拦截暗网新信号...');
+
+        try {
+            let worldViewStr = '';
+            if (typeof getWorldViewContext === 'function') {
+                worldViewStr = await getWorldViewContext();
+            }
+
+            const prompt = `[系统任务：模拟论坛路人(NPC)发帖]
+当前时间：${_formatDate(Date.now())}
+${worldViewStr ? `【当前世界观设定】：\n${worldViewStr}\n` : ''}
+
+【任务要求】：
+请生成 4 到 6 条全新的路人帖子，包含以下两种类型（请混合输出）：
+1. "event" (世界事件)：突发大事件，必须符合【当前世界观设定】，如果没有世界观就编造一些事件，不限类型。⚠️标题排版铁律：纯中文不超过5个字且每2-3个字必须加 \\n 换行，纯英文不超过3个单词且每个单词必须加 \\n 换行！
+2. "treehole" (匿名树洞)：匿名网友（如 momo, 已注销, 匿名用户, 熬夜冠军等）发的加密动态。文风要像真实的活人冲浪，随性、发泄情绪、吐槽、分享八卦或怪谈、有网络流行语。
+
+【返回格式】必须是包含多个对象的 JSON 数组，绝不输出其他废话：[
+  {
+    "type": "event", // 或 "treehole"
+    "author": "如果是event可写 'SYSTEM' 或 'NEWS'，如果是treehole写路人网名",
+    "title": "event专用标题(带\\n，treehole可留空)",
+    "content": "treehole的正文，或event的客观描述"
+  }
+]`;
+
+            const response = await ApiHelper.chatCompletion(activeApi,[{ role: 'system', content: prompt }]);
+            const cleaned = response.replace(/```json|```/g, '').trim();
+            const start = cleaned.indexOf('[');
+            const end = cleaned.lastIndexOf(']');
+            if (start === -1 || end === -1) throw new Error('JSON 解析失败');
+            
+            const postsData = JSON.parse(cleaned.substring(start, end + 1));
+            
+            // 扩充后的高奢背景图片池 (角色发世界事件专用)
+      const EVENT_IMG_URLS = [
+          'https://i.postimg.cc/0y1sf8MY/IMG_7337.jpg', 'https://i.postimg.cc/KjjgHtqz/IMG_9877.jpg',
+          'https://i.postimg.cc/2yyBKnc5/IMG_9878.jpg', 'https://i.postimg.cc/Y0PmKjZB/IMG_9879.jpg',
+          'https://i.postimg.cc/rsstP5hb/IMG_9880.jpg', 'https://i.postimg.cc/brr2B16K/IMG_9881.jpg',
+          'https://i.postimg.cc/mkkF57dn/IMG_9882.jpg', 'https://i.postimg.cc/prrn6K06/IMG_9883.jpg',
+          'https://i.postimg.cc/0jjJB7tc/IMG_9884.jpg', 'https://i.postimg.cc/PJJ8R16M/IMG_9887.jpg',
+          'https://i.postimg.cc/900qnyxp/IMG_9888.jpg', 'https://i.postimg.cc/RFXHdgTy/IMG_9889.jpg',
+          'https://i.postimg.cc/gJNZsgKM/IMG_9890.jpg', 'https://i.postimg.cc/pTqFCsBC/IMG_9891.jpg',
+          'https://i.postimg.cc/0QcwnVCZ/IMG_9892.jpg', 'https://i.postimg.cc/bJ3tgmRT/IMG_9893.jpg',
+          'https://i.postimg.cc/qRj3w1GK/IMG_9894.jpg', 'https://i.postimg.cc/Sxbhry2r/IMG_6675.jpg',
+          'https://i.postimg.cc/yNbVybJd/IMG-9967.jpg', 'https://i.postimg.cc/XJBnHkF7/IMG-9968.jpg',
+          'https://i.postimg.cc/V60zGWMs/IMG-9969.jpg', 'https://i.postimg.cc/j5nRg4Nt/IMG-9970.jpg',
+          'https://i.postimg.cc/V60zGWMN/IMG-9971.jpg', 'https://i.postimg.cc/HLhp9hJT/IMG-9972.jpg',
+          'https://i.postimg.cc/hG5S15JS/IMG-9973.jpg', 'https://i.postimg.cc/yNbVybJ1/IMG-9975.jpg',
+          'https://i.postimg.cc/d0xqjx7Q/IMG-9976.jpg', 'https://i.postimg.cc/6Qm9fm78/IMG-9977.jpg',
+          'https://i.postimg.cc/XvzVkzZY/IMG-9978.jpg', 'https://i.postimg.cc/7LWxnWC4/IMG-9979.jpg',
+          'https://i.postimg.cc/1zj9rjgQ/IMG-9980.jpg', 'https://i.postimg.cc/q75kx5td/IMG-9981.jpg',
+          'https://i.postimg.cc/hG5S15JR/IMG-9982.jpg', 'https://i.postimg.cc/W43Nrv1x/IMG-9983.jpg',
+          'https://i.postimg.cc/Gp2LYCmZ/IMG-9984.jpg', 'https://i.postimg.cc/q7RJnTvj/IMG-9985.jpg',
+          'https://i.postimg.cc/MTfzPmRH/IMG-9986.jpg', 'https://i.postimg.cc/C1nwPsD1/IMG-9987.jpg',
+          'https://i.postimg.cc/q7RJnTvD/IMG-9988.jpg', 'https://i.postimg.cc/W43Nrv1B/IMG-9989.jpg',
+          'https://i.postimg.cc/Jh2152s6/IMG-9990.jpg', 'https://i.postimg.cc/0NB80Bzt/IMG-9991.jpg',
+          'https://i.postimg.cc/yNbVybJ4/IMG-9992.jpg', 'https://i.postimg.cc/yNbVybD5/IMG-9993.jpg',
+          'https://i.postimg.cc/SKvyfvnP/IMG-9994.jpg'
+      ];
+
+            let added = 0;
+            const now = Date.now();
+            for (const p of postsData) {
+                const isEvent = p.type === 'event';
+                const post = {
+                    id: 'fp_' + now + Math.floor(Math.random() * 100000),
+                    // 👇 核心修复：把广场去掉了，路人只能发树洞和事件
+                    type: isEvent ? 'event' : 'treehole',
+                    timestamp: now - Math.floor(Math.random() * 3600000), 
+                    likes: [],
+                    comments:[],
+                    author: p.author || 'Anonymous',
+                    avatarKey: '' 
+                };
+
+                if (isEvent) {
+                    post.title = p.title || 'UNNAMED\nEVENT';
+                    post.desc = p.content || '...';
+                    post.image = EVENT_IMG_URLS[Math.floor(Math.random() * EVENT_IMG_URLS.length)];
+                } else {
+                    post.content = p.content || '...';
+                    post.hasImage = false;
+                }
+                await DB.forum.put(post);
+                added++;
+                
+                // 触发群像智能跟帖
+                if (typeof evaluateNewPost === 'function') {
+                    evaluateNewPost(post.id);
+                }
+            }
+
+            if(typeof Toast !== 'undefined') Toast.show(`成功拦截 ${added} 条新信号 ✦`);
+            await loadPosts(); 
+
+        } catch (e) {
+            console.error('[Forum NPC Refresh]', e);
+            if(typeof Toast !== 'undefined') Toast.show('信号拦截失败，请检查网络');
+        } finally {
+            btn.style.pointerEvents = 'auto';
+            if (icon) icon.style.animation = '';
+        }
+    }
+
+    function openPanel(id) { 
+        document.getElementById(id).classList.add('active'); 
+        // 🌟 新增：每次点开世界观面板时，重新拉取并渲染最新的世界书列表
+        if (id === 'fm-world-panel') {
+            renderWorldBooksForForum();
+        }
+    }
+    
     function closePanel(id) { document.getElementById(id).classList.remove('active'); }
+    // 🌟 新增：渲染全局世界书列表
+    async function renderWorldBooksForForum() {
+        const listEl = document.getElementById('fm-wb-list');
+        if (!listEl) return;
+        
+        let allWBs =[];
+        try { allWBs = await DB.worldInfo.getAll(); } catch(e){}
+        
+        // 筛选出没有绑定任何角色（即纯全局）的世界书
+        const globalWBs = allWBs.filter(wb => !wb.characterIds || wb.characterIds.length === 0);
+        
+        if (globalWBs.length === 0) {
+            listEl.innerHTML = '<div style="font-size:0.7rem; color:var(--fm-fg-muted); text-align:center; padding: 16px 0;">暂无全局世界书词条，请前往世界书模块创建。</div>';
+            return;
+        }
+        
+        // 读取已经保存的勾选配置
+        let linkedIds =[];
+        try {
+            const config = await DB.settings.get('forum-worldview');
+            if (config && config.linkedWorldBooks) linkedIds = config.linkedWorldBooks;
+        } catch(e) {}
+
+        listEl.innerHTML = globalWBs.map(wb => {
+            const isLinked = linkedIds.includes(String(wb.id));
+            return `
+            <div class="fm-wb-row">
+                <div class="fm-wb-title">${_escHtml(wb.name)}</div>
+                <div class="fm-switch ${isLinked ? 'on' : ''}" data-wbid="${wb.id}" onclick="this.classList.toggle('on')">
+                    <div class="fm-switch-knob"></div>
+                </div>
+            </div>`;
+        }).join('');
+    }
+
     function switchComposeType(type, el) {
         document.querySelectorAll('#forum-screen .seg-btn').forEach(btn => btn.classList.remove('active'));
         el.classList.add('active');
@@ -1281,7 +1538,7 @@ ${charProfiles || '无'}
     }
 
     // 更新 return 暴露
-    return { init, onEnter, filterFeed, switchTo, evaluateNewPost, toggleComments, addComment, prepareReply, openPanel, closePanel, switchComposeType, publishPost, deletePost, cancelDelete, changeForumAvatar, updateForumName, onEventImgSelected, removeEventImg, loadMoreComments, saveWorldView, getWorldViewContext };
+    return { init, onEnter, filterFeed, switchTo, evaluateNewPost, toggleComments, addComment, prepareReply, openPanel, closePanel, switchComposeType, publishPost, deletePost, cancelDelete, changeForumAvatar, updateForumName, onEventImgSelected, removeEventImg, loadMoreComments, saveWorldView, getWorldViewContext, refreshNPCFeed,openShareModal, closeShareModal, executeShare };
 })();
 
 window.ForumModule = ForumModule;

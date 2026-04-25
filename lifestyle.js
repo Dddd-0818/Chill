@@ -406,7 +406,6 @@ const LifestyleModule = (() => {
 
             <!-- View 3: 具体动线页 (Itinerary Log) -->
             <div class="ls-view" id="ls-itineraryView">
-                <div class="vertical-marginalia">LIFESTYLE ENGINE // TEMPORAL SYNC</div>
                 
                 <nav class="iti-top-nav">
                     <span class="iti-nav-brand" onclick="LifestyleModule.closeItinerary()"><i class="ph-bold ph-arrow-left" style="font-size: 14px;"></i> BACK</span>
@@ -470,6 +469,19 @@ const LifestyleModule = (() => {
                         <button class="ls-btn-rebuild" style="flex: 1; background: #111; color: #fff; border: none; font-size: 9px; padding: 12px 0;" id="ls-btn-confirm-exec">
                             CONFIRM
                         </button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- MODAL LAYER 3: 数据详情弹窗 (Context / Thoughts) -->
+            <div class="ls-modal-overlay" id="ls-dataModal" style="z-index: 700; display: flex; align-items: center; justify-content: center;" onclick="document.getElementById('ls-dataModal').classList.remove('active')">
+                <div class="ls-modal-sheet" style="position: relative; bottom: auto; width: 85%; max-width: 340px; border-radius: 16px; transform: scale(0.9); transition: transform 0.3s ease; display: block; background: rgba(255,255,255,0.9); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); box-shadow: 0 20px 40px rgba(0,0,0,0.15);" onclick="event.stopPropagation()">
+                    <div class="ls-modal-header" style="padding: 20px 24px 16px; border-bottom: 1px dashed rgba(0,0,0,0.1); display: flex; justify-content: space-between; align-items: center;">
+                        <span class="ls-modal-title" id="ls-dataModalTitle" style="font-family: 'Space Mono', monospace; font-size: 11px; color: #111; letter-spacing: 2px; font-weight: 700;">LOG.DETAILS</span>
+                        <button class="ls-modal-close" style="background:none; border:none; font-size:18px; cursor:pointer; color:#111;" onclick="document.getElementById('ls-dataModal').classList.remove('active')"><i class="ph-thin ph-x"></i></button>
+                    </div>
+                    <div class="ls-modal-body" id="ls-dataModalContent" style="padding: 24px; text-align: left; max-height: 50vh; overflow-y: auto;">
+                        <!-- 内容由 JS 动态注入 -->
                     </div>
                 </div>
             </div>
@@ -806,32 +818,48 @@ function _maybeShuffleSmallWindow(events, profile) {
     }
 
     // ==========================================
-    // 拆分2：引擎总调度 (大模型接入 + 时空迷雾拦截)
+    // 拆分2：引擎总调度 (加入角色后台自主内省机制)
     // ==========================================
+    const _scheduleLocks = new Map();
+
     async function _getOrCreateSchedule(charId, dateStr) {
         const schedId = `sch_${charId}_${dateStr}`;
-        let sched = null;
-
-        try { sched = await DB.schedules.get(String(charId), dateStr); } catch (e) {}
-
-        const routine = await DB.routines.get(String(charId));
-        if (!routine) return null;
-
-        // 如果数据库已经有算好的排期表，直接返回
-        if (sched && sched.version === SCHEDULE_VERSION) return sched;
-
-        const today = new Date();
-        const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-
-        // 🛡️ 时空迷雾拦截：如果是未来的日子，不排期，直接返回 null
-        if (dateStr > todayStr) return null;
-
-        // 🔄 过去的日子：我们先用假算法填补（后续再换成真实归档提取）
-        if (dateStr < todayStr) {
-            return _generateMathSchedule(charId, dateStr, routine, schedId);
+        
+        if (_scheduleLocks.has(schedId)) {
+            return await _scheduleLocks.get(schedId);
         }
 
-      // 💥【今日推演核心】如果正是今天！呼叫大模型拉取记录并排期
+        const task = (async () => {
+            let sched = null;
+            try { sched = await DB.schedules.get(String(charId), dateStr); } catch (e) {}
+
+            const routine = await DB.routines.get(String(charId));
+            if (!routine) return null;
+
+            const today = new Date();
+            const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+            const isToday = (dateStr === todayStr);
+
+            let isReflection = false; // 标记：今天是否已经排过期，正在进行“内省复查”
+
+            if (sched && sched.version === SCHEDULE_VERSION) {
+                if (!isToday) return sched;
+                
+                const TWO_HOURS = 2 * 60 * 60 * 1000;
+                if (sched.generatedAt && (Date.now() - sched.generatedAt) < TWO_HOURS) {
+                    return sched; // 2小时内，直接返回
+                }
+                // 🌟 超过2小时！我们不再粗暴删除它，而是把它保留下来，当作“内省”的底本！
+                isReflection = true; 
+            }
+
+            if (dateStr > todayStr) return null;
+
+            if (dateStr < todayStr) {
+                return await _generateMathSchedule(charId, dateStr, routine, schedId);
+            }
+
+            // 💥【今日推演核心】触发后台内省或全新推演
             try {
                 const activeApi = await DB.api.getActive();
                 if (!activeApi) throw new Error('未配置 API');
@@ -841,64 +869,64 @@ function _maybeShuffleSmallWindow(events, profile) {
                 const rawMsgs = await DB.messages.getPage(String(charId), 0, 50).catch(() =>[]);
                 const historyText = rawMsgs.reverse().map(m => {
                     const d = new Date(m.timestamp);
-                    const year = d.getFullYear();
-                    const month = String(d.getMonth() + 1).padStart(2, '0');
-                    const date = String(d.getDate()).padStart(2, '0');
-                    const hour = String(d.getHours()).padStart(2, '0');
-                    const min = String(d.getMinutes()).padStart(2, '0');
-                    
-                    const fullTimeStr = `${year}-${month}-${date} ${hour}:${min}`;
+                    const timeStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
                     const role = m.role === 'user' ? '用户' : (char?.name || '角色');
                     const txt = m.parts?.map(p => p.content || p.text || '').join('') || m.content;
-                    return `[${fullTimeStr}][${role}]: ${txt}`;
+                    return `[${timeStr}][${role}]: ${txt}`;
                 }).join('\n');
 
-                const prompt = `[系统指令：时空轨迹动态合成引擎]
-你现在需要为角色【${char?.name || '角色'}】合成今天的24小时行动轨迹。
-【当前物理时间】：${todayStr} (今天)
+                // 根据是全新的一天，还是中途复查，给角色不同的原始计划参考
+                // 🌟 修复1：在传给大模型的旧计划里，把 description 也带上，防止它忘掉
+                const currentPlanText = isReflection 
+                    ? JSON.stringify(sched.events.map(e => ({ time: e.time, title: e.title, location: e.location, description: e.description })))
+                    : '（今日尚无具体计划，请根据基础作息全新排期）';
 
-【基础作息模板（仅作为基本行为逻辑参考）】：
+                // 🌟 修复2：在输出要求里，强制大模型必须返回 description
+                const prompt = `[系统后台：角色自主意识与行程管理]
+你是拥有独立生活轨迹的生命【${char?.name || '角色'}】。现在系统时间是 ${todayStr}。
+系统每隔一段时间会在后台唤醒你，让你审视自己的时间线。
+
+【你默认的枯燥作息（仅供参考）】：
 起床：${routine.wakeUp || '08:00'} / 就寝：${routine.sleep || '23:00'}
-常规事件：${JSON.stringify(routine.events ||[])}
+常规：${JSON.stringify(routine.events ||[])}
 
-【50条跨次元聊天存证（含精确时间戳，请仔细分析日期）】：
+【你目前为今天定下的计划】：
+${currentPlanText}
+
+【近期跨次元聊天记录】：
 ${historyText || '（暂无记录）'}
 
-【推演逻辑与禁令】：
-1. **日期敏感性**：请仔细比对聊天记录中的[日期]与当前日期[${todayStr}]。如果记录中的日期在今天之前，除非是约定好了“明天（即今天）”要做的事，否则之前的闲聊不应干扰今天的行程。
-2. **变数定义 (isDeviation)**：
-   - 必须是切实发生的“突发状况”或“用户约定”。
-   - 如果昨晚聊太晚（超过午夜），今天起床时间必须逻辑性推迟。
-   - 严禁把“讨论了某事”、“说了某话”这种非物理层面的互动当作行程！
-3. **文案规范 (devText)**：
-   - **绝对禁止**使用：“聊天记录提到”、“用户要求”、“根据记录”等任何破坏沉浸感的废话。
-   - 必须使用【干练的行事历/备忘录】口吻。
-   - 示例：若约了喝茶，填“临时约见：与用户喝茶”；若起晚了，填“昨晚熬夜导致补觉”。
-4. **排序**：生成的 events 必须严格按 time 从 00:00 到 23:59 排序。
+【你的任务】：
+请作为一个活生生的人，思考最近的聊天记录是否改变了你的现实安排。
+1. 如果聊天里用户对你发出了邀约，且你答应了，你必须修改计划去赴约！
+2. 如果昨晚聊太晚，你可以主动推迟今天的起床时间。
+3. 如果聊天记录没什么特别的，且你对目前的计划很满意，请选择保持原样 ("action": "keep")。
 
-【输出要求】：严格返回 JSON 格式，不含Markdown代码块标签。
+【输出要求】：严格返回 JSON 格式。
 {
-  "dayProfile": { "mode": "workday/weekend", "mood": "性格描述" },
+  "action": "keep" | "update",
+  "reason": "【今日宏观独白】：你对今天整体计划的决策想法",
+  "dayProfile": { "mode": "workday/weekend", "mood": "你此刻的心情" },
   "events":[
     { 
       "time": "HH:MM", 
       "title": "事件简述", 
       "location": "地点", 
       "type": "工作/日常/社交", 
-      "description": "第一人称感性叙述", 
+      "description": "你在这个环境下的具体动作、正在经历的事（客观行为）",
+      "thought": "【瞬时心境】：你在这一刻脑子里在想什么？（主观私密念头，不可遗漏）", 
       "isDeviation": true/false,
-      "devText": "仅当isDeviation为true时填入简短变动备注"
+      "devText": "仅当isDeviation为true时填入简短备注"
     }
   ]
 }`;
 
-                console.groupCollapsed(`[Lifestyle] 🚀 阶段 2: 今日动态推演 (Schedule) - 日期: ${todayStr}`);
-                console.log(`%c【提取聊天记录】共 ${rawMsgs.length} 条`, "color:#d84315; font-weight:bold;");
+                console.groupCollapsed(`[Lifestyle] 🚀 阶段 2: 智能体内省判定 (Reflection) - ${todayStr}`);
+                console.log("%c【系统状态】", "color:#d84315; font-weight:bold;", isReflection ? "复查已存在的今日行程" : "生成全新今日行程");
                 console.log("%c【System Prompt】", "color:#9c2b2b; font-weight:bold;", "\n" + prompt);
 
                 const response = await ApiHelper.chatCompletion(activeApi,[{ role: 'system', content: prompt }]);
-                
-                console.log("%c【AI 原始输出】", "color:#2d6a4a; font-weight:bold;", "\n" + response);
+                console.log("%c【AI 决策输出】", "color:#2d6a4a; font-weight:bold;", "\n" + response);
 
                 const cleaned = response.replace(/```json|```/g, '').trim();
                 const start = cleaned.indexOf('{');
@@ -906,9 +934,19 @@ ${historyText || '（暂无记录）'}
                 if (start === -1 || end === -1) throw new Error('AI返回数据异常');
                 
                 const aiData = JSON.parse(cleaned.substring(start, end + 1));
-                console.log("%c【解析成功】", "color:#1976d2; font-weight:bold;", aiData);
+                console.log("%c【解析结果】", "color:#1976d2; font-weight:bold;", `行动: ${aiData.action} | 独白: ${aiData.reason}`);
                 console.groupEnd();
                 
+                // 🌟 核心逻辑：如果 AI 觉得不需要改，只更新 TTL 时间戳即可！极大节省算力！
+                if (aiData.action === 'keep' && isReflection && sched) {
+                    sched.generatedAt = Date.now();
+                    // 👉 存下此刻的内心独白
+                    sched.reflectionReason = aiData.reason || sched.reflectionReason; 
+                    await DB.schedules.put(sched);
+                    return sched;
+                }
+
+                // 如果是新生成，或者 AI 决定更新行程：
                 let seqCounter = 1;
                 const newEvents = (aiData.events ||[]).map(ev => ({
                     id: `ev_${Date.now()}_${Math.floor(Math.random()*10000)}`,
@@ -919,6 +957,7 @@ ${historyText || '（暂无记录）'}
                     icon: _guessIcon(ev.title, ev.type), 
                     state: ev.isDeviation ? 'deviation' : 'future', 
                     description: ev.description || '',
+                    thought: ev.thought || '', // 🌟 新增：接住这个时刻特有的内心戏！
                     type: ev.type || '日常',
                     devText: ev.devText || ''
                 }));
@@ -931,6 +970,9 @@ ${historyText || '（暂无记录）'}
                     charId: String(charId),
                     date: dateStr,
                     version: SCHEDULE_VERSION,
+                    generatedAt: Date.now(), 
+                    // 👉 存下本次排期时的内心独白
+                    reflectionReason: aiData.reason || '按部就班地度过今天，没什么特别的想法。',
                     dayProfile: {
                         mode: aiData.dayProfile?.mode || 'workday',
                         mood: aiData.dayProfile?.mood || 'steady',
@@ -944,10 +986,19 @@ ${historyText || '（暂无记录）'}
 
             } catch(e) {
                 console.groupEnd();
-                console.warn('[Lifestyle] LLM 智能推演失败，执行本地Fallback:', e.message);
+                console.warn('[Lifestyle] LLM 智能推演失败，执行兜底:', e.message);
+                if (isReflection && sched) {
+                    sched.generatedAt = Date.now();
+                    await DB.schedules.put(sched);
+                    return sched;
+                }
                 return await _generateMathSchedule(charId, dateStr, routine, schedId);
             }
-         }
+        })();
+
+        _scheduleLocks.set(schedId, task);
+        try { return await task; } finally { _scheduleLocks.delete(schedId); }
+    }
 
     function _evaluateScheduleState(schedule, isToday) {
         if (!schedule || !schedule.events) return;
@@ -1240,21 +1291,21 @@ anomalyText = deviations.map(d => d.devText || `[${d.title}] 发生突发变动`
                     </div>
 
                     <div class="iti-expand-panel">
-                        <p class="iti-desc-text">${item.description}</p>
-                        
-                        <div class="iti-editorial-actions">
-                            <div class="iti-action-group">
-                                <button class="iti-action-btn" onclick="event.stopPropagation(); alert('此功能筹备中: 查看历史上下文')">CONTEXT</button>
-                                <button class="iti-action-btn" onclick="event.stopPropagation(); alert('此功能筹备中: 主动制造事件偏差')">DEVIATION</button>
+                        <!-- 🌟 删掉了这里的 p 标签，强迫使用按钮查看详情 -->
+                        <div class="iti-editorial-actions" style="border-top: none; padding-top: 0;">
+                           <div class="iti-action-group">
+                                <!-- 🌟 将 CONTEXT 改为 碎碎念 -->
+                                <button class="iti-action-btn" onclick="event.stopPropagation(); LifestyleModule.showEventContext('${item.id}')">碎碎念</button>
+                                <!-- 🌟 将 THOUGHTS 改为 内心 -->
+                                <button class="iti-action-btn" onclick="event.stopPropagation(); LifestyleModule.showEventThoughts('${item.id}')">内心</button>
                             </div>
                             
-                            <!-- 改为纯展示的自动同步指示器，不可点击 -->
-<div class="iti-sync-btn" style="color: #D93A3A; cursor: default; pointer-events: none;">
-    <div class="iti-eq-visualizer">
-        <div class="iti-eq-bar"></div><div class="iti-eq-bar"></div><div class="iti-eq-bar"></div>
-    </div>
-    AUTO-SYNCED
-</div>
+                            <div class="iti-sync-btn" style="color: #D93A3A; cursor: default; pointer-events: none; flex-shrink: 0; white-space: nowrap; margin-left: auto;">
+                                <div class="iti-eq-visualizer">
+                                    <div class="iti-eq-bar"></div><div class="iti-eq-bar"></div><div class="iti-eq-bar"></div>
+                                </div>
+                                AUTO-SYNCED
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1266,6 +1317,61 @@ anomalyText = deviations.map(d => d.devText || `[${d.title}] 发生突发变动`
     function toggleItiCard(id) {
         _activeItiId = (_activeItiId === id) ? null : id;
         _renderItineraryTrack();
+    }
+    
+    function showEventContext(id) {
+        const ev = _currentSchedule.events.find(e => e.id === id);
+        if(!ev) return;
+        
+        document.getElementById('ls-dataModalTitle').textContent = `碎碎念 // ${ev.no}`;
+        
+        document.getElementById('ls-dataModalContent').innerHTML = `
+            <div style="font-family:'Space Mono', monospace; font-size:9px; color:#888; text-transform:uppercase; letter-spacing:1px; margin-bottom:12px;">[ Environmental Data ]</div>
+            <div style="font-family:'Space Mono', monospace; font-size:12px; color:#111; font-weight:700; margin-bottom:6px;">LOC: ${ev.location}</div>
+            <div style="font-family:'Space Mono', monospace; font-size:10px; color:#555; margin-bottom:20px;">TYPE: ${ev.type}</div>
+            
+            <div style="font-family:'Space Mono', monospace; font-size:9px; color:#888; text-transform:uppercase; letter-spacing:1px; margin-bottom:12px;">[ Action Observation ]</div>
+            <div style="font-family:'Noto Sans SC', sans-serif; font-size:13px; color:#333; line-height:1.7; border-left:2px solid #111; padding-left:12px;">
+                ${ev.description || '目标正在执行既定日程，无显著异常动作。'}
+            </div>
+        `;
+        document.getElementById('ls-dataModal').classList.add('active');
+    }
+
+    function showEventThoughts(id) {
+        const ev = _currentSchedule.events.find(e => e.id === id);
+        if(!ev) return;
+        
+        document.getElementById('ls-dataModalTitle').textContent = `内心 // ${ev.no}`;
+        
+        // 读取全天的宏观决策
+        let macroReason = _currentSchedule.reflectionReason || '（平稳度过今天，无特殊宏观想法）';
+        // 读取此时此刻的内心戏
+        let microThought = ev.thought || '（专注于眼前的事，脑子里暂时没有杂念）';
+        
+        let devHtml = '';
+        if (ev.state === 'deviation') {
+            devHtml = `
+                <div style="font-family:'Space Mono', monospace; font-size:9px; color:#D93A3A; text-transform:uppercase; letter-spacing:1px; margin-top:20px; margin-bottom:12px;">[ Detected Deviation ]</div>
+                <div style="font-family:'Noto Sans SC', sans-serif; font-size:13px; color:#D93A3A; line-height:1.7; border-left:2px solid #D93A3A; padding-left:12px;">
+                    ${ev.devText}
+                </div>
+            `;
+        }
+
+        document.getElementById('ls-dataModalContent').innerHTML = `
+            <div style="font-family:'Space Mono', monospace; font-size:9px; color:#888; text-transform:uppercase; letter-spacing:1px; margin-bottom:12px;">[ Macro Directive // 宏观决策 ]</div>
+            <div style="font-family:'Noto Sans SC', sans-serif; font-size:12px; color:#666; line-height:1.6; font-style:italic; border-left:2px solid #ccc; padding-left:12px; margin-bottom:20px;">
+                "${macroReason}"
+            </div>
+
+            <div style="font-family:'Space Mono', monospace; font-size:9px; color:#111; font-weight:700; text-transform:uppercase; letter-spacing:1px; margin-bottom:12px;">[ Instant Thought // 瞬时心境 ]</div>
+            <div style="font-family:'Noto Sans SC', sans-serif; font-size:14px; color:#111; line-height:1.7; font-weight:500; border-left:2px solid #111; padding-left:12px;">
+                "${microThought}"
+            </div>
+            ${devHtml}
+        `;
+        document.getElementById('ls-dataModal').classList.add('active');
     }
 
     // ==========================================
@@ -1512,6 +1618,7 @@ ${char.mbti ? 'MBTI：' + char.mbti : ''}
         generateRoutine, getCurrentStatus, 
         openRoutineConfig, closeRoutineConfig, rebuildRoutine,
         openItinerary, closeItinerary, toggleItiCard, 
-        getPromptContext
+        getPromptContext,showEventContext, 
+        showEventThoughts
     };
 })();
