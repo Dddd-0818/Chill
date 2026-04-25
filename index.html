@@ -26,7 +26,7 @@
 <script src="lifestyle.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Noto+Sans+SC:wght@300;400;500;700&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,700&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Inter:wght@300;400;500;700;900&family=Cinzel:wght@500;700&family=Noto+Serif+SC:wght@500;700;900&family=Libre+Barcode+39+Text&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700;800&family=Great+Vibes&family=Noto+Sans+SC:wght@300;400;500;700&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,700&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
 
 <style>
 /* ============================================================
@@ -3287,6 +3287,76 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
 #forum-screen .fm-share-item i { font-size: 1.4rem; color: var(--fm-fg-muted); }
 #forum-screen .fm-share-item span { font-size: 0.9rem; font-weight: 500; }
 
+/* ============================================================
+   Space 空间二页 (Retro Brutalist Widget)
+   ============================================================ */
+.retro-brutalist-widget {
+  display: flex; flex-direction: column; gap: 12px; margin-top: 10px; font-family: 'DM Sans', sans-serif;
+}
+.rb-flex-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.rb-pill-black {
+  background: var(--text-main); color: var(--bg-device); padding: 10px 16px; border-radius: 40px; 
+  font-weight: 800; font-size: 0.75rem; letter-spacing: 0.5px; white-space: nowrap; outline: none;
+}
+.rb-circle-white {
+  width: 36px; height: 36px; border-radius: 50%; border: 1.5px solid var(--text-main); 
+  display: flex; justify-content: center; align-items: center; background: var(--bg-card); 
+  color: var(--text-main); font-size: 1.1rem;
+}
+.rb-pill-white {
+  background: var(--bg-card); color: var(--text-main); border: 1.5px solid var(--text-main); 
+  border-radius: 40px; display: flex; gap: 12px; padding: 8px 16px;
+}
+.rb-pill-white i { font-size: 1.1rem; color: var(--text-main); }
+.rb-search-box {
+  display: flex; border: 1.5px solid var(--text-main); border-radius: 40px; overflow: hidden; 
+  height: 36px; background: var(--bg-card);
+}
+.rb-search-text {
+  padding: 0 16px; display: flex; align-items: center; font-size: 0.7rem; font-weight: 800; 
+  color: var(--text-main); outline: none; min-width: 60px;
+}
+.rb-search-icon {
+  background: var(--text-main); color: var(--bg-device); padding: 0 14px; 
+  display: flex; align-items: center; justify-content: center;
+}
+.rb-polaroid-section {
+  display: flex; align-items: center; justify-content: center; margin: 8px 0; padding-left: 10px;
+}
+.rb-cursive {
+  font-family: 'Great Vibes', cursive; font-size: 2.2rem; color: var(--text-main); 
+  transform: rotate(-90deg); white-space: nowrap; margin-right: -25px; z-index: 5; outline: none;
+}
+.rb-polaroid-stack { display: flex; align-items: center; }
+.rb-polaroid {
+  width: 90px; height: 110px; 
+  /* 这里的 var(--text-main) 浅色下是黑色，深色下是白色 */
+  background: var(--text-main); 
+  padding: 4px 4px 16px 4px; 
+  box-shadow: 2px 6px 15px rgba(0,0,0,0.15); 
+  border: 1px solid var(--text-main); 
+  cursor: pointer; transition: transform 0.2s;
+}[data-theme="dark"] .rb-polaroid { 
+  box-shadow: 2px 6px 15px rgba(0,0,0,0.6); 
+}
+.rb-polaroid:active { transform: scale(0.95) !important; z-index: 10 !important; }
+.rb-polaroid img { width: 100%; height: 100%; object-fit: cover; }
+.p1 { transform: rotate(-4deg); z-index: 1; }
+.p2 { transform: translateY(-12px) rotate(3deg); z-index: 2; margin-left: -20px; }
+.p3 { transform: rotate(5deg); z-index: 1; margin-left: -20px; }
+
+.rb-music-pill {
+  background: var(--text-main); color: var(--bg-device); border-radius: 50px; 
+  padding: 6px 16px 6px 6px; display: flex; justify-content: space-between; align-items: center;
+}
+.rb-music-avatar {
+  width: 38px; height: 38px; border-radius: 50%; border: 1.5px solid var(--bg-device); 
+  object-fit: cover; cursor: pointer; transition: transform 0.2s;
+}
+.rb-music-avatar:active { transform: scale(0.9); }
+.rb-music-info { display: flex; flex-direction: column; justify-content: center; margin-left: 10px; }
+.rb-music-info [contenteditable="true"] { outline: none; }
+
 </style>
 <body>
 <div class="device">
@@ -3298,6 +3368,10 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
   <input type="file" id="file-wallpaper"      accept="image/*" style="display:none">
   <input type="file" id="file-icon"           accept="image/*" style="display:none">
   <input type="file" id="file-group-avatar"   accept="image/*" style="display:none">
+  <input type="file" id="file-rb-p1" accept="image/*" style="display:none" onchange="SpaceModule.saveImg('rb-img-1', this)">
+  <input type="file" id="file-rb-p2" accept="image/*" style="display:none" onchange="SpaceModule.saveImg('rb-img-2', this)">
+  <input type="file" id="file-rb-p3" accept="image/*" style="display:none" onchange="SpaceModule.saveImg('rb-img-3', this)">
+  <input type="file" id="file-rb-music" accept="image/*" style="display:none" onchange="SpaceModule.saveImg('rb-img-music', this)">
 
   <!-- Toast -->
   <div class="toast" id="toast"></div>
@@ -3420,22 +3494,80 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
           <div class="icon-box" data-icon-id="6"><i class="ph ph-mask-happy"></i></div>
           <span class="icon-label">剧情</span>
         </div>
-        <div class="icon-cell">
-          <div class="icon-box" data-icon-id="7"><i class="ph ph-cloud"></i></div>
-          <span class="icon-label">云端</span>
+        <div class="icon-cell" id="icon-postoffice-cell">
+          <div class="icon-box" data-icon-id="7"><i class="ph ph-mailbox"></i></div>
+          <span class="icon-label">时空邮局</span>
         </div>
       </div>
     </div>
 
-    <div class="home-page"> <!-- 第二页开始 -->
-        <!-- 下面这个是一个好看的占位框，你可以先把组件往这里面塞 -->
-        <div style="flex: 1; min-height: 480px; display: flex; flex-direction: column; align-items: center; justify-content: center; border: 1px dashed var(--border-line); border-radius: 24px; background: rgba(0,0,0,0.02); margin-top: 10px;">
-            <i class="ph-thin ph-layout" style="font-size: 3rem; color: var(--text-sub); opacity: 0.5;"></i>
-            <div style="font-family: var(--font-mono2); font-size: 0.7rem; letter-spacing: 3px; color: var(--text-main); text-transform: uppercase; margin-top: 16px;">Space Tier 02</div>
-            <div style="font-size: 0.65rem; color: var(--text-sub); margin-top: 8px; letter-spacing: 1px;">等待装载组件...</div>
+<div class="home-page"> <!-- 第二页开始 -->
+       
+      <div class="retro-brutalist-widget">
+        
+        <!-- 第1排 -->
+        <div class="rb-flex-row">
+          <div class="rb-pill-black" contenteditable="true" id="rb-t1" onblur="SpaceModule.saveText('rb-t1')" spellcheck="false">THIS IS MY BLOG/SPACE!</div>
+          <div class="rb-circle-white"><i class="ph-bold ph-arrow-right"></i></div>
         </div>
+
+        <!-- 第2排 -->
+        <div class="rb-flex-row" style="justify-content: space-between;">
+          <div class="rb-pill-white">
+            <i class="ph-fill ph-facebook-logo"></i>
+            <i class="ph-fill ph-twitter-logo"></i>
+            <i class="ph-fill ph-spotify-logo"></i>
+          </div>
+          <div class="rb-search-box">
+            <div class="rb-search-text" contenteditable="true" id="rb-t2" onblur="SpaceModule.saveText('rb-t2')" spellcheck="false">SEARCH</div>
+            <div class="rb-search-icon"><i class="ph-bold ph-magnifying-glass"></i></div>
+          </div>
+        </div>
+
+        <!-- 第3排 -->
+        <div class="rb-polaroid-section">
+          <div class="rb-cursive" contenteditable="true" id="rb-t3" onblur="SpaceModule.saveText('rb-t3')" spellcheck="false">our journey</div>
+          <div class="rb-polaroid-stack">
+            <div class="rb-polaroid p1" onclick="document.getElementById('file-rb-p1').click()"><img id="rb-img-1" src="https://i.postimg.cc/BQnbRd0D/IMG-0015.jpg" alt="photo1"></div>
+            <div class="rb-polaroid p2" onclick="document.getElementById('file-rb-p2').click()"><img id="rb-img-2" src="https://i.postimg.cc/Kv8jCd2P/IMG-0013.jpg" alt="photo2"></div>
+            <div class="rb-polaroid p3" onclick="document.getElementById('file-rb-p3').click()"><img id="rb-img-3" src="https://i.postimg.cc/fTRy16Nt/IMG-0019.jpg" alt="photo3"></div>
+          </div>
+        </div>
+
+        <!-- 第4排 -->
+        <div class="rb-music-pill">
+          <div style="display:flex; align-items:center;">
+            <img id="rb-img-music" src="https://i.postimg.cc/hPtvNHBd/IMG-0016.jpg" class="rb-music-avatar" onclick="document.getElementById('file-rb-music').click()">
+            <div class="rb-music-info">
+              <div style="font-size:0.95rem; font-weight:800; line-height:1;" contenteditable="true" id="rb-t4" onblur="SpaceModule.saveText('rb-t4')" spellcheck="false">HEAVEN</div>
+              <div style="font-size:0.55rem; margin-top:2px; font-weight:500;" contenteditable="true" id="rb-t5" onblur="SpaceModule.saveText('rb-t5')" spellcheck="false">a song by Niall Horan</div>
+            </div>
+          </div>
+          <i class="ph-fill ph-heart" style="font-size:1.2rem; margin-right: 8px;"></i>
+        </div>
+      </div>
+ 
+    <!-- 👇 新增的第二页功能模块图标 👇 -->
+      <div class="grid-icons" style="margin-top: 30px; margin-bottom: 30px;">
+        <div class="icon-cell" id="icon-debate">
+          <div class="icon-box" data-icon-id="8"><i class="ph ph-scales"></i></div>
+          <span class="icon-label">辩论</span>
+        </div>
+        <div class="icon-cell" id="icon-phone">
+          <div class="icon-box" data-icon-id="9"><i class="ph ph-device-mobile"></i></div>
+          <span class="icon-label">查手机</span>
+        </div>
+        <div class="icon-cell" id="icon-couple">
+          <div class="icon-box" data-icon-id="10"><i class="ph ph-users"></i></div>
+          <span class="icon-label">情侣</span>
+        </div>
+        <div class="icon-cell" id="icon-cloud-2">
+          <div class="icon-box" data-icon-id="11"><i class="ph ph-cloud"></i></div>
+          <span class="icon-label">云端</span>
+        </div>
+      </div>
     </div>
-</div>
+  </div>
 
 <!-- 加上分页的小圆点指示器 -->
 <div class="home-dots">
@@ -3759,7 +3891,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
       </div>
     </div>
 
-    <!-- 数据设置页 -->
+   <!-- 数据设置页 -->
     <div id="data-page" class="settings-page">
       <div class="page-watermark">Data</div>
       <div class="nav-bar">
@@ -3774,8 +3906,27 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
           <div class="data-row"><span class="data-row-label">图片资产数量</span><span class="data-row-value" id="stat-assets">—</span></div>
           <div class="data-row"><span class="data-row-label">图片占用空间</span><span class="data-row-value" id="stat-size">—</span></div>
         </div>
-        <button class="btn-primary" onclick="DataModule.refresh()">刷新统计</button>
-        <button class="btn-ghost"   onclick="DataModule.clearAll()">清除全部数据</button>
+
+        <!-- 新增导出与导入按钮 -->
+        <div class="form-section">
+          <div class="section-title">备份与恢复 / Backup & Restore</div>
+          <button class="btn-primary" onclick="DataModule.exportData()" style="margin-bottom:12px;">
+            <i class="ph ph-export"></i> 导出完整备份包 (.zip)
+          </button>
+          <button class="btn-outline" onclick="document.getElementById('import-file').click()" style="margin-bottom:12px;">
+            <i class="ph ph-download-simple"></i> 从压缩包恢复 (.zip)
+          </button>
+          <input type="file" id="import-file" accept=".zip" style="display:none" onchange="DataModule.importData(event)">
+          <div style="font-size:0.6rem; color:var(--s-text-secondary); line-height:1.5;">
+            * 导出时包含所有聊天记录、角色档案及所有子系统的数据。<br>
+            * 采用原生二进制打包，保护内存防崩溃。
+          </div>
+        </div>
+
+        <button class="btn-primary" style="background:#333; color:#fff;" onclick="DataModule.refresh()">刷新统计</button>
+        <button class="btn-danger" style="margin-top:12px; width:100%; padding:16px; border:1px solid rgba(217,58,58,0.3); color:#D93A3A; background:transparent; border-radius:12px; font-weight:600; cursor:pointer;" onclick="DataModule.clearAll()">
+          清除全部数据
+        </button>
       </div>
     </div>
 
@@ -6956,7 +7107,7 @@ const ProfileModule = (() => {
 // ============================================================
 const ICON_DEFAULTS = [
   'ph-fill ph-coffee','ph ph-book-open-text','ph ph-music-note','ph ph-calendar-blank',
-  'ph ph-gear','ph ph-bell','ph ph-mask-happy','ph ph-cloud'
+  'ph ph-gear','ph ph-bell','ph ph-mask-happy','ph ph-cloud','ph ph-scales', 'ph ph-device-mobile', 'ph ph-users', 'ph ph-cloud'
 ];
 
 let _pendingIconId = null;
@@ -6986,7 +7137,7 @@ const UIModule = (() => {
   function renderIconsEditGrid() {
     const grid = document.getElementById('icons-grid-edit');
     grid.innerHTML = '';
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < 12; i++) {
       const item = document.createElement('div');
       item.className   = 'icon-edit-item';
       item.dataset.idx = i;
@@ -7005,9 +7156,9 @@ const UIModule = (() => {
   }
 
   async function clearAllIcons() {
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < 12; i++) {
       await Assets.remove(`icon-${i}`).catch(() => {});
-      const box = document.querySelector(`#grid-icons [data-icon-id="${i}"]`);
+     const box = document.querySelector(`.icon-box[data-icon-id="${i}"]`);
       if (box) box.innerHTML = `<i class="${ICON_DEFAULTS[i]}"></i>`;
     }
     renderIconsEditGrid();
@@ -7016,9 +7167,8 @@ const UIModule = (() => {
 
   return { applyWallpaper, clearWallpaper, renderIconsEditGrid, clearAllIcons };
 })();
-
 // ============================================================
-// DataModule — 数据统计页
+// DataModule — 数据统计页 & 全量备份与恢复
 // ============================================================
 const DataModule = (() => {
   async function refresh() {
@@ -7049,9 +7199,155 @@ const DataModule = (() => {
     return (bytes/(1024*1024)).toFixed(2) + ' MB';
   }
 
-  return { refresh, clearAll };
-})();
+  // 获取原生 IDB 实例，用于底层遍历所有表
+  async function _getRawDB() {
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open('chillOS');
+      req.onsuccess = e => resolve(e.target.result);
+      req.onerror = e => reject(e.target.error);
+    });
+  }
 
+  // ── 导出为 ZIP ──
+  async function exportData() {
+    Toast.show('正在打包数据，请勿关闭页面...', 3000);
+    try {
+      const db = await _getRawDB();
+      const stores = Array.from(db.objectStoreNames);
+      
+      const backupData = { _meta: { version: db.version, timestamp: Date.now() } };
+      const zipObj = {};
+
+      for (const storeName of stores) {
+        if (storeName === 'assets') {
+          // 【核心：二进制直接读入 ZIP，防止 Base64 内存崩溃】
+          backupData['assets_meta'] =[];
+          const records = await new Promise(res => {
+            const req = db.transaction(storeName, 'readonly').objectStore(storeName).getAll();
+            req.onsuccess = e => res(e.target.result);
+          });
+          
+          for (const record of records) {
+            backupData['assets_meta'].push({
+              key: record.key,
+              mimeType: record.mimeType,
+              size: record.size,
+              updatedAt: record.updatedAt
+            });
+            // 转为 Uint8Array 给 fflate
+            const buffer = await record.blob.arrayBuffer();
+            zipObj[`assets/${record.key}`] = new Uint8Array(buffer);
+          }
+        } else {
+          // 其他全部文本数据一次性抓取
+          const records = await new Promise(res => {
+            const req = db.transaction(storeName, 'readonly').objectStore(storeName).getAll();
+            req.onsuccess = e => res(e.target.result);
+          });
+          backupData[storeName] = records;
+        }
+      }
+
+      // 将 JSON 结构塞入根目录
+      const fflateAPI = typeof fflate !== 'undefined' ? fflate : window.fflate;
+      zipObj['database.json'] = fflateAPI.strToU8(JSON.stringify(backupData));
+
+      // 【核心：level: 0】禁用压缩！图片已经是压缩格式，二次压缩极易引发 OOM 崩溃
+      fflateAPI.zip(zipObj, { level: 0 }, (err, zipped) => {
+        if (err) throw err;
+        const blob = new Blob([zipped], { type: 'application/zip' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        const dateStr = new Date().toISOString().slice(0,10).replace(/-/g, '');
+        a.href = url;
+        a.download = `ChillOS_Backup_${dateStr}.zip`;
+        a.click();
+        URL.revokeObjectURL(url);
+        Toast.show('导出成功！');
+      });
+
+    } catch (err) {
+      console.error(err);
+      Toast.show('导出失败: ' + err.message);
+    }
+  }
+
+  // ── 从 ZIP 导入 ──
+  async function importData(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    e.target.value = ''; 
+    
+    if (!confirm('⚠️ 警告：导入将会覆盖当前设备上的【所有数据】！\n请确认你要继续吗？')) return;
+
+    Toast.show('正在解压与恢复，请稍候...', 10000);
+    try {
+      const buffer = await file.arrayBuffer();
+      const fflateAPI = typeof fflate !== 'undefined' ? fflate : window.fflate;
+      
+      fflateAPI.unzip(new Uint8Array(buffer), async (err, unzipped) => {
+        if (err) {
+          Toast.show('解压失败，文件可能已损坏');
+          return;
+        }
+
+        if (!unzipped['database.json']) {
+          Toast.show('无效的备份文件：缺失 database.json');
+          return;
+        }
+
+        const backupData = JSON.parse(fflateAPI.strFromU8(unzipped['database.json']));
+        
+        // 1. 清空当前数据库所有表
+        await DB.clearAll();
+        const db = await _getRawDB();
+        const stores = Array.from(db.objectStoreNames);
+
+        // 2. 恢复普通数据 (通过 IDB 事务高速批量写入)
+        for (const storeName of stores) {
+          if (storeName === 'assets') continue; 
+          if (backupData[storeName] && backupData[storeName].length > 0) {
+            const tx = db.transaction(storeName, 'readwrite');
+            const store = tx.objectStore(storeName);
+            for (const item of backupData[storeName]) {
+              store.put(item);
+            }
+            await new Promise((res, rej) => { tx.oncomplete = res; tx.onerror = rej; });
+          }
+        }
+
+        // 3. 恢复 assets 二进制数据 (复原 Blob)
+        if (backupData['assets_meta'] && backupData['assets_meta'].length > 0) {
+          const tx = db.transaction('assets', 'readwrite');
+          const store = tx.objectStore('assets');
+          
+          for (const meta of backupData['assets_meta']) {
+            const u8 = unzipped[`assets/${meta.key}`];
+            if (u8) {
+              const blob = new Blob([u8], { type: meta.mimeType });
+              store.put({
+                key: meta.key,
+                blob: blob,
+                mimeType: meta.mimeType,
+                size: meta.size,
+                updatedAt: meta.updatedAt
+              });
+            }
+          }
+          await new Promise((res, rej) => { tx.oncomplete = res; tx.onerror = rej; });
+        }
+
+        Toast.show('数据恢复成功！系统即将重启...');
+        setTimeout(() => location.reload(), 1500);
+      });
+    } catch (err) {
+      console.error(err);
+      Toast.show('导入失败: ' + err.message);
+    }
+  }
+
+  return { refresh, clearAll, exportData, importData };
+})();
 // ============================================================
 // 木鱼
 // ============================================================
@@ -7133,6 +7429,12 @@ document.getElementById('icon-settings').addEventListener('click', () => Router.
 document.getElementById('dock-character').addEventListener('click', () => Router.go('character'));
 // 遇见：由页面底部 chill-meet-bundle.js 绑定 data-icon-id="0" → ChillMeet.open()（内联 iframe，勿再跳转 chill-match.html）
 
+// 时空邮局
+document.querySelector('[data-icon-id="7"]')?.addEventListener('click', () => {
+  if (typeof PostOfficeModule !== 'undefined') PostOfficeModule.open();
+  else Toast.show('时空邮局未加载（缺少 post-office.js）');
+});
+
 // Profile 编辑
 document.getElementById('avatar-wrap').addEventListener('click', () => document.getElementById('file-avatar').click());
 document.getElementById('profile-edit-btn').addEventListener('click', e => { e.stopPropagation(); ProfileModule.openModal(); });
@@ -7194,8 +7496,8 @@ document.getElementById('file-icon').addEventListener('change', async e => {
   Toast.show('压缩中…');
   try {
     const url = await Assets.save(`icon-${_pendingIconId}`, file, 200, 0.9);
-    // 更新主页
-    const box = document.querySelector(`#grid-icons [data-icon-id="${_pendingIconId}"]`);
+   // 更新主页
+    const box = document.querySelector(`.icon-box[data-icon-id="${_pendingIconId}"]`);
     if (box) box.innerHTML = `<img class="icon-custom" src="${url}" alt="">`;
     // 更新编辑网格
     const item = document.querySelector(`#icons-grid-edit [data-idx="${_pendingIconId}"]`);
@@ -9807,392 +10109,6 @@ const VoiceModule = (() => {
 })();
 
 // ============================================================
-// NovelModule — NovelAI 图像生成（image.novelai.net）
-// ============================================================
-const NovelModule = (() => {
-  const KEY_CFG = 'novel-config';
-  const API = 'https://image.novelai.net/ai/generate-image';
-  const UC_V3 = 'nsfw, lowres, jpeg artifacts, worst quality, watermark, blurry, very displeasing';
-  const UC_V45C = 'blurry, lowres, upscaled, artistic error, scan artifacts, jpeg artifacts, logo, too many watermarks, negative space, blank page';
-  const UC_V45F = 'nsfw, blurry, lowres, error, worst quality, bad quality, jpeg artifacts, very displeasing, white blank page, blank page';
-
-  let _cfg = null;
-  let _testObjectUrl = null;
-  let _isGenerating = false; // 并发锁：同一时间只允许一个生图队列运行
-
-  function _readFormCfg() {
-    return {
-      apiKey: document.getElementById('novel-api-key')?.value.trim() || '',
-      model:  document.getElementById('novel-model')?.value || 'nai-diffusion-3',
-      steps:  parseInt(document.getElementById('novel-steps')?.value || '28', 10),
-      scale:  parseFloat(document.getElementById('novel-scale')?.value || '5'),
-      sampler: document.getElementById('novel-sampler')?.value || 'k_euler',
-      size:   document.getElementById('novel-size')?.value || '832x1216',
-      positivePrompt: document.getElementById('novel-prompt-positive')?.value.trim() || '',
-      negativePrompt: document.getElementById('novel-prompt-negative')?.value.trim() || '',
-    };
-  }
-
-  function _modelFamily(model) {
-    if (/nai-diffusion-4/.test(model)) return 'v4';
-    if (/furry-3/.test(model)) return 'furry3';
-    return 'v3';
-  }
-
-  function _augmentPrompt(model, prompt) {
-    const f = _modelFamily(model);
-    if (f === 'v3' || f === 'furry3') return `${prompt}, best quality, amazing quality, very aesthetic, absurdres`;
-    const curated = /curated/i.test(model);
-    if (curated) return `${prompt}, very aesthetic, location, masterpiece, no text, -0.8::feet::, rating:general`;
-    return `${prompt}, location, very aesthetic, masterpiece, no text`;
-  }
-
-  function _defaultUc(model) {
-    const f = _modelFamily(model);
-    if (f === 'v4') return /curated/i.test(model) ? UC_V45C : UC_V45F;
-    return UC_V3;
-  }
-
-  function _buildParameters(model, augmentedPrompt, cfg) {
-    const [sw, sh] = (cfg.size || '832x1216').split('x').map(Number);
-    const w = sw || 832;
-    const h = sh || 1216;
-    const base = {
-      width: w,
-      height: h,
-      steps: Number(cfg.steps) || 28,
-      scale: Number(cfg.scale) || 5,
-      sampler: cfg.sampler || 'k_euler',
-      n_samples: 1,
-      qualityToggle: true,
-      negative_prompt: (cfg.negativePrompt && cfg.negativePrompt.trim()) || _defaultUc(model),
-    };
-    const fam = _modelFamily(model);
-    if (fam === 'v4') {
-      const uc = base.negative_prompt;
-      return {
-        ...base,
-        params_version: 1,
-        ucPreset: /curated/i.test(model) ? 3 : 5,
-        v4_prompt: {
-          caption: { base_caption: augmentedPrompt, char_captions: [] },
-          use_coords: false,
-          use_order: true,
-        },
-        v4_negative_prompt: { caption: { base_caption: uc, char_captions: [] } },
-      };
-    }
-    return {
-      ...base,
-      noise_schedule: 'native',
-      params_version: 1,
-      legacy: false,
-      legacy_v3_extend: false,
-      ucPreset: 4,
-      sm: false,
-      sm_dyn: false,
-      deliberate_euler_ancestral_bug: true,
-    };
-  }
-
-  function _unzipFirstPng(arrayBuffer) {
-    const f = typeof fflate !== 'undefined' ? fflate : window.fflate;
-    if (!f || !f.unzipSync) throw new Error('fflate 未加载');
-    const files = f.unzipSync(new Uint8Array(arrayBuffer));
-    const name = Object.keys(files).find(k => /\.(png|webp)$/i.test(k));
-    if (!name) throw new Error('压缩包内无图片');
-    const bytes = files[name];
-    const MAX_BYTES = 20 * 1024 * 1024; // 20 MB 上限
-    if (bytes.byteLength > MAX_BYTES) throw new Error('图片文件过大（超过 20MB），已拒绝加载');
-    return bytes;
-  }
-
-  async function init() {
-    try {
-      const saved = await DB.settings.get(KEY_CFG);
-      if (saved) _cfg = saved;
-    } catch (e) { console.warn('[NovelModule] init failed', e); }
-    return _cfg;
-  }
-
-  function restoreUI() {
-    if (!_cfg) return;
-    const set = (id, val) => { const el = document.getElementById(id); if (el && val != null) el.value = val; };
-    set('novel-api-key', _cfg.apiKey || '');
-    set('novel-model', _cfg.model || 'nai-diffusion-3');
-    set('novel-steps', _cfg.steps ?? 28);
-    set('novel-scale', _cfg.scale ?? 5);
-    set('novel-sampler', _cfg.sampler || 'k_euler');
-    set('novel-size', _cfg.size || '832x1216');
-    set('novel-prompt-positive', _cfg.positivePrompt || '');
-    set('novel-prompt-negative', _cfg.negativePrompt || '');
-    const sv = document.getElementById('novel-steps-val');
-    if (sv) sv.textContent = String(_cfg.steps ?? 28);
-    const scv = document.getElementById('novel-scale-val');
-    if (scv) scv.textContent = parseFloat(_cfg.scale ?? 5).toFixed(1);
-  }
-
-  async function save() {
-    _cfg = _readFormCfg();
-    await DB.settings.set(KEY_CFG, _cfg);
-    Toast.show('Novel 配置已保存');
-  }
-
-  function getCfg() { return _cfg; }
-
-  async function generateImageBlob(mergedPrompt, runtimeCfg) {
-    const cfg = runtimeCfg || _cfg || await init();
-    if (!cfg?.apiKey) {
-      Toast.show('请先在设置 → Novel 设置中填写 Persistent Token');
-      return null;
-    }
-    const model = cfg.model || 'nai-diffusion-3';
-    const aug = _augmentPrompt(model, mergedPrompt);
-    const body = {
-      input: aug,
-      model,
-      action: 'generate',
-      parameters: _buildParameters(model, aug, cfg),
-    };
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s 超时
-    let res;
-    try {
-      res = await fetch(API, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${cfg.apiKey}`,
-        },
-        body: JSON.stringify(body),
-        signal: controller.signal,
-      });
-    } catch (fetchErr) {
-      if (fetchErr.name === 'AbortError') {
-        Toast.show('Novel 生图超时，请稍后重试');
-      } else {
-        Toast.show('Novel 网络错误：' + (fetchErr.message || ''));
-      }
-      return null;
-    } finally {
-      clearTimeout(timeoutId);
-    }
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      const msg = err.message || err.error || `HTTP ${res.status}`;
-      Toast.show('Novel 生图失败：' + msg);
-      return null;
-    }
-    const buf = await res.arrayBuffer();
-    const pngBytes = _unzipFirstPng(buf);
-    return new Blob([pngBytes], { type: 'image/png' });
-  }
-
-  function clearTestPreview() {
-    if (_testObjectUrl) {
-      URL.revokeObjectURL(_testObjectUrl);
-      _testObjectUrl = null;
-    }
-    const img = document.getElementById('novel-test-preview-img');
-    if (img) {
-      img.removeAttribute('src');
-      img.style.display = 'none';
-    }
-    const ph = document.getElementById('novel-test-preview-placeholder');
-    if (ph) ph.style.display = '';
-  }
-
-  function downloadTestPreview() {
-    const img = document.getElementById('novel-test-preview-img');
-    const src = img?.src;
-    if (!img || img.style.display === 'none' || !src) {
-      Toast.show('请先生成测试图');
-      return;
-    }
-    const a = document.createElement('a');
-    a.href = src;
-    a.download = `novelai-test-${Date.now()}.png`;
-    a.rel = 'noopener';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    Toast.show('已开始下载');
-  }
-
-  async function testGenerate() {
-    const pos = document.getElementById('novel-prompt-positive')?.value.trim();
-    if (!pos) {
-      Toast.show('请填写正向提示词');
-      return;
-    }
-    const cfg = _readFormCfg();
-    if (!cfg.apiKey) {
-      Toast.show('请先填写 Persistent Token');
-      return;
-    }
-    const btn = document.getElementById('novel-test-btn');
-    if (btn) {
-      btn.disabled = true;
-      btn.textContent = '生成中…';
-    }
-    try {
-      const blob = await generateImageBlob(pos, cfg);
-      if (!blob) return;
-      clearTestPreview();
-      _testObjectUrl = URL.createObjectURL(blob);
-      const img = document.getElementById('novel-test-preview-img');
-      const ph = document.getElementById('novel-test-preview-placeholder');
-      if (img) {
-        img.src = _testObjectUrl;
-        img.style.display = 'block';
-      }
-      if (ph) ph.style.display = 'none';
-      Toast.show('测试生图成功');
-    } catch (e) {
-      console.error('[NovelModule] testGenerate', e);
-      Toast.show('测试失败：' + (e.message || '未知错误'));
-    } finally {
-      if (btn) {
-        btn.disabled = false;
-        btn.textContent = '测试生图';
-      }
-    }
-  }
-
-  /**
-   * 在对话中插入 AI 配图消息（每条 tag 一张）
-   * @param opts.mergeIntoMsgId 若设置，将配图 part 追加到该条助手消息（与正文同气泡）
-   */
-  async function attachImagesForChar(charId, innerPrompts, charPositive, charNegative, opts = {}) {
-    if (!innerPrompts?.length || !charId) return;
-    try {
-      const on = await DB.settings.get(`novel-toggle-${charId}`);
-      if (on !== true) return;
-    } catch (e) { return; }
-
-    // 并发锁：若已有生图任务在跑，排队等待而非同时发起多个请求
-    while (_isGenerating) {
-      await new Promise(r => setTimeout(r, 500));
-    }
-    _isGenerating = true;
-
-    const mergeIntoMsgId = opts.mergeIntoMsgId;
-
-    const charExclusivePos = (charPositive || '').trim();
-    const cfgForChat = _cfg || await init();
-    const globalPos = (cfgForChat?.positivePrompt || '').trim();
-    const stylePrefix = charExclusivePos || globalPos;
-
-    const charExclusiveNeg = (charNegative || '').trim();
-    const globalNeg = (cfgForChat?.negativePrompt || '').trim();
-    const effectiveNeg = charExclusiveNeg || globalNeg;
-    const mergedCfg = { ...(cfgForChat || {}), negativePrompt: effectiveNeg };
-
-    const screen = document.getElementById('conv-screen');
-    const convOpen = screen && (screen.classList.contains('active') || screen.classList.contains('qr-active'));
-    const pendingCount = innerPrompts.filter(p => {
-      const merged = [stylePrefix, String(p).trim()].filter(Boolean).join(', ');
-      return !!merged.trim();
-    }).length;
-    if (convOpen && String(screen.dataset.cvCharId) === String(charId) && pendingCount > 0 && window.ConvModule?._showNovelPending) {
-      ConvModule._showNovelPending(charId, pendingCount);
-    }
-
-    try {
-      for (const inner of innerPrompts) {
-        const merged = [stylePrefix, inner.trim()].filter(Boolean).join(', ');
-        if (!merged.trim()) continue;
-        let blob;
-        try {
-          blob = await generateImageBlob(merged, mergedCfg);
-        } catch (e) {
-          console.error('[NovelModule] generate', e);
-          Toast.show('Novel 请求异常：' + (e.message || ''));
-          continue;
-        }
-        if (!blob) continue;
-
-        const assetKey = `chat-img-${charId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-        try {
-          await Assets.saveBlob(assetKey, blob, 1200, 0.88);
-        } catch (e) {
-          Toast.show('配图保存失败');
-          continue;
-        }
-
-        let sentRound = 0;
-        try {
-          const msgs = await DB.messages.getPage(charId, 0, 500);
-          sentRound = msgs.filter(m => m.role === 'assistant').length;
-        } catch (e) { /* ignore */ }
-
-        const imgPart = {
-          type: 'image',
-          assetKey,
-          description: '（NovelAI 配图）',
-          sentRound,
-          novelMergedPrompt: merged
-        };
-
-        if (mergeIntoMsgId != null) {
-          let existing = null;
-          try {
-            existing = await DB.messages.get(mergeIntoMsgId);
-          } catch (e) { existing = null; }
-          if (existing && String(existing.charId) === String(charId) && existing.role === 'assistant') {
-            const parts = [...(existing.parts || [{ type: 'text', content: existing.content || '' }])];
-            parts.push(imgPart);
-            const textPreview = parts.filter(p => p.type === 'text').map(p => p.content).join('\n').trim();
-            const updated = {
-              ...existing,
-              parts,
-              content: textPreview ? `${textPreview.slice(0, 80)}${textPreview.length > 80 ? '…' : ''} · [配图]` : '[配图]'
-            };
-            try {
-              await DB.messages.put(updated);
-            } catch (e) {
-              console.error('[NovelModule] merge put', e);
-              continue;
-            }
-            const screen2 = document.getElementById('conv-screen');
-            const open2 = screen2 && (screen2.classList.contains('active') || screen2.classList.contains('qr-active'));
-            if (open2 && String(screen2.dataset.cvCharId) === String(charId) && window.ConvModule?._replaceMessageBubble) {
-              await ConvModule._replaceMessageBubble(updated);
-            }
-            continue;
-          }
-        }
-
-        const msg = {
-          charId: String(charId),
-          role: 'assistant',
-          parts: [imgPart],
-          content: '[配图]',
-          timestamp: Date.now(),
-          status: 'sent',
-          recalled: false,
-          recallContent: '',
-          recallThought: '',
-        };
-        const newId = await DB.messages.add(msg);
-        msg.id = newId;
-
-        const screen3 = document.getElementById('conv-screen');
-        const open3 = screen3 && (screen3.classList.contains('active') || screen3.classList.contains('qr-active'));
-        if (open3 && String(screen3.dataset.cvCharId) === String(charId) && window.ConvModule?._appendNovelImageMessage) {
-          await ConvModule._appendNovelImageMessage(msg);
-        }
-      }
-    } finally {
-      _isGenerating = false; // 释放并发锁
-      if (window.ConvModule?._hideNovelPending) window.ConvModule._hideNovelPending();
-    }
-  }
-
-  return { init, save, getCfg, restoreUI, generateImageBlob, attachImagesForChar, testGenerate, clearTestPreview, downloadTestPreview };
-})();
-
-// ============================================================
 // EmoteModule — 表情包字典管理 (重构版：高级多选与独立全局)
 // ============================================================
 const EmoteModule = (() => {
@@ -10484,6 +10400,423 @@ const EmoteModule = (() => {
 return { init, open, close, toggleDict, addDict, confirmAddDict, toggleGlobal, toggleCharBind, deleteDict, batchImport, getActiveEmotes, getUrlByKeyword, pick, toggleEditMode, toggleSelect, deleteSelected };
 })();
 
+// ============================================================
+// NovelModule — NovelAI / Pollinations 无感融合生图引擎
+// ============================================================
+const NovelModule = (() => {
+  const KEY_CFG = 'novel-config';
+  const API = 'https://image.novelai.net/ai/generate-image';
+  const UC_V3 = 'nsfw, lowres, jpeg artifacts, worst quality, watermark, blurry, very displeasing';
+  const UC_V45C = 'blurry, lowres, upscaled, artistic error, scan artifacts, jpeg artifacts, logo, too many watermarks, negative space, blank page';
+  const UC_V45F = 'nsfw, blurry, lowres, error, worst quality, bad quality, jpeg artifacts, very displeasing, white blank page, blank page';
+
+  let _cfg = null;
+  let _testObjectUrl = null;
+  let _isGenerating = false; // 并发锁：同一时间只允许一个生图队列运行
+
+  function _readFormCfg() {
+    return {
+      apiKey: document.getElementById('novel-api-key')?.value.trim() || '',
+      model:  document.getElementById('novel-model')?.value || 'nai-diffusion-3',
+      steps:  parseInt(document.getElementById('novel-steps')?.value || '28', 10),
+      scale:  parseFloat(document.getElementById('novel-scale')?.value || '5'),
+      sampler: document.getElementById('novel-sampler')?.value || 'k_euler',
+      size:   document.getElementById('novel-size')?.value || '832x1216',
+      positivePrompt: document.getElementById('novel-prompt-positive')?.value.trim() || '',
+      negativePrompt: document.getElementById('novel-prompt-negative')?.value.trim() || '',
+    };
+  }
+
+  function _modelFamily(model) {
+    if (/nai-diffusion-4/.test(model)) return 'v4';
+    if (/furry-3/.test(model)) return 'furry3';
+    return 'v3';
+  }
+
+  function _augmentPrompt(model, prompt) {
+    const f = _modelFamily(model);
+    if (f === 'v3' || f === 'furry3') return `${prompt}, best quality, amazing quality, very aesthetic, absurdres`;
+    const curated = /curated/i.test(model);
+    if (curated) return `${prompt}, very aesthetic, location, masterpiece, no text, -0.8::feet::, rating:general`;
+    return `${prompt}, location, very aesthetic, masterpiece, no text`;
+  }
+
+  function _defaultUc(model) {
+    const f = _modelFamily(model);
+    if (f === 'v4') return /curated/i.test(model) ? UC_V45C : UC_V45F;
+    return UC_V3;
+  }
+
+  function _buildParameters(model, augmentedPrompt, cfg) {
+    const [sw, sh] = (cfg.size || '832x1216').split('x').map(Number);
+    const w = sw || 832;
+    const h = sh || 1216;
+    const base = {
+      width: w,
+      height: h,
+      steps: Number(cfg.steps) || 28,
+      scale: Number(cfg.scale) || 5,
+      sampler: cfg.sampler || 'k_euler',
+      n_samples: 1,
+      qualityToggle: true,
+      negative_prompt: (cfg.negativePrompt && cfg.negativePrompt.trim()) || _defaultUc(model),
+    };
+    const fam = _modelFamily(model);
+    if (fam === 'v4') {
+      const uc = base.negative_prompt;
+      return {
+        ...base,
+        params_version: 1,
+        ucPreset: /curated/i.test(model) ? 3 : 5,
+        v4_prompt: {
+          caption: { base_caption: augmentedPrompt, char_captions:[] },
+          use_coords: false,
+          use_order: true,
+        },
+        v4_negative_prompt: { caption: { base_caption: uc, char_captions:[] } },
+      };
+    }
+    return {
+      ...base,
+      noise_schedule: 'native',
+      params_version: 1,
+      legacy: false,
+      legacy_v3_extend: false,
+      ucPreset: 4,
+      sm: false,
+      sm_dyn: false,
+      deliberate_euler_ancestral_bug: true,
+    };
+  }
+
+  function _unzipFirstPng(arrayBuffer) {
+    const f = typeof fflate !== 'undefined' ? fflate : window.fflate;
+    if (!f || !f.unzipSync) throw new Error('fflate 未加载');
+    const files = f.unzipSync(new Uint8Array(arrayBuffer));
+    const name = Object.keys(files).find(k => /\.(png|webp)$/i.test(k));
+    if (!name) throw new Error('压缩包内无图片');
+    const bytes = files[name];
+    const MAX_BYTES = 20 * 1024 * 1024; // 20 MB 上限
+    if (bytes.byteLength > MAX_BYTES) throw new Error('图片文件过大（超过 20MB），已拒绝加载');
+    return bytes;
+  }
+
+  async function init() {
+    try {
+      const saved = await DB.settings.get(KEY_CFG);
+      if (saved) _cfg = saved;
+    } catch (e) { console.warn('[NovelModule] init failed', e); }
+    return _cfg;
+  }
+
+  function restoreUI() {
+    if (!_cfg) return;
+    const set = (id, val) => { const el = document.getElementById(id); if (el && val != null) el.value = val; };
+    set('novel-api-key', _cfg.apiKey || '');
+    set('novel-model', _cfg.model || 'nai-diffusion-3');
+    set('novel-steps', _cfg.steps ?? 28);
+    set('novel-scale', _cfg.scale ?? 5);
+    set('novel-sampler', _cfg.sampler || 'k_euler');
+    set('novel-size', _cfg.size || '832x1216');
+    set('novel-prompt-positive', _cfg.positivePrompt || '');
+    set('novel-prompt-negative', _cfg.negativePrompt || '');
+    const sv = document.getElementById('novel-steps-val');
+    if (sv) sv.textContent = String(_cfg.steps ?? 28);
+    const scv = document.getElementById('novel-scale-val');
+    if (scv) scv.textContent = parseFloat(_cfg.scale ?? 5).toFixed(1);
+  }
+
+  async function save() {
+    _cfg = _readFormCfg();
+    await DB.settings.set(KEY_CFG, _cfg);
+    Toast.show('生图配置已保存');
+  }
+
+  function getCfg() { return _cfg; }
+// 🌟 核心分流引擎：根据有没有填 Key 决定走哪条路
+  async function generateImageBlob(mergedPrompt, runtimeCfg) {
+    const cfg = runtimeCfg || _cfg || await init();
+    
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s 超时
+
+    // ===== 线路 1：免费 Pollinations 线路（高定氛围感特调版） =====
+    if (!cfg?.apiKey) {
+      try {
+        const [sw, sh] = (cfg.size || '832x1216').split('x').map(Number);
+        const w = sw || 832;
+        const h = sh || 1216;
+        const seed = Math.floor(Math.random() * 10000000); 
+        
+        // 🎨 魔法 1：高级网感/氛围感基础画质（强制添加 scenery(风景), still life(静物), no humans(无人)）
+        let safePos = `${mergedPrompt}, 8k uhd, highres, photorealistic, dslr, aesthetic, cinematic lighting, moody, instagram style, pinterest vibe, highly detailed, scenery, still life, no humans`;
+
+        // 🚫 魔法 2：负面词彻底封杀所有与“人”相关的概念
+        const userNeg = (cfg.negativePrompt || '').trim();
+        const baseNeg = `human, person, people, man, woman, boy, girl, face, portrait, body, figure, silhouette, anatomy, nsfw, creepy, horror, scary, ugly, blurry, watermark, text, signature`;
+        const safeNeg = userNeg ? `${userNeg}, ${baseNeg}` : baseNeg;
+
+        // 请求 flux-realism 写实模型
+        const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(safePos)}?width=${w}&height=${h}&nologo=true&seed=${seed}&model=flux-realism&negative_prompt=${encodeURIComponent(safeNeg)}`;
+
+        const res = await fetch(url, { signal: controller.signal });
+        clearTimeout(timeoutId);
+        
+        if (!res.ok) {
+          Toast.show('免费生图线路繁忙，请稍后重试');
+          return null;
+        }
+        return await res.blob();
+        
+      } catch (fetchErr) {
+        clearTimeout(timeoutId);
+        Toast.show('免费生图网络错误：' + (fetchErr.message || ''));
+        return null;
+      }
+    }
+
+    // ===== 线路 2：原生 NovelAI 官方付费线路 =====
+    const model = cfg.model || 'nai-diffusion-3';
+    const aug = _augmentPrompt(model, mergedPrompt);
+    const body = {
+      input: aug,
+      model,
+      action: 'generate',
+      parameters: _buildParameters(model, aug, cfg),
+    };
+    
+    let res;
+    try {
+      res = await fetch(API, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${cfg.apiKey}`,
+        },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+    } catch (fetchErr) {
+      clearTimeout(timeoutId);
+      if (fetchErr.name === 'AbortError') {
+        Toast.show('Novel 生图超时，请稍后重试');
+      } else {
+        Toast.show('Novel 网络错误：' + (fetchErr.message || ''));
+      }
+      return null;
+    }
+    clearTimeout(timeoutId);
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      const msg = err.message || err.error || `HTTP ${res.status}`;
+      Toast.show('Novel 生图失败：' + msg);
+      return null;
+    }
+    const buf = await res.arrayBuffer();
+    const pngBytes = _unzipFirstPng(buf);
+    return new Blob([pngBytes], { type: 'image/png' });
+  }
+  
+  function clearTestPreview() {
+    if (_testObjectUrl) {
+      URL.revokeObjectURL(_testObjectUrl);
+      _testObjectUrl = null;
+    }
+    const img = document.getElementById('novel-test-preview-img');
+    if (img) {
+      img.removeAttribute('src');
+      img.style.display = 'none';
+    }
+    const ph = document.getElementById('novel-test-preview-placeholder');
+    if (ph) ph.style.display = '';
+  }
+
+  function downloadTestPreview() {
+    const img = document.getElementById('novel-test-preview-img');
+    const src = img?.src;
+    if (!img || img.style.display === 'none' || !src) {
+      Toast.show('请先生成测试图');
+      return;
+    }
+    const a = document.createElement('a');
+    a.href = src;
+    a.download = `novelai-test-${Date.now()}.png`;
+    a.rel = 'noopener';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    Toast.show('已开始下载');
+  }
+
+  async function testGenerate() {
+    const pos = document.getElementById('novel-prompt-positive')?.value.trim();
+    if (!pos) {
+      Toast.show('请填写正向提示词');
+      return;
+    }
+    const cfg = _readFormCfg();
+    const btn = document.getElementById('novel-test-btn');
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = '生成中…';
+    }
+    try {
+      const blob = await generateImageBlob(pos, cfg);
+      if (!blob) return;
+      clearTestPreview();
+      _testObjectUrl = URL.createObjectURL(blob);
+      const img = document.getElementById('novel-test-preview-img');
+      const ph = document.getElementById('novel-test-preview-placeholder');
+      if (img) {
+        img.src = _testObjectUrl;
+        img.style.display = 'block';
+      }
+      if (ph) ph.style.display = 'none';
+      Toast.show('测试生图成功');
+    } catch (e) {
+      console.error('[NovelModule] testGenerate', e);
+      Toast.show('测试失败：' + (e.message || '未知错误'));
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = '测试生图';
+      }
+    }
+  }
+
+  /**
+   * 在对话中插入 AI 配图消息（每条 tag 一张）
+   * @param opts.mergeIntoMsgId 若设置，将配图 part 追加到该条助手消息（与正文同气泡）
+   */
+  async function attachImagesForChar(charId, innerPrompts, charPositive, charNegative, opts = {}) {
+    if (!innerPrompts?.length || !charId) return;
+    try {
+      const on = await DB.settings.get(`novel-toggle-${charId}`);
+      if (on !== true) return;
+    } catch (e) { return; }
+
+    // 并发锁：若已有生图任务在跑，排队等待而非同时发起多个请求
+    while (_isGenerating) {
+      await new Promise(r => setTimeout(r, 500));
+    }
+    _isGenerating = true;
+
+    const mergeIntoMsgId = opts.mergeIntoMsgId;
+
+    const charExclusivePos = (charPositive || '').trim();
+    const cfgForChat = _cfg || await init();
+    const globalPos = (cfgForChat?.positivePrompt || '').trim();
+    const stylePrefix = charExclusivePos || globalPos;
+
+    const charExclusiveNeg = (charNegative || '').trim();
+    const globalNeg = (cfgForChat?.negativePrompt || '').trim();
+    const effectiveNeg = charExclusiveNeg || globalNeg;
+    const mergedCfg = { ...(cfgForChat || {}), negativePrompt: effectiveNeg };
+
+    const screen = document.getElementById('conv-screen');
+    const convOpen = screen && (screen.classList.contains('active') || screen.classList.contains('qr-active'));
+    const pendingCount = innerPrompts.filter(p => {
+      const merged = [stylePrefix, String(p).trim()].filter(Boolean).join(', ');
+      return !!merged.trim();
+    }).length;
+    if (convOpen && String(screen.dataset.cvCharId) === String(charId) && pendingCount > 0 && window.ConvModule?._showNovelPending) {
+      ConvModule._showNovelPending(charId, pendingCount);
+    }
+
+    try {
+      for (const inner of innerPrompts) {
+        const merged = [stylePrefix, inner.trim()].filter(Boolean).join(', ');
+        if (!merged.trim()) continue;
+        let blob;
+        try {
+          blob = await generateImageBlob(merged, mergedCfg);
+        } catch (e) {
+          console.error('[NovelModule] generate', e);
+          Toast.show('请求异常：' + (e.message || ''));
+          continue;
+        }
+        if (!blob) continue;
+
+        const assetKey = `chat-img-${charId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        try {
+          await Assets.saveBlob(assetKey, blob, 1200, 0.88);
+        } catch (e) {
+          Toast.show('配图保存失败');
+          continue;
+        }
+
+        let sentRound = 0;
+        try {
+          const msgs = await DB.messages.getPage(charId, 0, 500);
+          sentRound = msgs.filter(m => m.role === 'assistant').length;
+        } catch (e) { /* ignore */ }
+
+        const imgPart = {
+          type: 'image',
+          assetKey,
+          description: '（智能配图）',
+          sentRound,
+          novelMergedPrompt: merged
+        };
+
+        if (mergeIntoMsgId != null) {
+          let existing = null;
+          try {
+            existing = await DB.messages.get(mergeIntoMsgId);
+          } catch (e) { existing = null; }
+          if (existing && String(existing.charId) === String(charId) && existing.role === 'assistant') {
+            const parts = [...(existing.parts ||[{ type: 'text', content: existing.content || '' }])];
+            parts.push(imgPart);
+            const textPreview = parts.filter(p => p.type === 'text').map(p => p.content).join('\n').trim();
+            const updated = {
+              ...existing,
+              parts,
+              content: textPreview ? `${textPreview.slice(0, 80)}${textPreview.length > 80 ? '…' : ''} ·[配图]` : '[配图]'
+            };
+            try {
+              await DB.messages.put(updated);
+            } catch (e) {
+              console.error('[NovelModule] merge put', e);
+              continue;
+            }
+            const screen2 = document.getElementById('conv-screen');
+            const open2 = screen2 && (screen2.classList.contains('active') || screen2.classList.contains('qr-active'));
+            if (open2 && String(screen2.dataset.cvCharId) === String(charId) && window.ConvModule?._replaceMessageBubble) {
+              await ConvModule._replaceMessageBubble(updated);
+            }
+            continue;
+          }
+        }
+
+        const msg = {
+          charId: String(charId),
+          role: 'assistant',
+          parts: [imgPart],
+          content: '[配图]',
+          timestamp: Date.now(),
+          status: 'sent',
+          recalled: false,
+          recallContent: '',
+          recallThought: '',
+        };
+        const newId = await DB.messages.add(msg);
+        msg.id = newId;
+
+        const screen3 = document.getElementById('conv-screen');
+        const open3 = screen3 && (screen3.classList.contains('active') || screen3.classList.contains('qr-active'));
+        if (open3 && String(screen3.dataset.cvCharId) === String(charId) && window.ConvModule?._appendNovelImageMessage) {
+          await ConvModule._appendNovelImageMessage(msg);
+        }
+      }
+    } finally {
+      _isGenerating = false; // 释放并发锁
+      if (window.ConvModule?._hideNovelPending) window.ConvModule._hideNovelPending();
+    }
+  }
+
+  return { init, save, getCfg, restoreUI, generateImageBlob, attachImagesForChar, testGenerate, clearTestPreview, downloadTestPreview };
+})();
 
 // ============================================================
 // MemoryModule — 潜意识与记忆档案提炼（高密度压缩 - 编年史版）
@@ -13891,8 +14224,16 @@ function _renderImgPreviewBar() {
         }
       } catch(e) { console.warn('[ConvModule] 跨窗口混排失败', e); }
 
-// 🌟 修改参数传递
-      const systemPrompt = _buildSystemPrompt(histMsgs, novelImgOnForPrompt, worldBookBlock, timePerceptionOn, timeGapPrompt, memorySummary, crossWindowMsgs, scheduleContext);
+// 检测当前是否使用的是免 Key 引擎
+      let isFreeEngine = true;
+      try {
+        const nvCfg = await DB.settings.get('novel-config');
+        if (nvCfg && nvCfg.apiKey) isFreeEngine = false; // 填了 Key 就认为是原生 NovelAI
+      } catch(e) {}
+
+      // 🌟 修改参数传递 (追加 isFreeEngine)
+      const systemPrompt = _buildSystemPrompt(histMsgs, novelImgOnForPrompt, worldBookBlock, timePerceptionOn, timeGapPrompt, memorySummary, crossWindowMsgs, scheduleContext, isFreeEngine);
+
       const apiMessages  = await _buildApiMessages(histMsgs, activeApi, currentRound);
       
       // 🖨️ [DEBUG] 华丽折叠版：打印完整上下文与系统提示词
@@ -14635,8 +14976,7 @@ ${emoteBlock}
   }
 
   // ── 组装 System Prompt ──
-
-function _buildSystemPrompt(histMsgs, novelImgOn = false, worldBookBlock = '', timePerceptionOn = true, timeGapPrompt = '', memorySummary = '', crossWindowMsgs =[], scheduleContext = '') {
+function _buildSystemPrompt(histMsgs, novelImgOn = false, worldBookBlock = '', timePerceptionOn = true, timeGapPrompt = '', memorySummary = '', crossWindowMsgs =[], scheduleContext = '', isFreeEngine = false) {
     let timeCtx = '';
     if (timePerceptionOn) {
        const now = new Date();
@@ -14660,21 +15000,17 @@ function _buildSystemPrompt(histMsgs, novelImgOn = false, worldBookBlock = '', t
       
        const lifestyleSection = scheduleContext ? scheduleContext : '';
 
-    const novelBehaviorBlock = novelImgOn
-      ? `# 高级行为：NovelAI 配图（本对话已开启）
-当你要发送**会被系统实际绘制成图片**的内容时（不是只用中文形容画面），必须使用以下标签；**标签内必须全部为英文**（英文关键词或标签式写法，逗号分隔），以利于 NovelAI 生图。**禁止在标签内写中文**；若需要中文口语、情绪或说明，请写在**另一条**中文气泡里，与本标签用 ||| 分隔。
+   let novelBehaviorBlock = '';
+    if (!novelImgOn) {
+        novelBehaviorBlock = `# 高级行为：画面描述（本对话未开启配图）\n本对话**未**接入自动生图。当你想描述你看到的画面、想让对方想象某个场景、或「用文字发图」时，请**只用中文自然语言**在普通气泡中叙述，如同真实聊天。**不要使用**[NOVEL_IMG]…[/NOVEL_IMG]，也不要用整段英文标签代替正常中文对话。`;
 
-**格式（标签内仅英文）：**
-[NOVEL_IMG]1girl, solo, upper body, soft lighting, depth of field[/NOVEL_IMG]
+} else if (isFreeEngine) {
+        novelBehaviorBlock = `# 高级行为：分享生活照片（图像引擎已开启）\n当你想要向我分享生活或发一些有氛围感的照片时，必须使用以下标签；标签内必须全部为纯英文逗号分隔的提示词。\n\n【你可以主动分享什么？】\n- 有氛围感的风景或城市街景 (如: moody scenery, city street, night view, cinematic lighting)\n- 餐厅探店或精美食物 (如: aesthetic cafe, coffee cup on table, delicious food, fine dining)\n- 家里的温馨角落或静物 (如: cozy interior, bedroom, warm light, chill vibe, still life)\n\n【⚠️ 绝对禁忌】：\n由于当前摄像头损坏，你【绝对不能】发送任何包含“人”、“人物”、“脸”、“身体部位”或“穿搭”的照片！只能分享纯风景、静物、建筑或美食。\n\n**格式（标签内仅英文）：**\n[NOVEL_IMG]aesthetic cafe, coffee cup on table, warm sunlight, instagram style[/NOVEL_IMG]\n\n**示例：**\n这家店的味道还不错。 |||[NOVEL_IMG]aesthetic restaurant, delicious food on table, moody lighting, fine dining[/NOVEL_IMG]`;
+    } else {
 
-**示例：**
-你看这张。 ||| [NOVEL_IMG]1boy, casual clothes, coffee shop, window seat, warm tone[/NOVEL_IMG]
-
-**原则：** 需要真图 → 用英文标签气泡；只需聊天里形容场景 → 可只用中文普通气泡，不要用 [NOVEL_IMG] 包中文。
-`
-      : `# 高级行为：画面描述（本对话未开启 Novel 配图）
-本对话**未**接入自动生图。当你想描述你看到的画面、想让对方想象某个场景、或「用文字发图」时，请**只用中文自然语言**在普通气泡中叙述，如同真实聊天。**不要使用** [NOVEL_IMG]…[/NOVEL_IMG]，也不要用整段英文标签代替正常中文对话。
-`;
+        // 原生 NovelAI 保留原有提示词
+        novelBehaviorBlock = `# 高级行为：NovelAI 配图（本对话已开启）\n当你要发送**会被系统实际绘制成图片**的内容时（不是只用中文形容画面），必须使用以下标签；**标签内必须全部为英文**（英文关键词或标签式写法，逗号分隔），以利于 NovelAI 生图。**禁止在标签内写中文**；若需要中文口语、情绪或说明，请写在**另一条**中文气泡里，与本标签用 ||| 分隔。\n\n**格式（标签内仅英文）：**\n[NOVEL_IMG]1girl, solo, upper body, soft lighting, depth of field[/NOVEL_IMG]\n\n**示例：**\n你看这张。 ||| [NOVEL_IMG]1boy, casual clothes, coffee shop, window seat, warm tone[/NOVEL_IMG]\n\n**原则：** 需要真图 → 用英文标签气泡；只需聊天里形容场景 → 可只用中文普通气泡，不要用 [NOVEL_IMG] 包中文。`;
+    }
 
 // 根据 NovelAI 开关，动态赋予大模型发动态的能力边界
     const feedBehaviorBlock = novelImgOn
@@ -16651,20 +16987,22 @@ try {
 window.ConvModule = ConvModule;
 
 // ============================================================
-// AgentModule — 全局后台调度与离线生态引擎
+// AgentModule — 全局后台调度与离线生态引擎 (防并发风暴版)
 // ============================================================
 
 const AgentModule = (() => {
   const KEY_CFG = 'agent-config';
-  const KEY_LAST_POST = 'agent-last-proactive-time'; // 🌟 记录上次主动发帖时间
-  let _taskQueue = [];
+  const KEY_LAST_POST = 'agent-last-proactive-time'; 
+  
+  // ⚡️ 快队列：处理实时社交回复 (如动态点赞评论)
+  let _taskQueue =[];
   let _tickTimer = null;
   let _lastProactiveTime = 0;
   let _lastSlowCheckTime = 0;
   let _lastDiaryAttempt = {};
   
   // 🌟 默认配置
- let _cfg = {
+  let _cfg = {
     enabled: true,
     reactionDelay: 10,
     proactiveEnabled: true,
@@ -16674,17 +17012,55 @@ const AgentModule = (() => {
     forumEnabled: true,
     forumInterval: 12
   };
-  
-  // 🌟 新增：后台静默识别图片内容
+
+  // ==========================================
+  // 🐢 核心新增：重型后台任务调度器 (防风暴排队)
+  // ==========================================
+  const _heavyQueue =[];
+  let _isHeavyProcessing = false;
+  const HEAVY_COOLDOWN = 3 * 60 * 1000; // 🌟 强制冷却时间：3 分钟 (180,000毫秒)
+
+  function _enqueueHeavyTask(taskName, taskFn) {
+    _heavyQueue.push({ name: taskName, fn: taskFn });
+    console.log(`[Agent] 📥 任务 [${taskName}] 加入长线排队，当前队列积压: ${_heavyQueue.length} 个`);
+    _processHeavyQueue();
+  }
+
+  async function _processHeavyQueue() {
+    if (_isHeavyProcessing || _heavyQueue.length === 0) return;
+    _isHeavyProcessing = true;
+
+    while (_heavyQueue.length > 0) {
+      const task = _heavyQueue.shift();
+      try {
+        console.log(`[Agent] ⚙️ 开始执行后台任务: ${task.name} (排队剩余: ${_heavyQueue.length} 个)`);
+        await task.fn();
+        console.log(`[Agent] ✅ 后台任务 [${task.name}] 执行完毕！`);
+      } catch (e) {
+        console.error(`[Agent] ❌ 后台任务 [${task.name}] 执行失败:`, e);
+      }
+
+      // 只要队列里还有任务没做完，强制休眠 3 分钟！
+      if (_heavyQueue.length > 0) {
+        console.log(`[Agent] ⏳ 进入强制冷却期... 严防并发风暴，等待 3 分钟后唤醒下一个任务。`);
+        await new Promise(r => setTimeout(r, HEAVY_COOLDOWN));
+      }
+    }
+
+    _isHeavyProcessing = false;
+    console.log(`[Agent] 🏁 所有堆积的后台长线任务已清空，大模型 API 压力解除。`);
+  }
+  // ==========================================
+
   async function _getImageDescription(imageKey, activeApi) {
     if (!imageKey) return '';
     try {
       const b64 = await Assets.getBase64(imageKey);
       if (!b64) return '[图片加载失败]';
       console.log('[Agent] 正在调用 Vision API 将动态图片转为文字记忆...');
-      const desc = await ApiHelper.chatCompletion(activeApi, [{
+      const desc = await ApiHelper.chatCompletion(activeApi,[{
         role: 'user',
-        content: [
+        content:[
           { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${b64}` } },
           { type: 'text', text: '用一句话简短描述这张图片的核心内容，不要废话，不超过30字。' }
         ]
@@ -16692,7 +17068,7 @@ const AgentModule = (() => {
       return desc ? `[配图画面：${desc.trim()}]` : '[一张图片]';
     } catch(e) {
       console.warn('[Agent] 动态图片转述失败(可能模型不支持视觉)', e);
-      return '[一张图片]'; // 兜底降级
+      return '[一张图片]'; 
     }
   }
 
@@ -16700,7 +17076,7 @@ const AgentModule = (() => {
     try {
       const saved = await DB.settings.get(KEY_CFG);
       if (saved) _cfg = { ..._cfg, ...saved };
-      _lastProactiveTime = await DB.settings.get(KEY_LAST_POST) || 0; // 读取上次发帖时间
+      _lastProactiveTime = await DB.settings.get(KEY_LAST_POST) || 0; 
     } catch(e) {}
     
     console.log('[AgentModule] 核心引擎启动，心跳正常', _cfg);
@@ -16708,39 +17084,34 @@ const AgentModule = (() => {
     _startHeartbeat();
   }
   
- // 监听来自系统各处的“事件器”
   function _bindEvents() {
-    // 监听楼中楼回复
     document.addEventListener('agent:userCommented', (e) => {
-      if (!_cfg.enabled) return; // 🌟 如果引擎关闭，直接忽略
+      if (!_cfg.enabled) return; 
       const payload = e.detail;
-      console.log(`[Agent] 捕获到用户社交互动 -> 压入任务队列`);
+      console.log(`[Agent] 捕获到用户社交互动 -> 压入快队列`);
       
       _taskQueue.push({
         id: 'task_' + Date.now(),
         type: 'EVALUATE_COMMENT_REPLY',
-        executeAt: Date.now() + (_cfg.reactionDelay * 1000), // 🌟 使用用户的设置延迟
+        executeAt: Date.now() + (_cfg.reactionDelay * 1000),
         data: payload
       });
     });
 
-  // 监听用户发布新动态 (批量评估模式)
     document.addEventListener('agent:userPosted', async (e) => {
       if (!_cfg.enabled) return; 
       const { postId, postText, imageKey } = e.detail;
       console.log(`[Agent] 📡 捕获新动态，准备将全网角色打包进行 1 次批量评估...`);
       
-      // 只需要推入 1 个批量处理任务
       _taskQueue.push({
         id: 'batch_post_' + postId,
         type: 'BATCH_EVALUATE_NEW_POST',
-        executeAt: Date.now() + 1000, // 给 1 秒缓冲就开始评估
+        executeAt: Date.now() + 1000, 
         data: { postId, postText, imageKey }
       });
     });
-   }
+  }
 
-  // 心跳轮询 (每 3 秒检查一次队列)
   function _startHeartbeat() {
     if (_tickTimer) clearInterval(_tickTimer);
     _tickTimer = setInterval(_tick, 3000);
@@ -16749,9 +17120,7 @@ const AgentModule = (() => {
  async function _tick() {
     const now = Date.now();
     
-    // ==========================================
-    // ⚡️ 1. 轻量级快速心跳 (每 3 秒执行)
-    // ==========================================
+    // ⚡️ 1. 快队列：处理实时社交回复 (每 3 秒检查一次)
     const readyTasks = _taskQueue.filter(t => t.executeAt <= now);
     _taskQueue = _taskQueue.filter(t => t.executeAt > now);
 
@@ -16765,23 +17134,25 @@ const AgentModule = (() => {
       }
     }
 
-    // ==========================================
-    // 🐢 2. 重度数据库扫描心跳 (每 3 分钟才放行一次)
-    // ==========================================
-    if (now - _lastSlowCheckTime < 3 * 60 * 1000) return; // 拦截：不足3分钟直接退下
-    _lastSlowCheckTime = now; // 记录本次扫描时间
+    // 🐢 2. 慢队列检查：扫描大消耗任务 (每 3 分钟才进来看一次，防止频繁扫库)
+    if (now - _lastSlowCheckTime < 3 * 60 * 1000) return; 
+    _lastSlowCheckTime = now; 
 
     // 🌟 检查角色主动发动态 (广场)
     if (_cfg.enabled && _cfg.proactiveEnabled) {
       if (_lastProactiveTime === 0) {
-         // 【修复】：初次运行不发帖，仅打上当前时间戳作为起点
          _lastProactiveTime = now;
          await DB.settings.set(KEY_LAST_POST, now);
       } else {
          const intervalMs = _cfg.proactiveInterval * 60 * 60 * 1000;
          if (now - _lastProactiveTime > intervalMs) {
-            console.log(`[Agent] ⏰ 距离上次主动发动态已超 ${_cfg.proactiveInterval} 小时，触发摇人！`);
-            await forceProactivePost();
+            // 立即更新时间，防止在排队时被重复加入！
+            _lastProactiveTime = now;
+            await DB.settings.set(KEY_LAST_POST, now);
+            
+            _enqueueHeavyTask(`随机发动态`, async () => {
+                await _executeProactivePost();
+            });
          }
       }
     }
@@ -16792,7 +17163,6 @@ const AgentModule = (() => {
        for (const char of chars) {
            const lastForumTs = await DB.settings.get(`last-forum-post-${char.id}`);
            if (!lastForumTs) {
-               // 【修复】：初次运行不发帖，给每个角色打上当前时间+随机错峰的初始烙印
                const initialOffset = Math.random() * _cfg.forumInterval * 60 * 60 * 1000;
                await DB.settings.set(`last-forum-post-${char.id}`, now + initialOffset);
                continue;
@@ -16800,10 +17170,13 @@ const AgentModule = (() => {
            
            const intervalMs = _cfg.forumInterval * 60 * 60 * 1000;
            if (now - lastForumTs > intervalMs) {
+               // 立即刷新时间防止重复进队
                const randomOffset = Math.random() * 2 * 60 * 60 * 1000;
                await DB.settings.set(`last-forum-post-${char.id}`, now + randomOffset);
-               console.log(`[Agent] 🌐 角色【${char.name}】论坛发帖冷却完毕，准备发帖！`);
-               _triggerForumPost(char);
+               
+               _enqueueHeavyTask(`论坛发帖-${char.name}`, async () => {
+                   await _triggerForumPost(char);
+               });
            }
        }
     }
@@ -16817,7 +17190,6 @@ const AgentModule = (() => {
                let lastDiaryTs = diaries && diaries.length > 0 ? diaries[0].timestamp : 0;
                
                if (lastDiaryTs === 0) {
-                   // 【修复】：初次运行不写日记，打上当前时间戳作为起点
                    const initKey = `diary-init-${char.id}`;
                    const hasInit = await DB.settings.get(initKey);
                    if (!hasInit) {
@@ -16843,8 +17215,9 @@ const AgentModule = (() => {
 
                    if (rounds >= 5) {
                        _lastDiaryAttempt[char.id] = now; 
-                       console.log(`[Agent] 📓 角色【${char.name}】完成了 ${rounds} 轮交流，日记触发`);
-                       await DiaryModule.generateDiary(String(char.id), true);
+                       _enqueueHeavyTask(`书写日记-${char.name}`, async () => {
+                           await DiaryModule.generateDiary(String(char.id), true);
+                       });
                    }
                }
            }
@@ -16857,7 +17230,8 @@ const AgentModule = (() => {
     }
   }
   
-// 任务处理：决定是否回复评论（楼中楼）
+  // ==================== 各种调度执行函数 ====================
+
   async function _handleCommentReply({ postId, targetCharId, postText, isReply, targetCommentText, userText }) {
     try {
       const activeApi = await DB.api.getActive().catch(()=>null);
@@ -16890,7 +17264,6 @@ ${userName} 刚刚针对你的这条评论，直接回复你说：“${userText}
 ${userName} 在你的动态下评论说：“${userText}”`;
       }
 
-     // 🌟 抓取最近 8 条私聊记录，作为楼中楼斗嘴的后盾
       const recentMsgs = await DB.messages.getPage(String(targetCharId), 0, 8).catch(()=>[]);
       const historyStr = recentMsgs.reverse().filter(m => m.role === 'user' || m.role === 'assistant').map(m => {
         const roleName = m.role === 'user' ? userName : char.name;
@@ -16908,28 +17281,21 @@ ${promptContext}
 严格按照以下格式输出（绝不输出多余废话）：
 [REPLY_COMMENT:你的回复内容]`;
 
-      // 🌟 修复日志穿透
-      console.log(`\n[Agent-Reply] 🧠 角色【${char.name}】开始处理楼中楼回复`);
       const response = await ApiHelper.chatCompletion(activeApi, [{ role: 'system', content: prompt }]);
-      console.log(`[Agent-Reply] 💬 【${char.name}】的楼中楼输出:`, response);
 
       const match = response.match(/\[REPLY_COMMENT:(.+?)\]/s);
       if (match) {
         const replyText = match[1].trim();
         
-       // 🌟 核心修复：等 AI 思考完再拉取最新动态，并加入视觉识别！
         const feedPosts = await DB.feed.getAll();
         const currentPost = feedPosts.find(p => p.id === postId);
         if (!currentPost) return;
 
-        // 👇 新增：调用视觉工具识别图片
         let imgDesc = '';
-        if (currentPost.imageKey) {
-            imgDesc = await _getImageDescription(currentPost.imageKey, activeApi);
-        }
+        if (currentPost.imageKey) imgDesc = await _getImageDescription(currentPost.imageKey, activeApi);
         const finalPostText = postText + (imgDesc ? ' ' + imgDesc : '');
 
-        currentPost.comments = currentPost.comments || [];
+        currentPost.comments = currentPost.comments ||[];
         currentPost.comments.push({
           id: Date.now() + Math.floor(Math.random() * 1000),
           authorId: targetCharId,
@@ -16957,7 +17323,6 @@ ${promptContext}
           lastMsg.parts[0].replyText += ` | 你接着回复：“${replyText}”`;
           lastMsg.timestamp = Date.now();
           
-          // 👇 关键：如果这是折叠追加，也要把图片描述更新进去！
           if (imgDesc && !lastMsg.parts[0].postText.includes(imgDesc)) {
             lastMsg.parts[0].postText += ' ' + imgDesc;
           }
@@ -16967,9 +17332,9 @@ ${promptContext}
           const ticketMsg = {
             charId: String(targetCharId),
             role: 'system_ticket',
-            parts: [{
+            parts:[{
               type: 'system_ticket', action: 'comment_replied',
-              postText: finalPostText, // 👈 这里存入包含画面描述的完整文本
+              postText: finalPostText, 
               userText: userText, replyText: replyText,
               postId: postId
             }],
@@ -16984,7 +17349,6 @@ ${promptContext}
     }
   }
   
-  // 🌟 1. 批处理大脑：1 次 API 搞定所有角色的反应
   async function _batchEvaluateNewPost({ postId, postText, imageKey }) {
     try {
       const activeApi = await DB.api.getActive().catch(()=>null);
@@ -16993,22 +17357,16 @@ ${promptContext}
       const chars = await DB.characters.getAll().catch(()=>[]);
       if (!chars || chars.length === 0) return;
 
-      // 1. 如果有图，先调 1 次视觉模型看图（帮所有角色省去重复看图的钱）
       let imgDesc = '';
-      if (imageKey) {
-        imgDesc = await _getImageDescription(imageKey, activeApi);
-      }
+      if (imageKey) imgDesc = await _getImageDescription(imageKey, activeApi);
       const finalPostText = postText + (imgDesc ? ' ' + imgDesc : '');
 
-      // 2. 提取用户档案
       const allPersonas = PersonaModule.getAll();
       const userPersona = allPersonas.find(p => String(p.id) === String(PersonaModule.getActiveId())) || allPersonas[0];
       const userName = userPersona?.name || '用户';
 
-    // 🌟 3. 把所有角色打包成名册，并强行塞入他们与你的【近期私聊记忆】！
       let charListText = '';
       for (const c of chars) {
-        // 抓取最近 8 条真实聊天记录
         const recentMsgs = await DB.messages.getPage(String(c.id), 0, 8).catch(()=>[]);
         let historyStr = '无近期私聊记录';
         if (recentMsgs.length > 0) {
@@ -17018,14 +17376,9 @@ ${promptContext}
             return `${roleName}: ${txt}`;
           }).join(' | ');
         }
-
-        charListText += `[ID: ${c.id}] 姓名: ${c.name}
-人设: ${c.persona}
-【近期私聊记忆】: ${historyStr || '无'}
---------------------\n`;
+        charListText += `[ID: ${c.id}] 姓名: ${c.name}\n人设: ${c.persona}\n【近期私聊记忆】: ${historyStr || '无'}\n--------------------\n`;
       }
 
-      // 4. 极致省 Token 的一锅端 Prompt（强化默契规则）
       const prompt = `[系统后台调度任务：群像动态评估]
 ${userName}（也就是我）刚刚发布了一条社交动态。
 动态内容：“${postText || '[仅分享了图片]'}” ${imgDesc ? `\n【附带图片画面描述：${imgDesc}】` : ''}
@@ -17035,9 +17388,9 @@ ${charListText}
 
 【任务】：
 请你同时模拟这 ${chars.length} 个角色，分别决定他们看到这条动态后会作何反应。
-【核心规则】：如果【近期私聊记忆】中已经提到了与该动态相关的话题（比如刚聊过、定下了约定），角色的评论必须体现出这种【私底下的默契】，绝对不要装作不知道！
-1. 如果该角色觉得没意思或不符合性格，值填 "[IGNORE]"。
-2. 如果决定评论，直接写出评论内容（简短自然，符合人设与私聊上下文）。
+【核心规则】：如果【近期私聊记忆】中已经提到了与该动态相关的话题，评论必须体现出【私底下的默契】。
+1. 如果该角色觉得没意思或不符合性格，必须填 "[IGNORE]"。
+2. 如果决定评论，直接写出评论内容。
 
 【输出格式】：严格返回 JSON 对象，键为角色 ID，值为回复内容。绝不输出多余废话！
 示例：
@@ -17047,11 +17400,7 @@ ${charListText}
   "5": "大半夜发这些，有病？"
 }`;
 
-      console.log(`\n[Agent-Batch] 🧠 开始批量评估 ${chars.length} 个角色对动态的反应...`);
-      const response = await ApiHelper.chatCompletion(activeApi, [{ role: 'system', content: prompt }]);
-      console.log(`[Agent-Batch] 💬 批量决策结果:`, response);
-
-      // 解析 JSON
+      const response = await ApiHelper.chatCompletion(activeApi,[{ role: 'system', content: prompt }]);
       const cleaned = response.replace(/```json|```/g, '').trim();
       const start = cleaned.indexOf('{');
       const end = cleaned.lastIndexOf('}');
@@ -17059,13 +17408,10 @@ ${charListText}
       
       const results = JSON.parse(cleaned.substring(start, end + 1));
 
-      // 5. 安排“本地错峰上屏”计划
       let delayMultiplier = 0;
       for (const [cid, reply] of Object.entries(results)) {
         if (!reply || reply.includes('[IGNORE]')) continue;
 
-        // 核心：把准备好的评论放进口袋，计算它该在几秒后发出去
-        // 基础延迟 + 每次增加 6~12 秒的随机错峰
         const staggerDelay = (delayMultiplier * 8000) + Math.floor(Math.random() * 6000);
         const executeTime = Date.now() + (_cfg.reactionDelay * 1000) + staggerDelay;
 
@@ -17075,8 +17421,6 @@ ${charListText}
           executeAt: executeTime,
           data: { postId, charId: cid, replyText: reply, finalPostText }
         });
-        
-        console.log(`[Agent-Batch] ⏱️ 安排【角色 ${cid}】在 ${((executeTime - Date.now())/1000).toFixed(1)} 秒后发送评论: ${reply}`);
         delayMultiplier++;
       }
 
@@ -17085,7 +17429,6 @@ ${charListText}
     }
   }
 
-  // 🌟 2. 错峰发射器：时间一到，纯本地执行（不消耗 API）
   async function _publishComment({ postId, charId, replyText, finalPostText }) {
     try {
       const char = await DB.characters.get(Number(charId)).catch(()=>null);
@@ -17093,7 +17436,7 @@ ${charListText}
 
       const feedPosts = await DB.feed.getAll();
       const currentPost = feedPosts.find(p => p.id === postId);
-      if (!currentPost) return; // 动态被删了就不发了
+      if (!currentPost) return; 
 
       const binding = await DB.bindings.get(String(charId)).catch(()=>null);
       const personaId = binding ? binding.personaId : PersonaModule.getActiveId();
@@ -17101,8 +17444,7 @@ ${charListText}
       const userPersona = allPersonas.find(p => String(p.id) === String(personaId)) || allPersonas[0];
       const userName = userPersona?.name || '用户';
 
-      // 写入评论到动态数据库
-      currentPost.comments = currentPost.comments || [];
+      currentPost.comments = currentPost.comments ||[];
       currentPost.comments.push({
         id: Date.now() + Math.floor(Math.random() * 1000), 
         authorId: charId,
@@ -17111,17 +17453,14 @@ ${charListText}
       });
       await DB.feed.put(currentPost);
 
-      // 刷新前端 UI
       if (typeof FeedModule !== 'undefined') FeedModule.refresh();
 
-      // 弹横幅通知
       let charAvatar = await Assets.getUrl(`char-avatar-${charId}`).catch(()=>'');
       NotificationModule.show({
         charId: charId, personaId: personaId, name: char.name,
         msg: `评论了你的动态: ${replyText}`, avatar: charAvatar, type: 'feed' 
       });
 
-      // 悄悄写入聊天记忆（带有折叠收纳逻辑）
       const recentMsgs = await DB.messages.getPage(String(charId), 0, 1).catch(()=>[]);
       const lastMsg = recentMsgs[0];
 
@@ -17136,7 +17475,7 @@ ${charListText}
         const ticketMsg = {
           charId: String(charId),
           role: 'system_ticket',
-          parts: [{
+          parts:[{
             type: 'system_ticket', action: 'user_post_commented',
             postText: finalPostText, 
             userText: '（你发布的动态）', replyText: replyText,
@@ -17152,165 +17491,31 @@ ${charListText}
     }
   }
 
-  
-  // 🌟 核心引擎：强制随机摇一个角色主动发帖
-  async function forceProactivePost() {
-    // 1. 马上更新时间，防止并发重复触发
-    _lastProactiveTime = Date.now();
-    await DB.settings.set(KEY_LAST_POST, _lastProactiveTime);
-
-    try {
-      const activeApi = await DB.api.getActive().catch(()=>null);
-      if (!activeApi) return;
-
-      const chars = await DB.characters.getAll().catch(()=>[]);
-      if (chars.length === 0) return;
-
-      // 2. 随机摇一个幸运儿
-      const char = chars[Math.floor(Math.random() * chars.length)];
-      const charId = String(char.id);
-
-      // 3. 检查这个角色有没有开启 NovelAI 配图权限
-      let novelImgOn = false;
-      try { novelImgOn = (await DB.settings.get(`novel-toggle-${charId}`)) === true; } catch(e) {}
-
-      // 4. 获取当前时间赋予大模型时间感知
-      const now = new Date();
-      const timeStr = `${now.getFullYear()}年${now.getMonth()+1}月${now.getDate()}日 ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
-
-      // 5. 组装让角色“自由发挥”的系统提示词
-      const prompt = `[系统后台自主任务：发布社交动态]
-当前时间：${timeStr}
-你的档案：${char.persona}
-
-【任务说明】：
-现在没有任何人跟你说话。请根据你的性格、目前的时间段以及你平时可能在做的事情，自发地更新一条社交平台动态（类似发朋友圈）。
-语言要随性、自然，带有浓厚的个人风格，绝对不要像机器人的工作汇报。
-
-【输出格式】（必须严格遵守以下格式之一，绝不输出其他废话）：
-${novelImgOn ? 
-`格式1（纯文字）：[POST:你想发的内容]
-格式2（带配图）：[POST_IMG:你想发的内容:画面的纯英文Prompt提示词]
-（注：如果你想配图，提示词必须为纯英文，用逗号分隔，如：coffee shop, raining, aesthetic）` 
-: 
-`格式（纯文字）：[POST:你想发的内容]
-（注：因为当前未连接视觉模块，你【绝对不能】尝试使用配图格式）`}
-
-示例：[POST:这雨下得没完没了，真烦。]`;
-
-      console.groupCollapsed(`[Agent-Proactive] 🎲 抽中角色【${char.name}】进行自发动态更新...`);
-      console.log(`%c[System Prompt]`, 'color:#9E9E9E;', prompt);
-      
-      const response = await ApiHelper.chatCompletion(activeApi, [{ role: 'system', content: prompt }]);
-      
-      console.log(`%c[AI 原始输出]`, 'color:#9C27B0; font-weight:bold;', response);
-      console.groupEnd();
-
-      const postMatch = response.match(/^\[POST:(.+)\]$/s);
-      const postImgMatch = response.match(/^\[POST_IMG:(.+?):(.+)\]$/s);
-
-      if (postMatch || postImgMatch) {
-        const isImg = !!postImgMatch;
-        const postText = isImg ? postImgMatch[1].trim() : postMatch[1].trim();
-        const imgPrompt = isImg ? postImgMatch[2].trim() : null;
-        let assetKey = null;
-
-        // 6. 如果带了配图，后台静默画图！
-        if (isImg && novelImgOn) {
-           const charPos = await DB.settings.get(`novel-prefix-${charId}`) || '';
-           const charNeg = await DB.settings.get(`novel-negative-${charId}`) || '';
-           const baseCfg = await NovelModule.getCfg() || await NovelModule.init();
-           const mergedCfg = { ...baseCfg, negativePrompt: charNeg || baseCfg.negativePrompt };
-           const augPrompt = [charPos, imgPrompt].filter(Boolean).join(', ');
-           
-           try {
-             console.log(`[Agent-Proactive] 🎨 开始静默绘制配图... Prompt: ${augPrompt}`);
-             const blob = await NovelModule.generateImageBlob(augPrompt, mergedCfg);
-             if (blob) {
-               assetKey = `feed-img-${charId}-${Date.now()}`;
-               await Assets.saveBlob(assetKey, blob, 1200, 0.85);
-             }
-           } catch (err) { console.error('[Agent-Proactive] 画图失败', err); }
-        }
-
-        // 7. 写入动态数据库
-        const newPost = {
-          id: Date.now(),
-          authorId: charId,
-          authorName: char.name,
-          avatarKey: `char-avatar-${charId}`, 
-          text: postText,
-          imageKey: assetKey,
-          likes: [], comments: [], commentOpen: false,
-          timestamp: Date.now()
-        };
-        await DB.feed.put(newPost);
-        if (typeof FeedModule !== 'undefined') FeedModule.refresh();
-
-        // 8. 触发横幅通知
-        let charAvatar = await Assets.getUrl(`char-avatar-${charId}`).catch(()=>'');
-        NotificationModule.show({
-          charId: charId, personaId: null, name: char.name,
-          msg: `刚刚更新了社交动态`, avatar: charAvatar, type: 'feed' 
-        });
-
-        // 👇 新增一行，智能拼接图片记忆
-        const finalPostText = postText + (assetKey && imgPrompt ? ` [附带配图画面：${imgPrompt}]` : '');
-
-        // 9. 悄悄注入聊天记忆
-        const ticketMsg = {
-          charId: String(charId),
-          role: 'system_ticket',
-          parts: [{
-            type: 'system_ticket', action: 'post_published',
-            postText: finalPostText, // 👈 改成使用拼接后的完整文本
-            postId: newPost.id
-          }],
-          content: `[发布了一条新动态]`,
-          timestamp: Date.now()
-        };
-       await DB.messages.add(ticketMsg);
-      }
-    } catch(e) {
-      console.error('[Agent-Proactive] 强制发帖执行失败', e);
-    }
-  }
-  
-  // 🌟 核心逻辑：离线问候检查器
-  async function _checkOfflineMessages(nowTime) {
+async function _checkOfflineMessages(nowTime) {
     try {
       const chars = await DB.characters.getAll().catch(()=>[]);
       for (const char of chars) {
         const charId = String(char.id);
         
-        // 1. 检查这个角色有没有开这个功能
         const isEnabled = await DB.settings.get(`offline-toggle-${charId}`);
         if (!isEnabled) continue;
 
-        // 2. 检查设定的阈值时间
         const intervalHours = await DB.settings.get(`offline-interval-${charId}`) || 24;
         
-        // 3. 检查最后互动时间。如果没有记录，就当做现在，防止误触
         const lastInteraction = await DB.settings.get(`last-interaction-${charId}`);
         if (!lastInteraction) {
            await DB.settings.set(`last-interaction-${charId}`, nowTime);
            continue;
         }
 
-        // 4. 判断是否超时！
         const thresholdMs = intervalHours * 60 * 60 * 1000;
         if (nowTime - lastInteraction > thresholdMs) {
-           console.log(`[Agent] ⏰ 角色【${char.name}】察觉到你失联了 ${intervalHours} 小时，准备主动发消息！`);
-           
-           // 【关键】：立刻更新互动时间，防止大模型处理慢导致并发疯狂发消息！
+           // 立刻更新时间，防止并发
            await DB.settings.set(`last-interaction-${charId}`, nowTime);
            
-           // 为了让“上线就收到消息”的错觉更真实，加一个随机延迟 (5秒 ~ 30秒)
-           const randomDelay = Math.floor(Math.random() * 25000) + 5000;
-           
-           setTimeout(() => {
-             _triggerProactiveChat(char, intervalHours);
-           }, randomDelay);
+           _enqueueHeavyTask(`离线问候-${char.name}`, async () => {
+               await _triggerProactiveChat(char, intervalHours);
+           });
         }
       }
     } catch(e) {
@@ -17318,26 +17523,21 @@ ${novelImgOn ?
     }
   }
 
-  // 🌟 增强版：让 AI 生成主动找你的文案 (支持多气泡连发、发图、发语音、分享生活)
   async function _triggerProactiveChat(char, lostHours) {
     try {
       const activeApi = await DB.api.getActive().catch(()=>null);
       if (!activeApi) return;
 
       const charId = String(char.id);
-      
-      // 获取绑定的面具（我是谁）
       const binding = await DB.bindings.get(charId).catch(()=>null);
       const personaId = binding ? binding.personaId : PersonaModule.getActiveId();
       const allPersonas = PersonaModule.getAll();
       const userPersona = allPersonas.find(p => String(p.id) === String(personaId)) || allPersonas[0];
       const userName = userPersona?.name || '用户';
 
-      // 检查是否为该角色开启了 NovelAI 画图权限
       let novelImgOn = false;
       try { novelImgOn = (await DB.settings.get(`novel-toggle-${charId}`)) === true; } catch(e) {}
 
-      // 提取点历史记忆给大模型参考，防止话题脱节
       const recentMsgs = await DB.messages.getPage(charId, 0, 10).catch(()=>[]);
       const historyText = recentMsgs.reverse().map(m => {
         const role = m.role === 'user' ? userName : char.name;
@@ -17345,7 +17545,21 @@ ${novelImgOn ?
         return `[${role}]: ${txt}`;
       }).join('\n');
 
-      // 🌟 全新精调的 Prompt：强调分享生活、多气泡、去舔狗化
+      let isFreeEngine = true;
+      try {
+        const nvCfg = await DB.settings.get('novel-config');
+        if (nvCfg && nvCfg.apiKey) isFreeEngine = false;
+      } catch(e) {}
+      
+      let imgRule = '你目前无法发送照片，请仅用文字或语音。';
+      if (novelImgOn) {
+          if (isFreeEngine) {
+            imgRule = '【重要分享欲】你非常喜欢随手拍照片发给我。可以是：氛围感探店美食、沿途风景、温馨的家里角落等。必须使用 [NOVEL_IMG]纯英文画面标签[/NOVEL_IMG] 附带照片。注意：【绝对禁止】分享包含任何人、脸、身体或穿搭的照片，只能是纯景物。';
+          } else {
+              imgRule = '【重要】你可以发送照片：使用[NOVEL_IMG]英文画面标签[/NOVEL_IMG] 来附带一张你当前视角的照片，分享你的生活。';
+          }
+      }
+
       const prompt = `[系统最高优先指令：主动联络 (Proactive Reach-out)]
 背景：距离你和 ${userName} 上次聊天已经过去了 ${lostHours} 个小时。
 你的档案：${char.persona}
@@ -17358,16 +17572,15 @@ ${historyText || '（无）'}
 
 【互动准则】：
 1. 分享生活为主：不要一上来就干巴巴地问“在干嘛”或抱怨“怎么不理我”。你可以分享你现在正在做的事、刚刚遇到的趣事、随口的吐槽、或者一张随手拍的照片。
-2. 真实连发感：真人发消息通常是碎片化的。请必须使用 ||| 将你的话拆分成 2~4 个连续的短气泡。
+2. 真实连发感：真人发消息通常是碎片化的。请必须使用 ||| 将你的话拆分成 多个连续的短气泡。
    例如：刚开完会。 ||| 累死我了 ||| 你下班没？
-3. ${novelImgOn ? '【重要】你可以发送照片：使用 [NOVEL_IMG]英文画面标签[/NOVEL_IMG] 来附带一张你当前视角的照片，分享你的生活。' : '你目前无法发送照片，请仅用文字或语音。'}
+3. ${imgRule}
 4. 可以发送语音：如果你觉得某句话适合用语音说，使用 [AUDIO:秒数:语音文字内容] 格式。
 
 【绝对规则】：直接输出你要发送的消息内容，绝不要带任何动作描写、心理活动描写或系统废话。`;
 
-      const response = await ApiHelper.chatCompletion(activeApi, [{ role: 'system', content: prompt }]);
+      const response = await ApiHelper.chatCompletion(activeApi,[{ role: 'system', content: prompt }]);
       
-      // 按 ||| 拆分多个气泡
       const rawBubbles = response.split('|||').map(s => s.trim()).filter(Boolean);
       if (rawBubbles.length === 0) return;
 
@@ -17375,18 +17588,15 @@ ${historyText || '（无）'}
       const convScreen = document.getElementById('conv-screen');
       const isChatActive = convScreen && (convScreen.classList.contains('active') || convScreen.classList.contains('qr-active')) && convScreen.dataset.cvCharId === charId;
 
-      // 遍历 AI 吐出的多个气泡，挨个发送
       for (const rawContent of rawBubbles) {
-        // 1. 解析 NovelAI 标签
         let textContent = rawContent;
-        let novelPrompts = [];
+        let novelPrompts =[];
         textContent = textContent.replace(/\[NOVEL_IMG\]([\s\S]*?)\[\/NOVEL_IMG\]/gi, (_, inner) => {
           if (inner.trim()) novelPrompts.push(inner.trim());
           return '';
         }).trim();
 
-        // 2. 解析 Audio 标签
-        let msgParts = [];
+        let msgParts =[];
         let displayContent = textContent;
         const audioMatch = textContent.match(/^\[AUDIO:(\d+):(.+)\]$/s);
         
@@ -17398,12 +17608,10 @@ ${historyText || '（无）'}
           displayContent = textContent;
         }
 
-        // 3. 处理纯画图无文字的情况
         const novelOnly = novelPrompts.length > 0 && !textContent.trim();
-        if (novelOnly && !novelImgOn) continue; // 如果没开画图又只发了图，跳过
+        if (novelOnly && !novelImgOn) continue; 
         if (novelOnly) displayContent = '[发来了一张图片]';
 
-        // 4. 构建消息实体并存入数据库
         const msg = {
           charId: charId,
           role: 'assistant',
@@ -17417,14 +17625,12 @@ ${historyText || '（无）'}
         const newId = await DB.messages.add(msg);
         msg.id = newId;
 
-        // 如果正好停留在当前聊天页，直接调用内部渲染函数上屏
         if (isChatActive) {
            if (window.ConvModule && typeof window.ConvModule._appendNovelImageMessage === 'function') {
              await ConvModule._appendNovelImageMessage(msg);
            }
         }
 
-        // 只有第一条消息才会触发手机顶部的横幅弹窗，防止夺命连环弹
         if (isFirstBubble) {
            if (!isChatActive) {
              let charAvatar = await Assets.getUrl(`char-avatar-${charId}`).catch(()=>'');
@@ -17439,124 +17645,74 @@ ${historyText || '（无）'}
            isFirstBubble = false;
         }
 
-        // 触发后台画图逻辑 (如果带有画图提示词)
         if (novelPrompts.length > 0 && novelImgOn) {
           const charPos = await DB.settings.get(`novel-prefix-${charId}`) || '';
           const charNeg = await DB.settings.get(`novel-negative-${charId}`) || '';
           if (typeof NovelModule !== 'undefined') {
-             // 静默画图，画完会自动替换掉这条消息里的内容
              NovelModule.attachImagesForChar(charId, novelPrompts, charPos, charNeg, { mergeIntoMsgId: msg.id }).catch(()=>{});
           }
         }
 
-        // 气泡间的真实延迟感 (1~2.5秒)，让发消息显得像真人在分段打字
         if (rawBubbles.length > 1) {
           await new Promise(r => setTimeout(r, 1000 + Math.random() * 1500));
         }
       }
-
     } catch(e) {
       console.error('[Agent] 生成离线呼叫失败', e);
     }
   }
   
-// 🌟 让角色自主决定发论坛的 Creator Brain (支持强制指定板块类型)
   async function _triggerForumPost(char, forceImage = false, forceType = null) {
     try {
       const activeApi = await DB.api.getActive().catch(()=>null);
       if (!activeApi) return;
 
-      // 🖼️ 内置高奢背景图片池 (给世界事件专用)
       const EVENT_IMG_URLS =[
-'https://i.postimg.cc/0y1sf8MY/IMG_7337.jpg', 
-
-'https://i.postimg.cc/KjjgHtqz/IMG_9877.jpg',
-
-  'https://i.postimg.cc/2yyBKnc5/IMG_9878.jpg', 
-
-'https://i.postimg.cc/Y0PmKjZB/IMG_9879.jpg',
-
-'https://i.postimg.cc/rsstP5hb/IMG_9880.jpg',
-
-'https://i.postimg.cc/brr2B16K/IMG_9881.jpg',
-                
-'https://i.postimg.cc/mkkF57dn/IMG_9882.jpg', 
-
-'https://i.postimg.cc/prrn6K06/IMG_9883.jpg',
-
-'https://i.postimg.cc/0jjJB7tc/IMG_9884.jpg', 
-
-'https://i.postimg.cc/PJJ8R16M/IMG_9887.jpg',
-
-'https://i.postimg.cc/900qnyxp/IMG_9888.jpg', 
-
-'https://i.postimg.cc/RFXHdgTy/IMG_9889.jpg',
-
-'https://i.postimg.cc/gJNZsgKM/IMG_9890.jpg', 
-
-'https://i.postimg.cc/pTqFCsBC/IMG_9891.jpg',
-
-'https://i.postimg.cc/0QcwnVCZ/IMG_9892.jpg', 
-
-'https://i.postimg.cc/bJ3tgmRT/IMG_9893.jpg',
-
-'https://i.postimg.cc/qRj3w1GK/IMG_9894.jpg',
-
-'https://i.postimg.cc/Sxbhry2r/IMG_6675.jpg',
-
-'https://i.postimg.cc/yNbVybJd/IMG-9967.jpg',
-
-'https://i.postimg.cc/XJBnHkF7/IMG-9968.jpg',
-
-'https://i.postimg.cc/V60zGWMs/IMG-9969.jpg',
-
-'https://i.postimg.cc/j5nRg4Nt/IMG-9970.jpg',
-
-'https://i.postimg.cc/V60zGWMN/IMG-9971.jpg',
-
-'https://i.postimg.cc/HLhp9hJT/IMG-9972.jpg',
-
-'https://i.postimg.cc/hG5S15JS/IMG-9973.jpg',
-
-'https://i.postimg.cc/yNbVybJ1/IMG-9975.jpg',
-
-'https://i.postimg.cc/d0xqjx7Q/IMG-9976.jpg',
-
-'https://i.postimg.cc/6Qm9fm78/IMG-9977.jpg',
-
-'https://i.postimg.cc/XvzVkzZY/IMG-9978.jpg',
-
-'https://i.postimg.cc/7LWxnWC4/IMG-9979.jpg',
-
-'https://i.postimg.cc/1zj9rjgQ/IMG-9980.jpg',
-
-'https://i.postimg.cc/q75kx5td/IMG-9981.jpg',
-
-'https://i.postimg.cc/hG5S15JR/IMG-9982.jpg',
-
-'https://i.postimg.cc/W43Nrv1x/IMG-9983.jpg',
-
-'https://i.postimg.cc/Gp2LYCmZ/IMG-9984.jpg',
-
-'https://i.postimg.cc/q7RJnTvj/IMG-9985.jpg',
-
-'https://i.postimg.cc/MTfzPmRH/IMG-9986.jpg',
-
-'https://i.postimg.cc/C1nwPsD1/IMG-9987.jpg',
-
-'https://i.postimg.cc/q7RJnTvD/IMG-9988.jpg',
-
-'https://i.postimg.cc/W43Nrv1B/IMG-9989.jpg',
-
-'https://i.postimg.cc/Jh2152s6/IMG-9990.jpg',
-
-'https://i.postimg.cc/0NB80Bzt/IMG-9991.jpg',
-
-'https://i.postimg.cc/yNbVybJ4/IMG-9992.jpg',
-
-'https://i.postimg.cc/yNbVybD5/IMG-9993.jpg',
-
-'https://i.postimg.cc/SKvyfvnP/IMG-9994.jpg'
+        'https://i.postimg.cc/0y1sf8MY/IMG_7337.jpg', 
+        'https://i.postimg.cc/KjjgHtqz/IMG_9877.jpg',
+        'https://i.postimg.cc/2yyBKnc5/IMG_9878.jpg', 
+        'https://i.postimg.cc/Y0PmKjZB/IMG_9879.jpg',
+        'https://i.postimg.cc/rsstP5hb/IMG_9880.jpg',
+        'https://i.postimg.cc/brr2B16K/IMG_9881.jpg',
+        'https://i.postimg.cc/mkkF57dn/IMG_9882.jpg', 
+        'https://i.postimg.cc/prrn6K06/IMG_9883.jpg',
+        'https://i.postimg.cc/0jjJB7tc/IMG_9884.jpg', 
+        'https://i.postimg.cc/PJJ8R16M/IMG_9887.jpg',
+        'https://i.postimg.cc/900qnyxp/IMG_9888.jpg', 
+        'https://i.postimg.cc/RFXHdgTy/IMG_9889.jpg',
+        'https://i.postimg.cc/gJNZsgKM/IMG_9890.jpg', 
+        'https://i.postimg.cc/pTqFCsBC/IMG_9891.jpg',
+        'https://i.postimg.cc/0QcwnVCZ/IMG_9892.jpg', 
+        'https://i.postimg.cc/bJ3tgmRT/IMG_9893.jpg',
+        'https://i.postimg.cc/qRj3w1GK/IMG_9894.jpg',
+        'https://i.postimg.cc/Sxbhry2r/IMG_6675.jpg',
+        'https://i.postimg.cc/yNbVybJd/IMG-9967.jpg',
+        'https://i.postimg.cc/XJBnHkF7/IMG-9968.jpg',
+        'https://i.postimg.cc/V60zGWMs/IMG-9969.jpg',
+        'https://i.postimg.cc/j5nRg4Nt/IMG-9970.jpg',
+        'https://i.postimg.cc/V60zGWMN/IMG-9971.jpg',
+        'https://i.postimg.cc/HLhp9hJT/IMG-9972.jpg',
+        'https://i.postimg.cc/hG5S15JS/IMG-9973.jpg',
+        'https://i.postimg.cc/yNbVybJ1/IMG-9975.jpg',
+        'https://i.postimg.cc/d0xqjx7Q/IMG-9976.jpg',
+        'https://i.postimg.cc/6Qm9fm78/IMG-9977.jpg',
+        'https://i.postimg.cc/XvzVkzZY/IMG-9978.jpg',
+        'https://i.postimg.cc/7LWxnWC4/IMG-9979.jpg',
+        'https://i.postimg.cc/1zj9rjgQ/IMG-9980.jpg',
+        'https://i.postimg.cc/q75kx5td/IMG-9981.jpg',
+        'https://i.postimg.cc/hG5S15JR/IMG-9982.jpg',
+        'https://i.postimg.cc/W43Nrv1x/IMG-9983.jpg',
+        'https://i.postimg.cc/Gp2LYCmZ/IMG-9984.jpg',
+        'https://i.postimg.cc/q7RJnTvj/IMG-9985.jpg',
+        'https://i.postimg.cc/MTfzPmRH/IMG-9986.jpg',
+        'https://i.postimg.cc/C1nwPsD1/IMG-9987.jpg',
+        'https://i.postimg.cc/q7RJnTvD/IMG-9988.jpg',
+        'https://i.postimg.cc/W43Nrv1B/IMG-9989.jpg',
+        'https://i.postimg.cc/Jh2152s6/IMG-9990.jpg',
+        'https://i.postimg.cc/0NB80Bzt/IMG-9991.jpg',
+        'https://i.postimg.cc/yNbVybJ4/IMG-9992.jpg',
+        'https://i.postimg.cc/yNbVybD5/IMG-9993.jpg',
+        'https://i.postimg.cc/SKvyfvnP/IMG-9994.jpg'
       ];
 
       const charId = String(char.id);
@@ -17609,7 +17765,6 @@ ${historyText || '（无）'}
         ? `【加密视觉 / 假图功能（本次强制测试）】：\n如果是广场或树洞，必须带图！请强制将 "hasImage" 设为 true，并在 "imageDesc" 中描写画面内容。注意：如果是世界事件(event)，系统自带全景配图，无需开启 hasImage。`
         : `【加密视觉 / 假图功能】：\n如果是广场或树洞，并且你觉得配上一张照片会更有氛围，请开启 "hasImage": true，并在 "imageDesc" 中描写画面内容。注意：如果是世界事件(event)，系统自带全景配图，无需开启 hasImage。`;
 
-    // 👇 这里是精髓：如果有 forceType，直接剥夺 AI 的选择权！
       const typeInstruction = forceType
         ? `【⚠️ 最高强制测试指令】：\n本次发帖必须且只能发在 "${forceType}" 板块！请务必在 JSON 的 type 字段返回 "${forceType}"，并严格遵照该板块的规则撰写内容。`
         : `你可以自主决定发在哪个板块：
@@ -17644,11 +17799,11 @@ ${imgInstruction}
   "content": "广场或树洞的正文内容（如果 type 是 event 则留空）",
   "title": "如果 type 是 event，请填写核心标题。⚠️排版规则极其严格：如果是英文，绝对不能超过3个单词，且每个单词后必须加 \\n 换行！如果是中文，绝对不能超过5个字，且每2到3个字必须加 \\n 换行！",
   "desc": "如果 type 是 event，请填写事件的详细客观描述（像真实新闻播报一样）",
-  "hasImage": true, // 是否带假图（event 会无视此项因为系统自带，但需返回布尔值）
+  "hasImage": true, // 是否带假图
   "imageDesc": "如果带图且不是 event，用生动优美的中文描写画面内容；不带图则留空"
 }`;
 
-      console.log(`[Agent-Forum] 🧠 开始推演【${char.name}】的论坛发帖... (板块: ${forceType || 'AI随机'}, 强制带图: ${forceImage})`);
+      console.log(`[Agent-Forum] 🧠 开始推演【${char.name}】的论坛发帖...`);
       const response = await ApiHelper.chatCompletion(activeApi,[{ role: 'system', content: prompt }]);
       
       const cleaned = response.replace(/```json|```/g, '').trim();
@@ -17657,7 +17812,6 @@ ${imgInstruction}
       if (start === -1 || end === -1) throw new Error('发帖 JSON 解析失败');
       const result = JSON.parse(cleaned.substring(start, end + 1));
 
-      // ── 组装最终帖子对象 ──
       const isAnon = result.type === 'treehole';
       const isEvent = result.type === 'event';
       
@@ -17674,7 +17828,6 @@ ${imgInstruction}
       if (isEvent) {
           post.title = result.title || 'UNNAMED EVENT';
           post.desc = result.desc || result.content || '...';
-          // 🎲 随机抽取内置高奢背景 URL
           post.image = EVENT_IMG_URLS[Math.floor(Math.random() * EVENT_IMG_URLS.length)];
       } else {
           post.content = result.content;
@@ -17682,16 +17835,13 @@ ${imgInstruction}
           post.imageDesc = result.imageDesc || '';
       }
 
-      // 入库
       await DB.forum.put(post);
       console.log(`[Agent-Forum] 📡 【${char.name}】发帖成功:`, post);
 
-      // 触发连环摇人来评论
       if (typeof ForumModule !== 'undefined' && ForumModule.evaluateNewPost) {
           ForumModule.evaluateNewPost(post.id);
       }
 
-      // 弹窗通知
       const avatar = await Assets.getUrl(`char-avatar-${char.id}`).catch(()=>'');
       
       let bannerName = char.name;
@@ -17718,7 +17868,6 @@ ${imgInstruction}
     }
   }
 
- // ── 设置界面相关 ──
   function renderSettings() {
     const elEnable = document.getElementById('ag-toggle-enable');
     const elProactive = document.getElementById('ag-toggle-proactive');
@@ -17727,7 +17876,7 @@ ${imgInstruction}
 
     if (elEnable) elEnable.checked = _cfg.enabled;
     if (elProactive) elProactive.checked = _cfg.proactiveEnabled;
-   if (elDelay) {
+    if (elDelay) {
       elDelay.value = _cfg.reactionDelay;
       document.getElementById('ag-delay-val').textContent = _cfg.reactionDelay + 's';
     }
@@ -17742,7 +17891,7 @@ ${imgInstruction}
       elInterval.value = _cfg.proactiveInterval;
       document.getElementById('ag-interval-val').textContent = _cfg.proactiveInterval + 'h';
     }
-  const elForum = document.getElementById('ag-toggle-forum');
+    const elForum = document.getElementById('ag-toggle-forum');
     const elForumInt = document.getElementById('ag-forum-interval-slider');
     if (elForum) elForum.checked = _cfg.forumEnabled;
     if (elForumInt) {
@@ -17771,31 +17920,182 @@ ${imgInstruction}
     Toast.show('Agent 引擎配置已更新');
   }
 
-// 🌟[Debug] 强制随机抓一个角色去论坛发帖（接收指令）
-async function forceForumPost(forceType = null) {
+  // 🌟[Debug] 手动触发随机发动态 (加入长线队列)
+  async function forceProactivePost() {
+    try {
+      const activeApi = await DB.api.getActive().catch(()=>null);
+      if (!activeApi) { Toast.show('请先配置并激活 API'); return; }
+      
+      Toast.show('🎲 已通知后台抽取角色发动态，请耐心等待...');
+      
+      // 加入重型队列，防止风暴
+      _enqueueHeavyTask('强制发动态', async () => {
+         await _executeProactivePost(); 
+      });
+    } catch(e) {
+      console.error('[Agent-Debug] 强制发动态排队失败', e);
+    }
+  }
+
+  // 🌟 [Debug] 强制随机抓一个角色去论坛发帖
+  async function forceForumPost(forceType = null) {
     try {
       const activeApi = await DB.api.getActive().catch(()=>null);
       if (!activeApi) { Toast.show('请先配置并激活 API'); return; }
       const chars = await DB.characters.getAll().catch(()=>[]);
       if (chars.length === 0) { Toast.show('没有可用的角色档案'); return; }
       
-      // 随机摇一个幸运儿
       const char = chars[Math.floor(Math.random() * chars.length)];
       
-      // 根据类型动态反馈
       let typeLabel = '随机板块';
       if (forceType === 'square') typeLabel = '【角色广场】';
       if (forceType === 'treehole') typeLabel = '【匿名树洞】';
       if (forceType === 'event') typeLabel = '【世界事件】';
 
-      Toast.show(`🎲 指派【${char.name}】去发一篇 ${typeLabel} ...`);
+      Toast.show(`🎲 已指派【${char.name}】去发一篇 ${typeLabel}，请稍候...`);
       
-      // 直接调用大脑函数 (强制带假图设为 true，并传入板块类型)
-      await _triggerForumPost(char, true, forceType);
+      // 加入重型队列排队执行
+      _enqueueHeavyTask(`强制发论坛-${char.name}`, async () => {
+         await _triggerForumPost(char, true, forceType);
+      });
       
     } catch(e) {
       console.error('[Agent-Debug] 强制发帖失败', e);
-      Toast.show('强制发帖执行失败');
+    }
+  }
+
+  // ==============================================================
+  // 🌟 核心抽离：角色主动发朋友圈动态的实际执行逻辑 (被后台队列调用)
+  // ==============================================================
+  async function _executeProactivePost() {
+    // 立即更新最后发帖时间，防止重复判定
+    _lastProactiveTime = Date.now();
+    await DB.settings.set(KEY_LAST_POST, _lastProactiveTime);
+
+    try {
+      const activeApi = await DB.api.getActive().catch(()=>null);
+      if (!activeApi) return;
+
+      const chars = await DB.characters.getAll().catch(()=>[]);
+      if (chars.length === 0) return;
+
+      // 随机摇一个幸运儿
+      const char = chars[Math.floor(Math.random() * chars.length)];
+      const charId = String(char.id);
+
+      let novelImgOn = false;
+      try { novelImgOn = (await DB.settings.get(`novel-toggle-${charId}`)) === true; } catch(e) {}
+
+      const now = new Date();
+      const timeStr = `${now.getFullYear()}年${now.getMonth()+1}月${now.getDate()}日 ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+
+      let isFreeEngine = true;
+      try {
+        const nvCfg = await DB.settings.get('novel-config');
+        if (nvCfg && nvCfg.apiKey) isFreeEngine = false;
+      } catch(e) {}
+
+      let formatBlock = '';
+      if (novelImgOn) {
+          if (isFreeEngine) {
+              formatBlock = `格式1（纯文字）：[POST:你想发的内容]\n格式2（带配图）：[POST_IMG:你想发的内容:画面的纯英文Prompt提示词]\n（配图内容推荐：高级质感的风景、探店美食、时尚穿搭OOTD、不露脸的氛围感身材照、温馨家居等。提示词必须为纯英文，逗号分隔，如：aesthetic cafe, rain, moody lighting, instagram style）`;
+          } else {
+            formatBlock = `格式1（纯文字）：[POST:你想发的内容]\n格式2（带配图）：[POST_IMG:你想发的内容:画面的纯英文Prompt提示词]\n（配图内容推荐：高级质感的风景、探店美食、温馨家居、静物等。提示词必须为纯英文，逗号分隔。注意：【绝对禁止】配图里出现任何人、脸、身体或穿搭，只能是纯景物，如：aesthetic cafe, rain, moody lighting, instagram style）`;
+          }
+      } else {
+          formatBlock = `格式（纯文字）：[POST:你想发的内容]\n（注：因为当前未连接视觉模块，你【绝对不能】尝试使用配图格式）`;
+      }
+
+      const prompt = `[系统后台自主任务：发布社交动态]
+当前时间：${timeStr}
+你的档案：${char.persona}
+
+【任务说明】：
+现在没有任何人跟你说话。请根据你的性格、目前的时间段以及你平时可能在做的事情，自发地更新一条社交平台动态（类似发朋友圈）。
+语言要随性、自然，带有浓厚的个人风格，绝对不要像机器人的工作汇报。
+
+【输出格式】（必须严格遵守以下格式之一，绝不输出其他废话）：
+${formatBlock}
+
+示例：[POST:这雨下得没完没了，真烦。]`;
+      
+      console.groupCollapsed(`[Agent-Proactive] 🎲 抽中角色【${char.name}】进行自发动态更新...`);
+      console.log(`%c[System Prompt]`, 'color:#9E9E9E;', prompt);
+
+      const response = await ApiHelper.chatCompletion(activeApi,[{ role: 'system', content: prompt }]);
+      console.log(`%c[AI 原始输出]`, 'color:#9C27B0; font-weight:bold;', response);
+      console.groupEnd();
+      
+      const postMatch = response.match(/^\[POST:(.+)\]$/s);
+      const postImgMatch = response.match(/^\[POST_IMG:(.+?):(.+)\]$/s);
+
+      if (postMatch || postImgMatch) {
+        const isImg = !!postImgMatch;
+        const postText = isImg ? postImgMatch[1].trim() : postMatch[1].trim();
+        const imgPrompt = isImg ? postImgMatch[2].trim() : null;
+        let assetKey = null;
+
+        // 如果带了配图，后台静默画图！
+        if (isImg && novelImgOn) {
+           const charPos = await DB.settings.get(`novel-prefix-${charId}`) || '';
+           const charNeg = await DB.settings.get(`novel-negative-${charId}`) || '';
+           // 使用容错方式获取配置
+           const baseCfg = (typeof NovelModule !== 'undefined' && NovelModule.getCfg) ? (NovelModule.getCfg() || await NovelModule.init()) : null;
+           
+           if (baseCfg) {
+               const mergedCfg = { ...baseCfg, negativePrompt: charNeg || baseCfg.negativePrompt };
+               const augPrompt = [charPos, imgPrompt].filter(Boolean).join(', ');
+               
+               try {
+                 console.log(`[Agent-Proactive] 🎨 开始静默绘制配图... Prompt: ${augPrompt}`);
+                 const blob = await NovelModule.generateImageBlob(augPrompt, mergedCfg);
+                 if (blob) {
+                   assetKey = `feed-img-${charId}-${Date.now()}`;
+                   await Assets.saveBlob(assetKey, blob, 1200, 0.85);
+                 }
+               } catch (err) { console.error('[Agent-Proactive] 画图失败', err); }
+           }
+        }
+
+        // 写入动态数据库
+        const newPost = {
+          id: Date.now(),
+          authorId: charId,
+          authorName: char.name,
+          avatarKey: `char-avatar-${charId}`, 
+          text: postText,
+          imageKey: assetKey,
+          likes: [], comments:[], commentOpen: false,
+          timestamp: Date.now()
+        };
+        await DB.feed.put(newPost);
+        if (typeof FeedModule !== 'undefined') FeedModule.refresh();
+
+        // 触发横幅通知
+        let charAvatar = await Assets.getUrl(`char-avatar-${charId}`).catch(()=>'');
+        NotificationModule.show({
+          charId: charId, personaId: null, name: char.name,
+          msg: `刚刚更新了社交动态`, avatar: charAvatar, type: 'feed' 
+        });
+
+        // 智能拼接图片记忆并存入聊天上下文
+        const finalPostText = postText + (assetKey && imgPrompt ? `[附带配图画面：${imgPrompt}]` : '');
+
+        const ticketMsg = {
+          charId: String(charId),
+          role: 'system_ticket',
+          parts:[{
+            type: 'system_ticket', action: 'post_published',
+            postText: finalPostText, 
+            postId: newPost.id
+          }],
+          content: `[发布了一条新动态]`,
+          timestamp: Date.now()
+        };
+       await DB.messages.add(ticketMsg);
+      }
+    } catch(e) {
+      console.error('[Agent-Proactive] 强制发帖执行失败', e);
     }
   }
 
@@ -19854,6 +20154,68 @@ const SystemModule = (() => {
   return { render, onFontSizeInput, saveFontSize, previewFont, addFont, activateFont, deactivateFont, deleteFont, toggleIconLabels, init };
 })();
 
+// ============================================================
+// SpaceModule — 第二页博客空间生态
+// ============================================================
+const SpaceModule = (() => {
+  const DEFAULTS = {
+    'rb-t1': 'THIS IS MY BLOG/SPACE!',
+    'rb-t2': 'SEARCH',
+    'rb-t3': 'our journey',
+    'rb-t4': 'HEAVEN',
+    'rb-t5': 'a song by Niall Horan'
+  };
+
+  async function init() {
+    // 1. 恢复文字
+    for (const key of Object.keys(DEFAULTS)) {
+      try {
+        const val = await DB.settings.get(`space-text-${key}`);
+        const el = document.getElementById(key);
+        if (el) el.textContent = val || DEFAULTS[key];
+      } catch(e) {}
+    }
+    // 2. 恢复图片
+    const imgKeys =['rb-img-1', 'rb-img-2', 'rb-img-3', 'rb-img-music'];
+    for (const key of imgKeys) {
+      try {
+        const url = await Assets.getUrl(`space-img-${key}`);
+        if (url) {
+          const el = document.getElementById(key);
+          if (el) el.src = url;
+        }
+      } catch(e) {}
+    }
+  }
+
+  async function saveText(key) {
+    const el = document.getElementById(key);
+    if (!el) return;
+    try {
+      await DB.settings.set(`space-text-${key}`, el.textContent);
+    } catch(e) { console.error('Save text failed', e); }
+  }
+
+  async function saveImg(key, inputEl) {
+    const file = inputEl.files[0];
+    if (!file) return;
+    Toast.show('相片洗印中…');
+    try {
+      // 这里的尺寸和质量你可以自己调，600px足够清晰
+      const url = await Assets.save(`space-img-${key}`, file, 600, 0.85);
+      const el = document.getElementById(key);
+      if (el) el.src = url;
+      Toast.show('已更新图片');
+    } catch(err) {
+      Toast.show('上传失败');
+      console.error(err);
+    }
+    inputEl.value = '';
+  }
+
+  return { init, saveText, saveImg };
+})();
+
 async function init() {
   try { await DB.init(); } catch(e) { console.error('DB init failed:', e); return; }
   try { await GroupChatModule.init(); } catch(e) { console.warn('groupchat init failed', e); }
@@ -19876,6 +20238,7 @@ async function init() {
   try { ForumModule.init(); } catch(e) { console.warn('forum init failed', e); }
   // 行程生活系统
   try { LifestyleModule.init(); } catch(e) { console.warn('lifestyle init failed', e); }
+  try { await SpaceModule.init(); } catch(e) { console.warn('space init failed', e); }
 
 // 主题
   try {
@@ -19918,11 +20281,11 @@ async function init() {
   } catch(e) { console.warn('wallpaper restore failed', e); }
 
   // 图标
-  for (let i = 0; i < 8; i++) {
+  for (let i = 0; i <12; i++) {
     try {
       const url = await Assets.getUrl(`icon-${i}`);
       if (!url) continue;
-      const box = document.querySelector(`#grid-icons [data-icon-id="${i}"]`);
+     const box = document.querySelector(`.icon-box[data-icon-id="${i}"]`);
       if (box) box.innerHTML = `<img class="icon-custom" src="${url}" alt="">`;
     } catch(e) { /* 单个图标失败不影响其他 */ }
   }
@@ -19933,5 +20296,6 @@ async function init() {
 
 init();
 </script>
+<script src="post-office.js"></script>
 </body>
 </html>
