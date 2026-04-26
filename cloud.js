@@ -349,27 +349,42 @@ const CloudModule = (() => {
     }
   }
   
-  // ── 请求系统通知权限 ──
+  // ── 请求系统通知权限 (带控制台追踪) ──
   async function requestPushPermission() {
+    console.log('[Push] 🔘 按钮被点击了...');
+    
     if (!('Notification' in window)) {
-      Toast.show('当前浏览器不支持系统通知');
+      console.error('[Push] ❌ 当前浏览器或壳子完全不支持 Notification API');
+      Toast.show('当前环境不支持系统通知 (请尝试添加到桌面或换个浏览器)');
       return;
     }
     
-    const permission = await Notification.requestPermission();
-    if (permission === 'granted') {
-      Toast.show('通知授权成功！信使已就位 ✦');
-      // 测试弹一条通知看看效果
-      if (navigator.serviceWorker.controller) {
-        navigator.serviceWorker.ready.then(reg => {
-          reg.showNotification('Chill OS', {
-            body: '神经链路对接完成，以后我会在这里找你。',
-            icon: 'apple-touch-icon.png'
+    try {
+      console.log('[Push] ⏳ 正在向系统申请权限...');
+      const permission = await Notification.requestPermission();
+      console.log('[Push] 📢 系统返回权限结果:', permission);
+      
+      if (permission === 'granted') {
+        Toast.show('通知授权成功！信使已就位 ✦');
+        // 测试弹一条通知
+        if (navigator.serviceWorker.controller) {
+          navigator.serviceWorker.ready.then(reg => {
+            reg.showNotification('Chill OS', {
+              body: '神经链路对接完成，以后我会在这里找你。',
+              icon: 'apple-touch-icon.png'
+            });
+            console.log('[Push] ✅ 测试通知已触发');
           });
-        });
+        } else {
+          console.warn('[Push] ⚠️ SW未接管页面，请刷新页面再试');
+          Toast.show('请刷新一次页面使信使接管');
+        }
+      } else {
+        Toast.show('授权被拒绝，无法发送通知');
       }
-    } else {
-      Toast.show('通知授权被拒绝，离线 Agent 无法工作');
+    } catch (err) {
+      console.error('[Push] ❌ 请求权限时发生异常:', err);
+      Toast.show('请求权限出错，详见控制台');
     }
   }
 
