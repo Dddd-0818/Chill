@@ -2,7 +2,7 @@
 
 /**
  * ============================================================
- * CloudModule — Supabase 云原生同步引擎 (高定视觉版)
+ * CloudModule — Supabase 云原生同步引擎 (高定视觉版) + 离线收发室
  * ============================================================
  */
 const CloudModule = (() => {
@@ -33,8 +33,7 @@ const CloudModule = (() => {
       border-radius: 8px;
       text-transform: uppercase; 
       letter-spacing: 1px;
-    }
-    [data-theme="dark"] #cloud-screen .cloud-hint-box {
+    }[data-theme="dark"] #cloud-screen .cloud-hint-box {
       background: rgba(255,255,255,0.02); 
       border-color: rgba(255,255,255,0.15);
     }
@@ -112,7 +111,6 @@ const CloudModule = (() => {
               <div style="font-size:0.85rem; font-weight:600; color:var(--s-text-primary); margin-bottom:8px;">开启真·离线推送</div>
               <div style="font-size:0.6rem; color:var(--s-text-secondary); margin-bottom:12px; line-height:1.5;">授权后，即使关闭浏览器，大模型也能在后台通过系统通知主动找你。</div>
               
-              <!-- 🌟 新增：VAPID 公钥输入框 -->
               <div class="input-wrapper" style="margin-bottom:16px;">
                 <label class="label-text">VAPID Public Key / 推送公钥</label>
                 <input type="text" id="vapid-key" class="input-line" placeholder="BEl6... (用户自行填入)">
@@ -129,7 +127,6 @@ const CloudModule = (() => {
     </div>
   `;
   
-  // Fix: PWA 离线加载极快，DOMContentLoaded 可能已经触发，用 readyState 兜底
   function _injectHTML() {
     const device = document.querySelector('.device');
     if (device && !document.getElementById('cloud-screen')) {
@@ -150,6 +147,7 @@ const CloudModule = (() => {
     });
   }
 
+  // 获取带弹窗验证的 supabase 实例
   function _getSupabase() {
     const url = document.getElementById('cloud-url').value.trim().replace(/\/$/, '');
     const key = document.getElementById('cloud-key').value.trim();
@@ -166,14 +164,24 @@ const CloudModule = (() => {
     return window.supabase.createClient(url, key);
   }
 
+  // 🌟 静默获取 Supabase 实例（不弹窗，专门给后台静默收件用）
+  async function _getSupabaseSilent() {
+    try {
+      const url = await DB.settings.get('cloud-url');
+      const key = await DB.settings.get('cloud-key');
+      if (!url || !key || !window.supabase) return null;
+      return window.supabase.createClient(url, key);
+    } catch(e) { return null; }
+  }
+
   async function open() {
     try {
       const savedUrl = await DB.settings.get('cloud-url');
       const savedKey = await DB.settings.get('cloud-key');
-      const savedVapid = await DB.settings.get('cloud-vapid'); // 🌟 新增
+      const savedVapid = await DB.settings.get('cloud-vapid');
       if (savedUrl) document.getElementById('cloud-url').value = savedUrl;
       if (savedKey) document.getElementById('cloud-key').value = savedKey;
-      if (savedVapid) document.getElementById('vapid-key').value = savedVapid; // 🌟 新增
+      if (savedVapid) document.getElementById('vapid-key').value = savedVapid;
     } catch(e) {}
     document.getElementById('cloud-screen').classList.add('active');
   }
@@ -182,7 +190,6 @@ const CloudModule = (() => {
     document.getElementById('cloud-screen').classList.remove('active');
   }
 
-  // ── 独立内置的高定危险弹窗 ──
   function _showCloudConfirm(title, message, btnText) {
     return new Promise((resolve) => {
       const overlay = document.createElement('div');
@@ -206,17 +213,11 @@ const CloudModule = (() => {
     });
   }
 
-  // ── 上传到 Supabase (Sync Up) ──
   async function syncUp() {
     const supabase = _getSupabase();
     if (!supabase) return;
 
-    // 为了防止误触覆盖掉云端的珍贵备份，给上传也加个弹窗！
-    const confirmed = await _showCloudConfirm(
-      'Push to Cloud', 
-      '警告：上传将完全覆盖云端现有的备份数据。<br>确定要执行上传吗？', 
-      '确认覆盖'
-    );
+    const confirmed = await _showCloudConfirm('Push to Cloud', '警告：上传将完全覆盖云端现有的备份数据。<br>确定要执行上传吗？', '确认覆盖');
     if (!confirmed) return;
 
     const btn = document.getElementById('btn-sync-up');
@@ -274,17 +275,11 @@ const CloudModule = (() => {
     }
   }
 
-  // ── 从 Supabase 拉取 (Sync Down) ──
   async function syncDown() {
     const supabase = _getSupabase();
     if (!supabase) return;
 
-    // 使用我们刚写的、绝对不会被拦截的高定弹窗
-    const confirmed = await _showCloudConfirm(
-      'Pull from Cloud', 
-      '警告：从云端拉取将完全覆盖当前设备上的所有数据！<br>确定执行吗？', 
-      '确认拉取'
-    );
+    const confirmed = await _showCloudConfirm('Pull from Cloud', '警告：从云端拉取将完全覆盖当前设备上的所有数据！<br>确定执行吗？', '确认拉取');
     if (!confirmed) return;
 
     const btn = document.getElementById('btn-sync-down');
@@ -301,7 +296,6 @@ const CloudModule = (() => {
         .single(); 
 
       if (dbErr || !syncRecords || !syncRecords.data) throw new Error('未在云端找到备份数据');
-      
       const cloudData = syncRecords.data;
 
       await DB.clearAll();
@@ -312,30 +306,18 @@ const CloudModule = (() => {
       const total = assetsMeta.length;
       let current = 0;
 
-      // ✅ 这是修复后的代码
       if (total > 0) {
         for (const meta of assetsMeta) {
           current++;
           btn.innerHTML = `<i class="ph-light ph-spinner" style="animation:spin 1s linear infinite"></i> 提取媒体 (${current}/${total})`;
           
-          // 1. 先下载，不占着数据库通道
-          const { data: blobData, error: dlErr } = await supabase
-            .storage
-            .from('chill_assets')
-            .download(meta.key);
+          const { data: blobData, error: dlErr } = await supabase.storage.from('chill_assets').download(meta.key);
             
           if (blobData && !dlErr) {
-            // 2. 下载完后，开启一个“快闪”事务，存完立刻关门
             await new Promise((resolve, reject) => {
               const tx = db.transaction('assets', 'readwrite');
               const store = tx.objectStore('assets');
-              const request = store.put({
-                key: meta.key, 
-                blob: blobData, 
-                mimeType: meta.mimeType,
-                size: meta.size, 
-                updatedAt: meta.updatedAt
-              });
+              store.put({ key: meta.key, blob: blobData, mimeType: meta.mimeType, size: meta.size, updatedAt: meta.updatedAt });
               tx.oncomplete = () => resolve();
               tx.onerror = () => reject(tx.error);
             });
@@ -366,7 +348,6 @@ const CloudModule = (() => {
     }
   }
   
-  // --- 辅助函数：解码 VAPID 公钥 ---
   function urlBase64ToUint8Array(base64String) {
     const padding = '='.repeat((4 - base64String.length % 4) % 4);
     const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
@@ -378,35 +359,20 @@ const CloudModule = (() => {
     return outputArray;
   }
 
-  // ── 请求系统通知权限并生成令牌 ──
   async function requestPushPermission() {
-    // 🌟 核心：先读取用户填写的公钥
     const vapidInput = document.getElementById('vapid-key').value.trim();
-    if (!vapidInput) {
-      Toast.show('请先填写 VAPID 推送公钥');
-      return;
-    }
-
-    if (!('Notification' in window) || !('serviceWorker' in navigator)) {
-      Toast.show('当前浏览器不支持系统级推送');
-      return;
-    }
+    if (!vapidInput) { Toast.show('请先填写 VAPID 推送公钥'); return; }
+    if (!('Notification' in window) || !('serviceWorker' in navigator)) { Toast.show('当前浏览器不支持系统级推送'); return; }
     
     const permission = await Notification.requestPermission();
-    if (permission !== 'granted') {
-      Toast.show('通知授权被拒绝，离线 Agent 无法工作');
-      return;
-    }
+    if (permission !== 'granted') { Toast.show('通知授权被拒绝，离线 Agent 无法工作'); return; }
 
     Toast.show('正在生成端对端加密通信令牌...', 3000);
 
     try {
-      // 记住用户的 VAPID Key
       await DB.settings.set('cloud-vapid', vapidInput);
-
       const reg = await navigator.serviceWorker.ready;
       
-      // 1. 向苹果/谷歌服务器请求订阅令牌（使用用户输入的公钥）
       let subscription = await reg.pushManager.getSubscription();
       if (!subscription) {
         subscription = await reg.pushManager.subscribe({
@@ -415,13 +381,10 @@ const CloudModule = (() => {
         });
       }
 
-      // 2. 将这把“钥匙”存入本地数据库
       const subData = JSON.parse(JSON.stringify(subscription));
       await DB.settings.set('push-subscription', subData);
-      
       Toast.show('设备令牌生成成功！信使已就位 ✦');
       
-      // 3. 测试弹窗
       reg.showNotification('Chill OS', {
         body: '神经链路对接完成，设备加密令牌已锁定。',
         icon: 'apple-touch-icon.png'
@@ -433,8 +396,115 @@ const CloudModule = (() => {
     }
   }
 
-  return { open, close, syncUp, syncDown, requestPushPermission };
+  // ============================================================
+  // 🌟 核心：静默收取离线消息 (阅后即焚)
+  // ============================================================
+  async function checkOfflineMessages() {
+    const supabase = await _getSupabaseSilent();
+    if (!supabase) return;
+
+    try {
+      // 1. 查询收发室有没有新信件
+      const { data: offlineMsgs, error } = await supabase
+        .from('cloud_offline_messages')
+        .select('*');
+        
+      if (error || !offlineMsgs || offlineMsgs.length === 0) return;
+
+      console.log(`[Cloud] 📥 发现 ${offlineMsgs.length} 组离线消息，开始静默收取...`);
+
+      for (const record of offlineMsgs) {
+        const charId = record.char_id;
+        const bubbles = record.content ||[];
+        let timestamp = new Date(record.created_at).getTime();
+
+        for (const text of bubbles) {
+          let displayContent = text;
+          let msgParts =[{ type: 'text', content: text }];
+          
+          // 兼容基础的标签解析 (音频和表情)
+          const audioMatch = text.match(/^\[AUDIO:(\d+):(.+)\]$/s);
+          const emoteMatch = text.match(/^\[EMOTE:(.+)\]$/i);
+          
+          if (audioMatch) {
+            msgParts = [{ type: 'audio', duration: parseInt(audioMatch[1]), transcript: audioMatch[2].trim() }];
+            displayContent = `[语音消息 ${audioMatch[1]}秒]`;
+          } else if (emoteMatch) {
+            const keyword = emoteMatch[1].trim();
+            if (typeof EmoteModule !== 'undefined') {
+              const url = EmoteModule.getUrlByKeyword(keyword, charId);
+              if (url) {
+                msgParts = [{ type: 'image', url: url, description: `[表情包:${keyword}]` }];
+                displayContent = `[表情包]`;
+              } else {
+                msgParts = [{ type: 'text', content: `*试图发送表情包：${keyword}*` }];
+              }
+            }
+          }
+
+          const msg = {
+            charId: String(charId),
+            role: 'assistant',
+            parts: msgParts,
+            content: displayContent,
+            timestamp: timestamp++, // 错开 1ms，确保数组顺序
+            status: 'sent',
+            recalled: false,
+            recallContent: '',
+            recallThought: '',
+            recallNewMsg: ''
+          };
+
+          const newId = await DB.messages.add(msg);
+          msg.id = newId;
+
+          // 2. 如果用户恰好停留在该角色的聊天页（或处于半屏快回），原地静默插入 DOM
+          if (typeof ConvModule !== 'undefined') {
+            const screen = document.getElementById('conv-screen');
+            if (screen && (screen.classList.contains('active') || screen.classList.contains('qr-active')) && screen.dataset.cvCharId === String(charId)) {
+               // 利用底层 API 将其上屏
+               if (ConvModule._appendNovelImageMessage) {
+                 ConvModule._appendNovelImageMessage(msg).catch(()=>{});
+               }
+            }
+          }
+        }
+
+        // 3. 收取完毕，焚毁云端信件 (彻底解决同步覆盖冲突问题)
+        await supabase.from('cloud_offline_messages').delete().eq('id', record.id);
+        console.log(`[Cloud] 🗑️ 离线信件 ${record.id} 已落库并销毁。`);
+        
+        // 4. 刷新该角色的最后交互时间，防止本地 Agent 立刻启动“夺命连环 Call”
+        await DB.settings.set(`last-interaction-${charId}`, Date.now());
+      }
+
+      // 5. 收件结束，刷新桌面小红点
+      if (typeof NotifModule !== 'undefined') NotifModule.refresh();
+
+    } catch (e) {
+      console.error('[Cloud] 离线消息收取失败:', e);
+    }
+  }
+
+  // ── 初始化挂载 ──
+  async function init() {
+    // 首次加载系统时（如手动点通知进来的）查一次水表
+    await checkOfflineMessages();
+    
+    // 监听应用切回前台事件（从息屏返回、从后台划回时自动检查）
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        checkOfflineMessages();
+      }
+    });
+  }
+
+  return { init, open, close, syncUp, syncDown, requestPushPermission };
 })();
 
-// Fix: 确保 inline onclick="CloudModule.xxx()" 在任何加载方式下都能找到它
 window.CloudModule = CloudModule;
+
+// 在文件末尾确保加载时执行初始化
+setTimeout(() => {
+    if (CloudModule.init) CloudModule.init();
+}, 1000);
