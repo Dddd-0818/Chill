@@ -24,6 +24,8 @@
 <script src="diary.js"></script>
 <script src="forum.js"></script>
 <script src="lifestyle.js"></script>
+<script src="post-office.js"></script>
+<script src="cloud.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700;800&family=Great+Vibes&family=Noto+Sans+SC:wght@300;400;500;700&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,700&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
@@ -3907,28 +3909,19 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
           <div class="data-row"><span class="data-row-label">图片占用空间</span><span class="data-row-value" id="stat-size">—</span></div>
         </div>
 
-       <!-- 新增导出与导入按钮 -->
+        <!-- 新增导出与导入按钮 -->
         <div class="form-section">
           <div class="section-title">备份与恢复 / Backup & Restore</div>
           <button class="btn-primary" onclick="DataModule.exportData()" style="margin-bottom:12px;">
             <i class="ph ph-export"></i> 导出完整备份包 (.zip)
           </button>
-
-          <!-- 原来的全量覆盖恢复 -->
           <button class="btn-outline" onclick="document.getElementById('import-file').click()" style="margin-bottom:12px;">
-            <i class="ph ph-download-simple"></i> 从压缩包恢复 (全量覆盖)
+            <i class="ph ph-download-simple"></i> 从压缩包恢复 (.zip)
           </button>
           <input type="file" id="import-file" accept=".zip" style="display:none" onchange="DataModule.importData(event)">
-
-          <!-- 新增：跨项目选择性融合 (支持 zip 和 json) -->
-          <button class="btn-outline" onclick="document.getElementById('merge-import-file').click()" style="margin-bottom:12px; border-color:#2d6a4a; color:#2d6a4a; background:rgba(45,106,74,0.05);">
-            <i class="ph ph-plugs-connected"></i> 跨项目数据融合 (仅提取纯净对话)
-          </button>
-          <input type="file" id="merge-import-file" accept=".zip, .json" style="display:none" onchange="DataModule.mergeImportData(event)">
-          
           <div style="font-size:0.6rem; color:var(--s-text-secondary); line-height:1.5;">
-            * 跨项目融合：支持 .zip 或 .json 文件。仅提取追加他人的 API、角色、面具、世界书和纯文本记录。<br>
-            * 自动剔除访谈记录、多余设定及复杂组件，免除适配烦恼。
+            * 导出时包含所有聊天记录、角色档案及所有子系统的数据。<br>
+            * 采用原生二进制打包，保护内存防崩溃。
           </div>
         </div>
 
@@ -6031,6 +6024,21 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
 'use strict';
 
 // ============================================================
+// 注册 Service Worker (离线信使)
+// ============================================================
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js')
+      .then(reg => {
+        console.log('[Service Worker] 注册成功，作用域:', reg.scope);
+      })
+      .catch(err => {
+        console.warn('[Service Worker] 注册失败:', err);
+      });
+  });
+}
+
+// ============================================================
 // DB — IndexedDB 封装
 // stores:
 //   settings    { key, value }
@@ -6282,10 +6290,11 @@ const DB = (() => {
     return all.find(p => p.isActive) || null;
   }
  
-  // ---- 清库 ----
+ // ---- 清库 (已修复：动态读取所有表) ----
   async function clearAll() {
     await open();
-    const stores = ['settings', 'meet', 'assets', 'api_profiles'];
+    // 动态获取当前数据库里的所有表，不管是聊天、角色还是世界书，一网打尽
+    const stores = Array.from(_db.objectStoreNames);
     return Promise.all(stores.map(s =>
       new Promise((resolve, reject) => {
         const req = tx(s, 'readwrite').clear();
@@ -7176,10 +7185,42 @@ const UIModule = (() => {
 
   return { applyWallpaper, clearWallpaper, renderIconsEditGrid, clearAllIcons };
 })();
+
 // ============================================================
-// DataModule — 数据统计页 & 全量备份与恢复
+// DataModule — 数据统计页 & 全量备份与恢复 (纯净稳定版 + 自定义弹窗)
 // ============================================================
 const DataModule = (() => {
+  
+  // 🌟 辅助：自定义高定风危险操作弹窗（完美替代原生 confirm）
+  function _showDangerConfirm(title, message, btnText) {
+    return new Promise((resolve) => {
+      const overlay = document.createElement('div');
+      overlay.className = 'modal-overlay show';
+      overlay.style.cssText = 'z-index: 9999; align-items: center; justify-content: center; display: flex; background: rgba(0,0,0,0.6); backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px);';
+      overlay.innerHTML = `
+        <div class="cv-mag-modal" style="background:var(--bg-card,#fff); border:0.5px solid rgba(18,18,18,0.1); border-radius:28px; padding:32px 24px; box-shadow:0 40px 80px rgba(0,0,0,0.2); text-align:center; max-width:320px; width:90%; position:relative; overflow:hidden; transform:translateY(0); opacity:1;">
+          <div style="position:absolute;top:-30px;right:-20px;font-family:'Playfair Display',serif;font-size:200px;font-style:italic;font-weight:300;color:rgba(217,58,58,0.04);line-height:1;pointer-events:none;z-index:0;">W</div>
+          <i class="ph-thin ph-warning-circle" style="font-size:2.5rem;color:#D93A3A;margin-bottom:16px;position:relative;z-index:1;"></i>
+          <h2 style="font-family:'Playfair Display',serif;font-size:1.8rem;font-weight:500;font-style:italic;color:var(--text-main,#121212);line-height:1.2;margin-bottom:8px;position:relative;z-index:1;">${title}</h2>
+          <p style="font-size:0.8rem;color:var(--text-sub,#999);margin-bottom:32px;line-height:1.5;position:relative;z-index:1;">${message}</p>
+          <div style="display:flex;gap:12px;position:relative;z-index:1;">
+            <button id="cc-cancel" style="flex:1;padding:14px 0;border-radius:100px;background:transparent;border:0.5px solid rgba(18,18,18,0.2);color:var(--text-main,#121212);font-weight:600;font-size:0.85rem;cursor:pointer;font-family:'Inter',sans-serif; transition:0.2s;">取消</button>
+            <button id="cc-confirm" style="flex:1;padding:14px 0;border-radius:100px;background:#D93A3A;border:none;color:#fff;font-weight:600;font-size:0.85rem;cursor:pointer;box-shadow:0 8px 20px rgba(217,58,58,0.2);font-family:'Inter',sans-serif; transition:0.2s;">${btnText}</button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+      
+      const btnCancel = overlay.querySelector('#cc-cancel');
+      const btnConfirm = overlay.querySelector('#cc-confirm');
+      btnCancel.onmousedown = () => btnCancel.style.background = 'rgba(0,0,0,0.05)';
+      btnConfirm.onmousedown = () => btnConfirm.style.transform = 'scale(0.95)';
+
+      btnCancel.onclick = () => { overlay.remove(); resolve(false); };
+      btnConfirm.onclick = () => { overlay.remove(); resolve(true); };
+    });
+  }
+
   async function refresh() {
     try {
       const profiles = await DB.api.getAll();
@@ -7194,10 +7235,17 @@ const DataModule = (() => {
   }
 
   async function clearAll() {
-    if (!confirm('确认清除全部数据？此操作不可恢复。')) return;
+    // 🌟 使用自定义弹窗
+    const confirmed = await _showDangerConfirm(
+      'Wipe All Data', 
+      '确认清除全部数据？<br>此操作将彻底抹除所有设置与记忆，不可逆转。', 
+      '确认清除'
+    );
+    if (!confirmed) return;
+
     try {
       await DB.clearAll();
-      Toast.show('数据已清除，即将刷新');
+      Toast.show('数据已清除，即将重载');
       setTimeout(() => location.reload(), 1500);
     } catch (e) { Toast.show('清除失败'); console.error(e); }
   }
@@ -7208,7 +7256,6 @@ const DataModule = (() => {
     return (bytes/(1024*1024)).toFixed(2) + ' MB';
   }
 
-  // 获取原生 IDB 实例，用于底层遍历所有表
   async function _getRawDB() {
     return new Promise((resolve, reject) => {
       const req = indexedDB.open('chillOS');
@@ -7217,19 +7264,17 @@ const DataModule = (() => {
     });
   }
 
-  // ── 导出为 ZIP ──
+  // ── 全量导出为 ZIP ──
   async function exportData() {
     Toast.show('正在打包数据，请勿关闭页面...', 3000);
     try {
       const db = await _getRawDB();
       const stores = Array.from(db.objectStoreNames);
-      
       const backupData = { _meta: { version: db.version, timestamp: Date.now() } };
       const zipObj = {};
 
       for (const storeName of stores) {
         if (storeName === 'assets') {
-          // 【核心：二进制直接读入 ZIP，防止 Base64 内存崩溃】
           backupData['assets_meta'] =[];
           const records = await new Promise(res => {
             const req = db.transaction(storeName, 'readonly').objectStore(storeName).getAll();
@@ -7238,17 +7283,12 @@ const DataModule = (() => {
           
           for (const record of records) {
             backupData['assets_meta'].push({
-              key: record.key,
-              mimeType: record.mimeType,
-              size: record.size,
-              updatedAt: record.updatedAt
+              key: record.key, mimeType: record.mimeType, size: record.size, updatedAt: record.updatedAt
             });
-            // 转为 Uint8Array 给 fflate
             const buffer = await record.blob.arrayBuffer();
             zipObj[`assets/${record.key}`] = new Uint8Array(buffer);
           }
         } else {
-          // 其他全部文本数据一次性抓取
           const records = await new Promise(res => {
             const req = db.transaction(storeName, 'readonly').objectStore(storeName).getAll();
             req.onsuccess = e => res(e.target.result);
@@ -7257,11 +7297,10 @@ const DataModule = (() => {
         }
       }
 
-      // 将 JSON 结构塞入根目录
       const fflateAPI = typeof fflate !== 'undefined' ? fflate : window.fflate;
       zipObj['database.json'] = fflateAPI.strToU8(JSON.stringify(backupData));
 
-      // 【核心：level: 0】禁用压缩！图片已经是压缩格式，二次压缩极易引发 OOM 崩溃
+      // 0 压缩率，防崩溃
       fflateAPI.zip(zipObj, { level: 0 }, (err, zipped) => {
         if (err) throw err;
         const blob = new Blob([zipped], { type: 'application/zip' });
@@ -7281,13 +7320,19 @@ const DataModule = (() => {
     }
   }
 
-  // ── 从 ZIP 导入 ──
+  // ── 从 ZIP 导入并全量覆盖 ──
   async function importData(e) {
     const file = e.target.files[0];
     if (!file) return;
     e.target.value = ''; 
     
-    if (!confirm('⚠️ 警告：导入将会覆盖当前设备上的【所有数据】！\n请确认你要继续吗？')) return;
+    // 🌟 使用自定义弹窗
+    const confirmed = await _showDangerConfirm(
+      'Restore Backup', 
+      '警告：导入将完全覆盖当前设备上的【所有数据】！<br>确定要继续吗？', 
+      '确认覆盖'
+    );
+    if (!confirmed) return;
 
     Toast.show('正在解压与恢复，请稍候...', 10000);
     try {
@@ -7295,58 +7340,45 @@ const DataModule = (() => {
       const fflateAPI = typeof fflate !== 'undefined' ? fflate : window.fflate;
       
       fflateAPI.unzip(new Uint8Array(buffer), async (err, unzipped) => {
-        if (err) {
-          Toast.show('解压失败，文件可能已损坏');
-          return;
-        }
+        if (err) { Toast.show('解压失败，文件可能已损坏'); return; }
 
-        if (!unzipped['database.json']) {
-          Toast.show('无效的备份文件：缺失 database.json');
-          return;
-        }
+        const dbKey = Object.keys(unzipped).find(k => k.endsWith('database.json'));
+        if (!dbKey) { Toast.show('无效的备份文件：缺失 database.json'); return; }
 
-        const backupData = JSON.parse(fflateAPI.strFromU8(unzipped['database.json']));
+        const backupData = JSON.parse(fflateAPI.strFromU8(unzipped[dbKey]));
         
-        // 1. 清空当前数据库所有表
         await DB.clearAll();
         const db = await _getRawDB();
         const stores = Array.from(db.objectStoreNames);
 
-        // 2. 恢复普通数据 (通过 IDB 事务高速批量写入)
         for (const storeName of stores) {
           if (storeName === 'assets') continue; 
           if (backupData[storeName] && backupData[storeName].length > 0) {
             const tx = db.transaction(storeName, 'readwrite');
             const store = tx.objectStore(storeName);
-            for (const item of backupData[storeName]) {
-              store.put(item);
-            }
+            for (const item of backupData[storeName]) store.put(item);
             await new Promise((res, rej) => { tx.oncomplete = res; tx.onerror = rej; });
           }
         }
 
-        // 3. 恢复 assets 二进制数据 (复原 Blob)
         if (backupData['assets_meta'] && backupData['assets_meta'].length > 0) {
           const tx = db.transaction('assets', 'readwrite');
           const store = tx.objectStore('assets');
           
           for (const meta of backupData['assets_meta']) {
-            const u8 = unzipped[`assets/${meta.key}`];
+            const assetPath = Object.keys(unzipped).find(k => k.endsWith(`assets/${meta.key}`)) || `assets/${meta.key}`;
+            const u8 = unzipped[assetPath];
             if (u8) {
               const blob = new Blob([u8], { type: meta.mimeType });
               store.put({
-                key: meta.key,
-                blob: blob,
-                mimeType: meta.mimeType,
-                size: meta.size,
-                updatedAt: meta.updatedAt
+                key: meta.key, blob: blob, mimeType: meta.mimeType, size: meta.size, updatedAt: meta.updatedAt
               });
             }
           }
           await new Promise((res, rej) => { tx.oncomplete = res; tx.onerror = rej; });
         }
 
-        Toast.show('数据恢复成功！系统即将重启...');
+        Toast.show('数据恢复成功！系统即将重载...');
         setTimeout(() => location.reload(), 1500);
       });
     } catch (err) {
@@ -7355,201 +7387,9 @@ const DataModule = (() => {
     }
   }
 
-// ── 跨项目净化融合导入 (Merge & Purify Import) ──
-  async function mergeImportData(e) {
-    const file = e.target.files[0];
-    if (!file) return;
-    e.target.value = ''; 
-    
-    if (!confirm('此操作将把文件内的 API、角色、面具、世界书和纯净聊天记录【追加】到你当前的系统中。\n\n不覆盖现有数据，自动剥离多余设定，保证纯净导入。\n\n确认执行融合吗？')) return;
-
-    Toast.show('正在净化与融合数据，请稍候...', 10000);
-    try {
-      const isZip = file.name.toLowerCase().endsWith('.zip');
-      let backup = null;
-      let unzipped = null;
-      let assetsMeta =[];
-
-      // 1. 根据文件类型解析数据源
-      if (isZip) {
-        const buffer = await file.arrayBuffer();
-        const fflateAPI = typeof fflate !== 'undefined' ? fflate : window.fflate;
-        unzipped = await new Promise((resolve, reject) => {
-          fflateAPI.unzip(new Uint8Array(buffer), (err, data) => {
-            if (err) reject(err); else resolve(data);
-          });
-        });
-        if (!unzipped['database.json']) throw new Error('压缩包缺失 database.json 数据核心');
-        backup = JSON.parse(fflateAPI.strFromU8(unzipped['database.json']));
-        assetsMeta = backup['assets_meta'] ||[];
-      } else {
-        // 如果是纯 JSON 文件
-        const text = await file.text();
-        backup = JSON.parse(text);
-        assetsMeta =[]; // 纯 JSON 没有物理文件附件
-      }
-
-      // 内部辅助：精准定点提取头像
-      async function copyAsset(oldKey, newKey) {
-        if (!oldKey) return '';
-        if (!isZip || !unzipped) return oldKey; // JSON 可能包含外部链接，直接原样返回
-        const meta = assetsMeta.find(m => m.key === oldKey);
-        if (!meta) return oldKey; 
-        const u8 = unzipped[`assets/${oldKey}`];
-        if (u8) {
-          const blob = new Blob([u8], { type: meta.mimeType });
-          await DB.assets.set(newKey, blob, meta.mimeType);
-          return newKey;
-        }
-        return oldKey;
-      }
-
-      let importedChars = 0;
-      let importedMsgs = 0;
-
-      // 2. 追加 API 配置
-      if (backup.api_profiles) {
-        for (const api of backup.api_profiles) {
-          delete api.id; 
-          api.isActive = false; // 绝不抢走当前用户的活跃 API
-          await DB.api.add(api);
-        }
-      }
-
-     // 3. 映射追加面具 (User Personas) - 剥离 bio，保留 backstory
-      let personaIdMap = {}; // oldId -> newId
-      if (backup.settings) {
-        const oldPersonasObj = backup.settings.find(s => s.key === 'user-personas');
-        if (oldPersonasObj && Array.isArray(oldPersonasObj.value)) {
-          const localPersonas = await DB.settings.get('user-personas') ||[];
-          for (const p of oldPersonasObj.value) {
-            const newId = Date.now() + Math.floor(Math.random() * 10000);
-            personaIdMap[p.id] = newId;
-            
-            const newImgKey = p.imgKey ? await copyAsset(p.imgKey, `persona-avatar-${newId}`) : '';
-            
-            localPersonas.push({
-              id: newId,
-              name: p.name + ' (Import)',
-              bio: '',                      // 强行清空简短的签名(bio)，留给用户填
-              backstory: p.backstory || '', // 保留核心的背景设定(backstory)
-              imgKey: newImgKey
-            });
-          }
-          await DB.settings.set('user-personas', localPersonas);
-        }
-      }
-
-      // 4. 映射追加角色 (Characters) - 剥离访谈及多余设定
-      let charIdMap = {}; // oldId -> newId
-      if (backup.characters) {
-        for (const char of backup.characters) {
-          const oldId = char.id;
-          
-          let newImgKey = '';
-          if (char.avatarUrl) {
-            // 先处理图片
-            newImgKey = await copyAsset(char.avatarUrl, `char-avatar-import-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`);
-          }
-
-          // 核心净化：只取这几个字段，把 aiData 置空
-          const pureChar = {
-            name: char.name + ' (Import)',
-            persona: char.persona || '',
-            avatarUrl: newImgKey,
-            title: char.title || '', // 称呼可以保留
-            mbti: '',                // 清空
-            customQ1: '',            // 清空
-            customQ2: '',            // 清空
-            aiData: null             // 清空，用户点进详情会自动弹出重新生成
-          };
-
-          const newId = await DB.characters.add(pureChar);
-          charIdMap[oldId] = newId;
-          importedChars++;
-          
-          // 若有生成了头像Key，将最终的ID写进 key 规范化 (这步可选，但为了规整加上)
-          if (newImgKey && newImgKey.includes('import')) {
-            const finalKey = `char-avatar-${newId}`;
-            const tempAsset = await DB.assets.get(newImgKey);
-            if (tempAsset) {
-              await DB.assets.set(finalKey, tempAsset.blob, tempAsset.mimeType);
-              await DB.assets.del(newImgKey);
-              pureChar.avatarUrl = finalKey;
-              await DB.characters.put({ ...pureChar, id: newId });
-            }
-          }
-
-          // 同步他们之间的面具绑定关系
-          if (backup.chat_bindings) {
-             const oldBind = backup.chat_bindings.find(b => String(b.charId) === String(oldId));
-             if (oldBind && personaIdMap[oldBind.personaId]) {
-                await DB.bindings.set(String(newId), personaIdMap[oldBind.personaId]);
-             }
-          }
-        }
-      }
-
-      // 5. 追加世界书 (WorldBook) - 注入默认关键词
-      if (backup.world_info) {
-        for (const wi of backup.world_info) {
-          delete wi.id;
-          if (wi.characterIds && Array.isArray(wi.characterIds)) {
-            wi.characterIds = wi.characterIds.map(cid => String(charIdMap[cid])).filter(Boolean);
-          }
-          // 强制合规：如果原词条没有 keyword，则赋一个默认值
-          wi.keyword = wi.keyword || '[导入词条_待修改]';
-          await DB.worldInfo.add(wi);
-        }
-      }
-
-      // 6. 核心净化器：过滤并追加消息 (Messages)
-      if (backup.messages) {
-        for (const msg of backup.messages) {
-          const newCharId = charIdMap[msg.charId];
-          if (!newCharId) continue;
-          if (msg.role === 'system_ticket') continue;
-
-          let validParts =[];
-          let hasDroppedParts = false;
-          
-          if (msg.parts && Array.isArray(msg.parts)) {
-            for (const p of msg.parts) {
-              if (p.type === 'text' || p.type === 'audio') {
-                validParts.push(p);
-              } else {
-                hasDroppedParts = true;
-              }
-            }
-          } else {
-            validParts = [{ type: 'text', content: msg.content }];
-          }
-
-          if (validParts.length === 0) continue; 
-
-          delete msg.id;
-          msg.charId = String(newCharId);
-          msg.parts = validParts;
-          
-          if (hasDroppedParts) {
-             msg.content = validParts.map(p => p.content || p.transcript || '[纯净文本]').join('\n');
-          }
-          
-          await DB.messages.add(msg);
-          importedMsgs++;
-        }
-      }
-
-      Toast.show(`✦ 数据飞升完毕 ✦\n新增 ${importedChars} 个角色，${importedMsgs} 条纯净记忆。系统即将重载。`);
-      setTimeout(() => location.reload(), 2500);
-
-    } catch (err) {
-      console.error(err);
-      Toast.show('融合失败: ' + err.message);
-    }
-  }
-       return { refresh, clearAll, exportData, importData, mergeImportData };
+  return { refresh, clearAll, exportData, importData, _showDangerConfirm };
 })();
+
 // ============================================================
 // 木鱼
 // ============================================================
@@ -7725,6 +7565,15 @@ document.getElementById('icon-diary').addEventListener('click', () => {
 // 【行程图标】
 document.querySelector('[data-icon-id="3"]').addEventListener('click', () => {
   Router.go('lifestyle');
+});
+
+// 【云端图标】 - 第二页的 Cloud 模块
+document.getElementById('icon-cloud-2')?.addEventListener('click', () => {
+  if (typeof CloudModule !== 'undefined') {
+    CloudModule.open();
+  } else {
+    Toast.show('云端模块未加载，请检查 cloud.js 是否存在');
+  }
 });
 
 // ============================================================
@@ -20498,6 +20347,5 @@ async function init() {
 
 init();
 </script>
-<script src="post-office.js"></script>
 </body>
 </html>
