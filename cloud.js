@@ -122,10 +122,18 @@ const CloudModule = (() => {
     </div>
   `;
   
-  window.addEventListener('DOMContentLoaded', () => {
+  // Fix: PWA 离线加载极快，DOMContentLoaded 可能已经触发，用 readyState 兜底
+  function _injectHTML() {
     const device = document.querySelector('.device');
-    if (device) device.insertAdjacentHTML('beforeend', cloudHTML);
-  });
+    if (device && !document.getElementById('cloud-screen')) {
+      device.insertAdjacentHTML('beforeend', cloudHTML);
+    }
+  }
+  if (document.readyState === 'loading') {
+    window.addEventListener('DOMContentLoaded', _injectHTML);
+  } else {
+    _injectHTML();
+  }
 
   async function _getRawDB() {
     return new Promise((resolve, reject) => {
@@ -390,3 +398,6 @@ const CloudModule = (() => {
 
   return { open, close, syncUp, syncDown, requestPushPermission };
 })();
+
+// Fix: 确保 inline onclick="CloudModule.xxx()" 在任何加载方式下都能找到它
+window.CloudModule = CloudModule;
