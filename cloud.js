@@ -100,12 +100,20 @@ const CloudModule = (() => {
             </div>
           </div>
 
-          <div class="form-section" style="opacity:0.3; pointer-events:none; margin-top:32px;">
-            <div class="section-title">神经元模块 / Neural Engine <span style="font-size:0.5rem;">(Coming Soon)</span></div>
+          <div class="form-section" style="margin-top:32px;">
+            <div class="section-title">神经元模块 / Neural Engine</div>
             <div style="font-size:0.75rem; color:var(--s-text-secondary); line-height:2.2; font-family:'Space Mono', monospace; text-transform: uppercase;">
               <i class="ph-light ph-database"></i> PgVector Long-term RAG<br>
               <i class="ph-light ph-brain"></i> Autonomous Edge Agent<br>
               <i class="ph-light ph-bell-ringing"></i> Web Push Notification
+            </div>
+            
+            <div style="margin-top:16px; padding:16px; background:rgba(0,0,0,0.02); border:1px solid rgba(18,18,18,0.1); border-radius:8px;">
+              <div style="font-size:0.85rem; font-weight:600; color:var(--s-text-primary); margin-bottom:8px;">开启真·离线推送</div>
+              <div style="font-size:0.6rem; color:var(--s-text-secondary); margin-bottom:12px; line-height:1.5;">授权后，即使关闭浏览器，大模型也能在后台通过系统通知主动找你。</div>
+              <button class="btn-outline" style="width:100%; border-color:#121212; color:#121212;" onclick="CloudModule.requestPushPermission()">
+                <i class="ph-bold ph-bell-ringing"></i> 允许发送系统通知
+              </button>
             </div>
           </div>
 
