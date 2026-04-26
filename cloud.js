@@ -111,7 +111,14 @@ const CloudModule = (() => {
             <div style="margin-top:16px; padding:16px; background:rgba(0,0,0,0.02); border:1px solid rgba(18,18,18,0.1); border-radius:8px;">
               <div style="font-size:0.85rem; font-weight:600; color:var(--s-text-primary); margin-bottom:8px;">开启真·离线推送</div>
               <div style="font-size:0.6rem; color:var(--s-text-secondary); margin-bottom:12px; line-height:1.5;">授权后，即使关闭浏览器，大模型也能在后台通过系统通知主动找你。</div>
-              <button class="btn-outline" style="width:100%; border-color:#121212; color:#121212;" onclick="CloudModule.requestPushPermission()">
+              
+              <!-- 🌟 新增：VAPID 公钥输入框 -->
+              <div class="input-wrapper" style="margin-bottom:16px;">
+                <label class="label-text">VAPID Public Key / 推送公钥</label>
+                <input type="text" id="vapid-key" class="input-line" placeholder="BEl6... (用户自行填入)">
+              </div>
+
+              <button class="btn-outline" style="width:100%; border-color:var(--s-text-primary); color:var(--s-text-primary);" onclick="CloudModule.requestPushPermission()">
                 <i class="ph-bold ph-bell-ringing"></i> 允许发送系统通知
               </button>
             </div>
@@ -163,8 +170,10 @@ const CloudModule = (() => {
     try {
       const savedUrl = await DB.settings.get('cloud-url');
       const savedKey = await DB.settings.get('cloud-key');
+      const savedVapid = await DB.settings.get('cloud-vapid'); // 🌟 新增
       if (savedUrl) document.getElementById('cloud-url').value = savedUrl;
       if (savedKey) document.getElementById('cloud-key').value = savedKey;
+      if (savedVapid) document.getElementById('vapid-key').value = savedVapid; // 🌟 新增
     } catch(e) {}
     document.getElementById('cloud-screen').classList.add('active');
   }
@@ -357,42 +366,70 @@ const CloudModule = (() => {
     }
   }
   
-  // ── 请求系统通知权限 (带控制台追踪) ──
+  // --- 辅助函数：解码 VAPID 公钥 ---
+  function urlBase64ToUint8Array(base64String) {
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
+    const rawData = window.atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+    for (let i = 0; i < rawData.length; ++i) {
+      outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
+  }
+
+  // ── 请求系统通知权限并生成令牌 ──
   async function requestPushPermission() {
-    console.log('[Push] 🔘 按钮被点击了...');
-    
-    if (!('Notification' in window)) {
-      console.error('[Push] ❌ 当前浏览器或壳子完全不支持 Notification API');
-      Toast.show('当前环境不支持系统通知 (请尝试添加到桌面或换个浏览器)');
+    // 🌟 核心：先读取用户填写的公钥
+    const vapidInput = document.getElementById('vapid-key').value.trim();
+    if (!vapidInput) {
+      Toast.show('请先填写 VAPID 推送公钥');
+      return;
+    }
+
+    if (!('Notification' in window) || !('serviceWorker' in navigator)) {
+      Toast.show('当前浏览器不支持系统级推送');
       return;
     }
     
+    const permission = await Notification.requestPermission();
+    if (permission !== 'granted') {
+      Toast.show('通知授权被拒绝，离线 Agent 无法工作');
+      return;
+    }
+
+    Toast.show('正在生成端对端加密通信令牌...', 3000);
+
     try {
-      console.log('[Push] ⏳ 正在向系统申请权限...');
-      const permission = await Notification.requestPermission();
-      console.log('[Push] 📢 系统返回权限结果:', permission);
+      // 记住用户的 VAPID Key
+      await DB.settings.set('cloud-vapid', vapidInput);
+
+      const reg = await navigator.serviceWorker.ready;
       
-      if (permission === 'granted') {
-        Toast.show('通知授权成功！信使已就位 ✦');
-        // 测试弹一条通知
-        if (navigator.serviceWorker.controller) {
-          navigator.serviceWorker.ready.then(reg => {
-            reg.showNotification('Chill OS', {
-              body: '神经链路对接完成，以后我会在这里找你。',
-              icon: 'apple-touch-icon.png'
-            });
-            console.log('[Push] ✅ 测试通知已触发');
-          });
-        } else {
-          console.warn('[Push] ⚠️ SW未接管页面，请刷新页面再试');
-          Toast.show('请刷新一次页面使信使接管');
-        }
-      } else {
-        Toast.show('授权被拒绝，无法发送通知');
+      // 1. 向苹果/谷歌服务器请求订阅令牌（使用用户输入的公钥）
+      let subscription = await reg.pushManager.getSubscription();
+      if (!subscription) {
+        subscription = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(vapidInput)
+        });
       }
-    } catch (err) {
-      console.error('[Push] ❌ 请求权限时发生异常:', err);
-      Toast.show('请求权限出错，详见控制台');
+
+      // 2. 将这把“钥匙”存入本地数据库
+      const subData = JSON.parse(JSON.stringify(subscription));
+      await DB.settings.set('push-subscription', subData);
+      
+      Toast.show('设备令牌生成成功！信使已就位 ✦');
+      
+      // 3. 测试弹窗
+      reg.showNotification('Chill OS', {
+        body: '神经链路对接完成，设备加密令牌已锁定。',
+        icon: 'apple-touch-icon.png'
+      });
+
+    } catch (e) {
+      console.error('[Push] 订阅失败:', e);
+      Toast.show('生成设备令牌失败，请检查公钥格式是否正确');
     }
   }
 
