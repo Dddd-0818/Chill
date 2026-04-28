@@ -61,7 +61,7 @@ const ForumModule = (() => {
             #forum-screen header {
                 padding: max(env(safe-area-inset-top, 20px), 20px) 20px 10px;
                 display: flex; justify-content: space-between; align-items: flex-end;
-                border-bottom: 1px solid var(--fm-line); z-index: 10; background: var(--fm-bg);
+                border-bottom: 1px solid var(--fm-line); z-index: 50; background: var(--fm-bg);
             }
             #forum-screen .header-left { display: flex; align-items: flex-end; gap: 12px; }
             #forum-screen .logo-main {
@@ -83,11 +83,32 @@ const ForumModule = (() => {
             #forum-screen .icon-btn.circle { border-radius: 50%; }
 
             #forum-screen .fm-profile-pill {
-                display: flex; align-items: center; gap: 6px;
-                background: rgba(255,255,255,0.05); padding: 4px 10px 4px 4px;
-                border-radius: 20px; border: 1px solid var(--fm-line);
-                margin-right: 6px;
-            }
+    display: flex; align-items: center; gap: 6px;
+    background: transparent; border: none; padding: 4px 10px 4px 4px;
+    margin-right: 6px;
+}
+
+/* 下拉菜单的样式 */
+#forum-screen .fm-action-popover {
+    position: absolute; top: calc(100% + 8px); right: 0;
+    background: var(--fm-surface); border: 1px solid var(--fm-line);
+    border-radius: 8px; box-shadow: 0 10px 24px rgba(0,0,0,0.8);
+    display: flex; flex-direction: column; min-width: 140px;
+    opacity: 0; visibility: hidden; transform: translateY(-10px);
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1); z-index: 100;
+}
+#forum-screen .fm-action-popover.active {
+    opacity: 1; visibility: visible; transform: translateY(0);
+}
+#forum-screen .fm-popover-item {
+    padding: 14px 16px; font-family: var(--fm-font-mono); font-size: 0.75rem;
+    color: var(--fm-fg); display: flex; align-items: center; gap: 10px;
+    cursor: pointer; border-bottom: 1px solid rgba(255,255,255,0.05);
+    white-space: nowrap; text-transform: uppercase; letter-spacing: 1px;
+}
+#forum-screen .fm-popover-item:last-child { border-bottom: none; }
+#forum-screen .fm-popover-item:active { background: rgba(255,255,255,0.05); }
+#forum-screen .fm-popover-item i { font-size: 1.1rem; color: var(--fm-fg-muted); }
             #forum-screen .fm-profile-avatar {
                 width: 24px; height: 24px; border-radius: 50%; object-fit: cover; cursor: pointer;
                 border: 1px solid rgba(255,255,255,0.1);
@@ -393,15 +414,28 @@ const ForumModule = (() => {
                         </div>
                     </div>
                     <div class="header-actions" style="align-items: center;">
-                        <div class="fm-profile-pill">
-                            <img src="" id="fm-user-avatar" class="fm-profile-avatar" onclick="document.getElementById('fm-upload-avatar-profile').click()" title="更换论坛头像">
-                            <input type="text" id="fm-user-name" class="fm-profile-name" onchange="ForumModule.updateForumName(this.value)" title="修改论坛昵称">
-                        </div>
-                         <div class="icon-btn" id="fm-refresh-btn" onclick="ForumModule.refreshNPCFeed()" title="刷新路人信号"><i class="ph ph-arrows-clockwise"></i></div>
-                        
-                        <div class="icon-btn" onclick="ForumModule.openPanel('fm-world-panel')"><i class="ph ph-globe-hemisphere-west"></i></div>
-                        <div class="icon-btn" onclick="ForumModule.openPanel('fm-compose-panel')"><i class="ph ph-pen-nib"></i></div>
-                    </div>
+    <div class="fm-profile-pill">
+        <img src="" id="fm-user-avatar" class="fm-profile-avatar" onclick="document.getElementById('fm-upload-avatar-profile').click()" title="更换论坛头像">
+        <input type="text" id="fm-user-name" class="fm-profile-name" onchange="ForumModule.updateForumName(this.value)" title="修改论坛昵称">
+    </div>
+    
+    <div style="position: relative;" id="fm-action-menu-wrap">
+        <div class="icon-btn" onclick="document.getElementById('fm-action-popover').classList.toggle('active')">
+            <i class="ph ph-dots-three"></i>
+        </div>
+        <div class="fm-action-popover" id="fm-action-popover">
+            <div class="fm-popover-item" onclick="ForumModule.openPanel('fm-compose-panel'); document.getElementById('fm-action-popover').classList.remove('active')">
+                <i class="ph ph-pen-nib"></i> 发布信号
+            </div>
+            <div class="fm-popover-item" onclick="ForumModule.openPanel('fm-world-panel'); document.getElementById('fm-action-popover').classList.remove('active')">
+                <i class="ph ph-globe-hemisphere-west"></i> 世界架构
+            </div>
+            <div class="fm-popover-item" id="fm-refresh-btn" onclick="ForumModule.refreshNPCFeed(); document.getElementById('fm-action-popover').classList.remove('active')">
+                <i class="ph ph-arrows-clockwise"></i> 拦截暗网
+            </div>
+        </div>
+    </div>
+</div>
                 </header>
                 <input type="file" id="fm-upload-avatar-profile" style="display:none" accept="image/*" onchange="ForumModule.changeForumAvatar(event)">
 
@@ -519,6 +553,15 @@ const ForumModule = (() => {
         });
 
         _initialized = true;
+        
+        // 点击页面空白处自动收起菜单
+        document.addEventListener('click', (e) => {
+            const popover = document.getElementById('fm-action-popover');
+            const wrap = document.getElementById('fm-action-menu-wrap');
+            if (popover && popover.classList.contains('active') && wrap && !wrap.contains(e.target)) {
+                popover.classList.remove('active');
+            }
+        });
 
         // 🌟 开启暗网心跳：支持状态无损保持 (输入框文字与焦点不丢)
         let isHeartbeatRunning = false;
