@@ -2,7 +2,7 @@
 
 /**
  * ============================================================
- * CloudModule — Supabase 云原生同步引擎 (高定视觉版) + 离线收发室
+ * CloudModule — Supabase 云原生同步引擎 (高定视觉版) + 离线收发室 + 自动备份
  * ============================================================
  */
 const CloudModule = (() => {
@@ -84,9 +84,22 @@ const CloudModule = (() => {
               <button class="btn-outline" id="btn-sync-down" style="flex:1; border-color:var(--s-text-secondary); color:var(--s-text-secondary);" onclick="CloudModule.syncDown()">
                 <i class="ph-light ph-cloud-arrow-down"></i> PULL / 拉取
               </button>
-              <button class="btn-primary" id="btn-sync-up" style="flex:1; background:var(--s-text-primary); color:var(--s-bg);" onclick="CloudModule.syncUp()">
+              <button class="btn-primary" id="btn-sync-up" style="flex:1; background:var(--s-text-primary); color:var(--s-bg);" onclick="CloudModule.syncUp(false)">
                 <i class="ph-light ph-cloud-arrow-up"></i> PUSH / 上传
               </button>
+            </div>
+
+            <!-- 🌟 新增：自动备份开关 -->
+            <div class="toggle-row" style="margin-top: 16px; border-top: 1px dashed rgba(18,18,18,0.1); padding-top: 16px;">
+              <div class="toggle-row-info">
+                <div class="toggle-row-label" style="font-size:0.85rem; font-weight:600; color:var(--s-text-primary);">自动备份 (Auto Backup)</div>
+                <div class="toggle-row-desc" style="font-size:0.6rem; color:var(--s-text-secondary); margin-top:4px;">应用退入后台时静默同步 (CD: 6小时)</div>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="cloud-auto-backup" onchange="CloudModule.toggleAutoBackup(this.checked)">
+                <div class="toggle-track"></div>
+                <div class="toggle-thumb"></div>
+              </label>
             </div>
             
             <div class="cloud-hint-box">
@@ -147,8 +160,14 @@ const CloudModule = (() => {
     });
   }
 
+  // 🌟 新增：在模块顶部声明一个全局变量，用来保存“唯一的连接”
+  let _supabaseInstance = null;
+
   // 获取带弹窗验证的 supabase 实例
   function _getSupabase() {
+    // 如果已经连过了，直接把存好的线拿出来用，不再重复创建！
+    if (_supabaseInstance) return _supabaseInstance;
+
     const url = document.getElementById('cloud-url').value.trim().replace(/\/$/, '');
     const key = document.getElementById('cloud-key').value.trim();
     if (!url || !key) {
@@ -161,16 +180,25 @@ const CloudModule = (() => {
     }
     DB.settings.set('cloud-url', url);
     DB.settings.set('cloud-key', key);
-    return window.supabase.createClient(url, key);
+    
+    // 创建连接并存起来
+    _supabaseInstance = window.supabase.createClient(url, key);
+    return _supabaseInstance;
   }
 
-  // 🌟 静默获取 Supabase 实例（不弹窗，专门给后台静默收件用）
+  // 🌟 静默获取 Supabase 实例（供静默上传和静默收件用）
   async function _getSupabaseSilent() {
+    // 如果已经连过了，直接用！
+    if (_supabaseInstance) return _supabaseInstance;
+
     try {
       const url = await DB.settings.get('cloud-url');
       const key = await DB.settings.get('cloud-key');
       if (!url || !key || !window.supabase) return null;
-      return window.supabase.createClient(url, key);
+      
+      // 创建连接并存起来
+      _supabaseInstance = window.supabase.createClient(url, key);
+      return _supabaseInstance;
     } catch(e) { return null; }
   }
 
@@ -179,9 +207,15 @@ const CloudModule = (() => {
       const savedUrl = await DB.settings.get('cloud-url');
       const savedKey = await DB.settings.get('cloud-key');
       const savedVapid = await DB.settings.get('cloud-vapid');
+      const autoBackup = await DB.settings.get('cloud-auto-backup');
+      
       if (savedUrl) document.getElementById('cloud-url').value = savedUrl;
       if (savedKey) document.getElementById('cloud-key').value = savedKey;
       if (savedVapid) document.getElementById('vapid-key').value = savedVapid;
+      
+      const autoToggle = document.getElementById('cloud-auto-backup');
+      if (autoToggle) autoToggle.checked = !!autoBackup;
+
     } catch(e) {}
     document.getElementById('cloud-screen').classList.add('active');
   }
@@ -213,24 +247,39 @@ const CloudModule = (() => {
     });
   }
 
-  async function syncUp() {
-    const supabase = _getSupabase();
+  // 🌟 修改：切换自动备份开关
+  async function toggleAutoBackup(enabled) {
+    try {
+      await DB.settings.set('cloud-auto-backup', enabled);
+      if (enabled) Toast.show('自动备份已开启 (切换至后台时触发)');
+    } catch (e) {}
+  }
+
+  // 🌟 修改：支持 isSilent 模式，跳过弹窗和 UI 阻挡
+  async function syncUp(isSilent = false) {
+    // 自动备份时用静默读取的方式拿 key，手动点击时走带 UI 的方法
+    const supabase = isSilent ? await _getSupabaseSilent() : _getSupabase();
     if (!supabase) return;
 
-    const confirmed = await _showCloudConfirm('Push to Cloud', '警告：上传将完全覆盖云端现有的备份数据。<br>确定要执行上传吗？', '确认覆盖');
-    if (!confirmed) return;
+    if (!isSilent) {
+      const confirmed = await _showCloudConfirm('Push to Cloud', '警告：上传将完全覆盖云端现有的备份数据。<br>确定要执行上传吗？', '确认覆盖');
+      if (!confirmed) return;
+    }
 
     const btn = document.getElementById('btn-sync-up');
-    const oriText = btn.innerHTML;
-    btn.style.pointerEvents = 'none';
+    let oriText = '';
+    
+    if (!isSilent && btn) {
+      oriText = btn.innerHTML;
+      btn.style.pointerEvents = 'none';
+      btn.innerHTML = '<i class="ph-light ph-spinner" style="animation:spin 1s linear infinite"></i> 提取数据...';
+    }
 
     try {
       const db = await _getRawDB();
       const stores = Array.from(db.objectStoreNames);
       const payload = { _meta: { version: db.version, timestamp: Date.now() }, assets_meta:[] };
       const assetsToUpload =[];
-
-      btn.innerHTML = '<i class="ph-light ph-spinner" style="animation:spin 1s linear infinite"></i> 提取本地数据...';
 
       for (const storeName of stores) {
         const records = await new Promise(res => {
@@ -250,7 +299,8 @@ const CloudModule = (() => {
         }
       }
 
-      btn.innerHTML = '<i class="ph-light ph-spinner" style="animation:spin 1s linear infinite"></i> 上传神经突触...';
+      if (!isSilent && btn) btn.innerHTML = '<i class="ph-light ph-spinner" style="animation:spin 1s linear infinite"></i> 上传神经突触...';
+      
       const { error: dbErr } = await supabase
         .from('chill_sync')
         .upsert({ id: 'main_backup', data: payload, updated_at: new Date() });
@@ -260,18 +310,27 @@ const CloudModule = (() => {
       const total = assetsToUpload.length;
       for (const record of assetsToUpload) {
         current++;
-        btn.innerHTML = `<i class="ph-light ph-spinner" style="animation:spin 1s linear infinite"></i> 刻录媒体 (${current}/${total})`;
+        if (!isSilent && btn) btn.innerHTML = `<i class="ph-light ph-spinner" style="animation:spin 1s linear infinite"></i> 刻录媒体 (${current}/${total})`;
         const { error: storageErr } = await supabase.storage.from('chill_assets').upload(record.key, record.blob, { upsert: true, contentType: record.mimeType });
         if (storageErr) console.warn(`图片上传失败[${record.key}]:`, storageErr);
       }
 
-      Toast.show('✦ 云端连结完毕，档案已永存 ✦');
+      // 备份成功后，记录时间戳
+      await DB.settings.set('cloud-last-auto-backup-time', Date.now());
+
+      if (!isSilent) {
+        Toast.show('✦ 云端连结完毕，档案已永存 ✦');
+      } else {
+        console.log('[Cloud] ✅ 自动静默备份已完成');
+      }
     } catch(e) {
       console.error(e);
-      Toast.show('上传失败: ' + e.message);
+      if (!isSilent) Toast.show('上传失败: ' + e.message);
     } finally {
-      btn.innerHTML = oriText;
-      btn.style.pointerEvents = 'auto';
+      if (!isSilent && btn) {
+        btn.innerHTML = oriText;
+        btn.style.pointerEvents = 'auto';
+      }
     }
   }
 
@@ -397,14 +456,13 @@ const CloudModule = (() => {
   }
 
   // ============================================================
-  // 🌟 核心：静默收取离线消息 (阅后即焚)
+  // 静默收取离线消息 (阅后即焚)
   // ============================================================
   async function checkOfflineMessages() {
     const supabase = await _getSupabaseSilent();
     if (!supabase) return;
 
     try {
-      // 1. 查询收发室有没有新信件
       const { data: offlineMsgs, error } = await supabase
         .from('cloud_offline_messages')
         .select('*');
@@ -422,12 +480,11 @@ const CloudModule = (() => {
           let displayContent = text;
           let msgParts =[{ type: 'text', content: text }];
           
-          // 兼容基础的标签解析 (音频和表情)
           const audioMatch = text.match(/^\[AUDIO:(\d+):(.+)\]$/s);
           const emoteMatch = text.match(/^\[EMOTE:(.+)\]$/i);
           
           if (audioMatch) {
-            msgParts = [{ type: 'audio', duration: parseInt(audioMatch[1]), transcript: audioMatch[2].trim() }];
+            msgParts =[{ type: 'audio', duration: parseInt(audioMatch[1]), transcript: audioMatch[2].trim() }];
             displayContent = `[语音消息 ${audioMatch[1]}秒]`;
           } else if (emoteMatch) {
             const keyword = emoteMatch[1].trim();
@@ -437,7 +494,7 @@ const CloudModule = (() => {
                 msgParts = [{ type: 'image', url: url, description: `[表情包:${keyword}]` }];
                 displayContent = `[表情包]`;
               } else {
-                msgParts = [{ type: 'text', content: `*试图发送表情包：${keyword}*` }];
+                msgParts =[{ type: 'text', content: `*试图发送表情包：${keyword}*` }];
               }
             }
           }
@@ -447,7 +504,7 @@ const CloudModule = (() => {
             role: 'assistant',
             parts: msgParts,
             content: displayContent,
-            timestamp: timestamp++, // 错开 1ms，确保数组顺序
+            timestamp: timestamp++,
             status: 'sent',
             recalled: false,
             recallContent: '',
@@ -458,11 +515,9 @@ const CloudModule = (() => {
           const newId = await DB.messages.add(msg);
           msg.id = newId;
 
-          // 2. 如果用户恰好停留在该角色的聊天页（或处于半屏快回），原地静默插入 DOM
           if (typeof ConvModule !== 'undefined') {
             const screen = document.getElementById('conv-screen');
             if (screen && (screen.classList.contains('active') || screen.classList.contains('qr-active')) && screen.dataset.cvCharId === String(charId)) {
-               // 利用底层 API 将其上屏
                if (ConvModule._appendNovelImageMessage) {
                  ConvModule._appendNovelImageMessage(msg).catch(()=>{});
                }
@@ -470,15 +525,12 @@ const CloudModule = (() => {
           }
         }
 
-        // 3. 收取完毕，焚毁云端信件 (彻底解决同步覆盖冲突问题)
         await supabase.from('cloud_offline_messages').delete().eq('id', record.id);
         console.log(`[Cloud] 🗑️ 离线信件 ${record.id} 已落库并销毁。`);
         
-        // 4. 刷新该角色的最后交互时间，防止本地 Agent 立刻启动“夺命连环 Call”
         await DB.settings.set(`last-interaction-${charId}`, Date.now());
       }
 
-      // 5. 收件结束，刷新桌面小红点
       if (typeof NotifModule !== 'undefined') NotifModule.refresh();
 
     } catch (e) {
@@ -488,18 +540,41 @@ const CloudModule = (() => {
 
   // ── 初始化挂载 ──
   async function init() {
-    // 首次加载系统时（如手动点通知进来的）查一次水表
+    // 首次加载时查收离线信件
     await checkOfflineMessages();
     
-    // 监听应用切回前台事件（从息屏返回、从后台划回时自动检查）
-    document.addEventListener('visibilitychange', () => {
+    // 监听应用可见性变化
+    document.addEventListener('visibilitychange', async () => {
+      // 1. 切回前台：检查是否有信件
       if (document.visibilityState === 'visible') {
         checkOfflineMessages();
+      } 
+      // 2. 🌟 切到后台：触发静默备份检查
+      else if (document.visibilityState === 'hidden') {
+        try {
+          const autoEnabled = await DB.settings.get('cloud-auto-backup');
+          if (autoEnabled) {
+            const lastBackupTime = await DB.settings.get('cloud-last-auto-backup-time') || 0;
+            const now = Date.now();
+            const COOLDOWN = 6 * 60 * 60 * 1000; // 冷却期：6 小时
+
+            if (now - lastBackupTime > COOLDOWN) {
+              console.log('[Cloud] 💤 应用退至后台，开始静默同步到云端...');
+              // 这里不需要 await 阻塞前台线程，直接丢给浏览器去跑网络请求
+              syncUp(true);
+            } else {
+               const hoursLeft = ((COOLDOWN - (now - lastBackupTime)) / (1000 * 60 * 60)).toFixed(1);
+               console.log(`[Cloud] 💤 应用退至后台，跳过自动备份 (冷却中，剩余 ${hoursLeft} 小时)`);
+            }
+          }
+        } catch(e) {
+          console.warn('[Cloud] 自动备份检查失败:', e);
+        }
       }
     });
   }
 
-  return { init, open, close, syncUp, syncDown, requestPushPermission };
+  return { init, open, close, syncUp, syncDown, requestPushPermission, toggleAutoBackup };
 })();
 
 window.CloudModule = CloudModule;

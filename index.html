@@ -14,10 +14,14 @@
 <script src="https://unpkg.com/fflate@0.8.2/umd/index.js"></script>
 <script src="https://unpkg.com/mammoth@1.6.0/mammoth.browser.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="https://unpkg.com/vconsole@latest/dist/vconsole.min.js"></script>
+<script src="https://unpkg.com/eruda"></script>
 <script>
-  // 初始化 VConsole
-  var vConsole = new VConsole();
+  eruda.init({
+    defaults: {
+      displaySize: 50, // 面板高度
+      theme: 'Dark'    // 默认深色主题
+    }
+  });
 </script>
 <script src="music.js"></script>
 <script src="chill-meet-bundle.js"></script>
@@ -26,10 +30,10 @@
 <script src="lifestyle.js"></script>
 <script src="post-office.js"></script>
 <script src="cloud.js"></script>
+<script src="debate.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700;800&family=Great+Vibes&family=Noto+Sans+SC:wght@300;400;500;700&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,700&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
-
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700;800&family=Great+Vibes&family=Libre+Barcode+39+Text&family=Noto+Sans+SC:wght@300;400;500;700&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,700&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
 <style>
 /* ============================================================
    CSS 变量
@@ -7573,6 +7577,15 @@ document.getElementById('icon-cloud-2')?.addEventListener('click', () => {
     CloudModule.open();
   } else {
     Toast.show('云端模块未加载，请检查 cloud.js 是否存在');
+  }
+});
+
+// 辩论
+document.getElementById('icon-debate')?.addEventListener('click', () => {
+  if (typeof DebateModule !== 'undefined') {
+    DebateModule.open();
+  } else {
+    Toast.show('辩论模块未加载，请检查 debate.js 是否存在');
   }
 });
 
