@@ -18,7 +18,7 @@ const DebateModule = (() => {
       --db-bg-base: #030303; --db-text-pure: #ffffff; --db-text-dim: #888888;
       --db-glass-bg: rgba(18, 18, 18, 0.6); --db-glass-border: rgba(255, 255, 255, 0.08);
       --db-glass-highlight: rgba(255, 255, 255, 0.15); --db-blur-strong: blur(40px);
-      --db-font-serif-en: 'Cinzel', serif; --db-font-serif-zh: 'Noto Serif SC', serif;
+      --db-font-serif-en: 'Cinzel', serif; --db-font-serif-zh: 'Songti SC', 'STSong', 'Noto Serif SC', 'PT Serif', 'SimSun', serif;
       --db-font-sans-en: 'Space Grotesk', sans-serif; --db-font-sans-zh: 'Inter', sans-serif;
     }
     #debate-screen {
@@ -48,7 +48,19 @@ const DebateModule = (() => {
     #debate-screen .hero-header { position: relative; margin-bottom: 56px; margin-top: 40px; }
     #debate-screen .hero-header .bg-text { font-family: var(--db-font-sans-en); font-size: 4rem; font-weight: 700; color: rgba(255,255,255,0.02); letter-spacing: -2px; position: absolute; top: -20px; left: -10px; z-index: -1; text-transform: uppercase; }
     #debate-screen .hero-header .title-en { font-family: var(--db-font-serif-en); font-size: 1.2rem; letter-spacing: 0.4em; color: var(--db-text-dim); margin-bottom: 8px; display: block; }
-    #debate-screen .hero-header .title-zh { font-family: var(--db-font-serif-zh); font-size: 2.8rem; font-weight: 900; letter-spacing: 2px; line-height: 1.1; }
+   #debate-screen .hero-header .title-zh { 
+  font-family: var(--db-font-serif-zh); 
+  font-size: 2.6rem; 
+  font-weight: 400; /* 关键：去掉笨重的加粗，回归纤细优雅 */
+  letter-spacing: 6px; /* 拉开字间距，增加呼吸感 */
+  line-height: 1.2; 
+  /* 银色金属渐变质感 */
+  background: linear-gradient(180deg, #FFFFFF 0%, #888888 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  /* 增加深渊微光 */
+  filter: drop-shadow(0 4px 12px rgba(255,255,255,0.15));
+}
 
     #debate-screen .sect { margin-bottom: 40px; opacity: 0.3; pointer-events: none; transition: opacity 0.5s ease; flex-shrink: 0; }
     #debate-screen .sect.unlocked { opacity: 1; pointer-events: auto; }
