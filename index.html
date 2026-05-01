@@ -31,6 +31,8 @@
 <script src="post-office.js"></script>
 <script src="cloud.js"></script>
 <script src="debate.js"></script>
+<script src="codex.js"></script>
+<script src="subjects.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700;800&family=Great+Vibes&family=Libre+Barcode+39+Text&family=Noto+Sans+SC:wght@300;400;500;700&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,700&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
@@ -93,7 +95,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
 /* ============================================================
    Home Screen
    ============================================================ */
-.scroll-content{height:100%;overflow-y:auto;padding:calc(env(safe-area-inset-top,0px) + 20px) 20px 120px;}
+.scroll-content{height:100%;overflow-y:hidden;padding:calc(env(safe-area-inset-top,0px) + 20px) 20px 120px;}
 .scroll-content::-webkit-scrollbar{display:none;}
 .header{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:24px;padding:0 4px;}
 .date-box h1{font-size:2.1333rem;font-weight:400;font-style:italic;line-height:1;margin-bottom:4px;}
@@ -110,6 +112,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
     scroll-snap-type: x mandatory;
     scrollbar-width: none;
     scroll-behavior: smooth;
+    touch-action: pan-x;
 }
 .home-swiper::-webkit-scrollbar { display: none; }
 .home-page {
@@ -3571,6 +3574,11 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
           <div class="icon-box" data-icon-id="11"><i class="ph ph-cloud"></i></div>
           <span class="icon-label">云端</span>
         </div>
+        <!-- 👇 新增的索引图标 👇 -->
+    <div class="icon-cell" id="icon-codex">
+        <div class="icon-box" data-icon-id="12"><i class="ph ph-question"></i></div>
+        <span class="icon-label">索引</span>
+    </div>
       </div>
     </div>
   </div>
@@ -3975,7 +3983,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
             <div class="slider-row">
               <span style="font-size:0.7333rem;color:var(--s-text-secondary);width:24px;flex-shrink:0;">A</span>
               <input type="range" id="sys-font-size-slider" class="styled-slider"
-                min="12" max="20" step="1" value="15"
+                min="12" max="20" step="1" value="13"
                 oninput="SystemModule.onFontSizeInput(this.value)">
               <span style="font-size:1.1333rem;color:var(--s-text-secondary);width:20px;flex-shrink:0;">A</span>
               <span class="slider-val" id="sys-font-size-display">15</span>
@@ -6781,11 +6789,11 @@ const Toast = (() => {
 // ============================================================
 const Router = (() => {
   // 顶层 screen id 列表
-const TOP_SCREENS =['settings-screen', 'character-screen', 'chat-screen', 'conv-screen', 'worldbook-screen', 'story-roster-screen', 'story-chat-screen', 'forum-screen','lifestyle-screen'];
+const TOP_SCREENS =['settings-screen', 'character-screen', 'chat-screen', 'conv-screen', 'worldbook-screen', 'story-roster-screen', 'story-chat-screen', 'forum-screen','lifestyle-screen', 'codex-screen'];
   // 改为数组栈，支持多级子页导航
   const _subStack = {};
 function go(target, watermark) {
-    if (target === 'settings' || target === 'character' || target === 'chat' || target === 'conv' || target === 'worldbook' || target === 'story-roster' || target === 'story-chat' || target === 'forum' || target === 'lifestyle') {
+    if (target === 'settings' || target === 'character' || target === 'chat' || target === 'conv' || target === 'worldbook' || target === 'story-roster' || target === 'story-chat' || target === 'forum' || target === 'lifestyle' || target === 'codex') {
       const map = { 
         settings:  'settings-screen', 
         character: 'character-screen', 
@@ -6795,7 +6803,9 @@ function go(target, watermark) {
         'story-roster': 'story-roster-screen',
         'story-chat': 'story-chat-screen',
         forum:     'forum-screen',
-        lifestyle: 'lifestyle-screen'
+        lifestyle: 'lifestyle-screen',
+        codex: 'codex-screen' ,
+      
       };
       
       const screenId = map[target];
@@ -6852,6 +6862,7 @@ function go(target, watermark) {
     if (target === 'story-roster') StoryModule.onEnter();
     if (target === 'forum')     ForumModule.onEnter(); 
     if (target === 'lifestyle') LifestyleModule.onEnter();
+  
   }
 
   function _onEnterPage(pageId) {
@@ -7586,6 +7597,21 @@ document.getElementById('icon-debate')?.addEventListener('click', () => {
     DebateModule.open();
   } else {
     Toast.show('辩论模块未加载，请检查 debate.js 是否存在');
+  }
+});
+//索引
+document.getElementById('icon-codex')?.addEventListener('click', () => {
+  if (typeof CodexModule !== 'undefined') {
+    CodexModule.open();
+  }
+});
+
+// 查手机
+document.getElementById('icon-phone')?.addEventListener('click', () => {
+  if (typeof SubjectsModule !== 'undefined') { // ✨ 修改模块名
+    SubjectsModule.open(); // ✨ 直接调用 open 方法
+  } else {
+    Toast.show('查手机模块未加载，请检查 subject.js 是否存在'); // ✨ 修改提示信息
   }
 });
 
@@ -19988,7 +20014,7 @@ const SystemModule = (() => {
   const KEY_FONTS       = 'system-fonts';
   const KEY_ICON_LABELS = 'system-icon-labels';
 
-  let _fontSize      = 15;
+  let _fontSize      = 13;
   let _fonts         = [];
   let _showIconLabels = true;
 
@@ -20303,6 +20329,8 @@ async function init() {
   // 行程生活系统
   try { LifestyleModule.init(); } catch(e) { console.warn('lifestyle init failed', e); }
   try { await SpaceModule.init(); } catch(e) { console.warn('space init failed', e); }
+  try { CodexModule.init(); } catch(e) 
+{ console.warn('codex init failed', e); }
 
 // 主题
   try {
