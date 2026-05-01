@@ -95,26 +95,53 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
 /* ============================================================
    Home Screen
    ============================================================ */
-.scroll-content{height:100%;overflow-y:hidden;padding:calc(env(safe-area-inset-top,0px) + 20px) 20px 120px;}
+.scroll-content {
+  height: 100%;
+  overflow-y: auto; 
+  overflow-x: hidden;
+  /* 修复：左右留白设为 0，交给内部的 page 页面自行处理留白 */
+  padding: calc(env(safe-area-inset-top, 0px) + 110px) 0 120px; 
+}
 .scroll-content::-webkit-scrollbar{display:none;}
-.header{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:24px;padding:0 4px;}
+.header {
+  position: absolute; 
+  top: 0;
+  left: 0;
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  padding: calc(env(safe-area-inset-top, 0px) + 20px) 24px 16px;
+  background: var(--bg-device); /* 👈 直接使用系统自带的实心背景色 */
+  z-index: 100;
+}
 .date-box h1{font-size:2.1333rem;font-weight:400;font-style:italic;line-height:1;margin-bottom:4px;}
 .date-time-line{display:flex;align-items:center;gap:8px;color:var(--text-sub);font-size:0.8rem;letter-spacing:1px;text-transform:uppercase;}
+
 /* ============================================================
    桌面分页 (Home Swiper)
    ============================================================ */
 .home-swiper {
     display: flex;
-    width: calc(100% + 40px); /* 抵消外层 20px padding，实现无缝边缘滑动 */
-    margin-left: -20px;
+    width: 100%; /* 修复：直接占满 100%，不再使用 calc 补偿 */
     overflow-x: auto;
     overflow-y: hidden;
     scroll-snap-type: x mandatory;
     scrollbar-width: none;
-    scroll-behavior: smooth;
-    touch-action: pan-x;
+    -webkit-overflow-scrolling: touch; /* 修复：增加 iOS 专属弹性平滑滚动 */
 }
 .home-swiper::-webkit-scrollbar { display: none; }
+.home-page {
+    flex: 0 0 100%;
+    width: 100%;
+    max-width: 100%; /* 修复：增加最大宽度限制，防止子元素过宽撑破排版 */
+    scroll-snap-align: center;
+    scroll-snap-stop: always; /* 修复：强制要求每次滑动必须完美停靠，不再卡中间 */
+    padding: 0 20px; /* 原先外层减去的 20px 留白统一加在这里 */
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+}
 .home-page {
     flex: 0 0 100%;
     width: 100%;
@@ -3399,18 +3426,23 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
     </div>
   </div>
 
-  <!-- ==================== HOME SCREEN ==================== -->
+ <!-- ==================== HOME SCREEN ==================== -->
   <div id="home-screen" class="screen active">
+
+    <!-- 顶部的日期和切换按钮被提出来了，和下方的滚动区平级 -->
+    <div class="header">
+      <div class="date-box">
+        <h1 class="serif" id="day-main">Saturday.</h1>
+        <div class="date-time-line"><p id="date-main">OCT 24</p><span>•</span><p id="time-main">09:41</p></div>
+      </div>
+      <div class="theme-switch" id="theme-btn">MODE: DAY</div>
+    </div>
+    
+    <!-- 下方的小组件和图标变成了一个独立的滚动容器 -->
     <div class="scroll-content" id="home-scroll">
-      <div class="header">
-        <div class="date-box">
-          <h1 class="serif" id="day-main">Saturday.</h1>
-          <div class="date-time-line"><p id="date-main">OCT 24</p><span>•</span><p id="time-main">09:41</p></div>
-        </div>
-       <div class="theme-switch" id="theme-btn">MODE: DAY</div></div>
        
        <div class="home-swiper" id="home-swiper" onscroll="updateHomeDots(this)">
-    <div class="home-page"> <!-- 第一页开始 -->
+         <div class="home-page"> <!-- 第一页开始 -->
        
       <div class="profile-card">
         <div class="avatar-wrap" id="avatar-wrap">
