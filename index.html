@@ -60,9 +60,9 @@
 /* ============================================================
    基础 Reset
    ============================================================ */
-html{font-size:var(--base-font-size);height:100%;overflow:hidden;overscroll-behavior:none;}
+html{font-size:var(--base-font-size);overscroll-behavior:none;}
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;outline:none;}
-body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;justify-content:center;align-items:center;height:100%;margin:0;overflow:hidden;transition:background-color .3s;color:var(--text-main);overscroll-behavior:none;}
+body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;transition:background-color .3s;color:var(--text-main);overscroll-behavior:none;}
 .serif{font-family:'Playfair Display',serif;}
 .device{width:390px;height:844px;background:var(--bg-device);border-radius:44px;position:relative;box-shadow:0 0 0 10px #222,0 20px 50px rgba(0,0,0,.2);overflow:hidden;}
 
@@ -457,7 +457,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
 
 @media(max-width:768px){
   body{background:var(--bg-device);align-items:flex-start;}
-  .device{width:100%;height:100%;height:100dvh;border:none;border-radius:0;box-shadow:none;}
+  /* 终极全屏解法：放弃高度计算，直接将四个边缘钉死在可视区域边界 */
+  .device{position:fixed;top:0;left:0;right:0;bottom:0;width:100%;height:auto;border:none;border-radius:0;box-shadow:none;}
   .dock-wrapper{position:fixed;bottom:0;}
   .details-panel,.overlay,.modal-overlay{position:fixed;}
 }
