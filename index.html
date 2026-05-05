@@ -14,15 +14,6 @@
 <script src="https://unpkg.com/fflate@0.8.2/umd/index.js"></script>
 <script src="https://unpkg.com/mammoth@1.6.0/mammoth.browser.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="https://unpkg.com/eruda"></script>
-<script>
-  eruda.init({
-    defaults: {
-      displaySize: 50, // 面板高度
-      theme: 'Dark'    // 默认深色主题
-    }
-  });
-</script>
 <script src="music.js"></script>
 <script src="chill-meet-bundle.js"></script>
 <script src="diary.js"></script>
@@ -33,6 +24,7 @@
 <script src="debate.js"></script>
 <script src="codex.js"></script>
 <script src="subjects.js"></script>
+<script src="editorial.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700;800&family=Great+Vibes&family=Libre+Barcode+39+Text&family=Noto+Sans+SC:wght@300;400;500;700&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,700&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
@@ -68,9 +60,9 @@
 /* ============================================================
    基础 Reset
    ============================================================ */
-html{font-size:var(--base-font-size);}
+html{font-size:var(--base-font-size);height:100%;overflow:hidden;overscroll-behavior:none;}
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;outline:none;}
-body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;justify-content:center;align-items:center;min-height:100vh;transition:background-color .3s;color:var(--text-main);overscroll-behavior-y:none;}
+body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;justify-content:center;align-items:center;height:100%;margin:0;overflow:hidden;transition:background-color .3s;color:var(--text-main);overscroll-behavior:none;}
 .serif{font-family:'Playfair Display',serif;}
 .device{width:390px;height:844px;background:var(--bg-device);border-radius:44px;position:relative;box-shadow:0 0 0 10px #222,0 20px 50px rgba(0,0,0,.2);overflow:hidden;}
 
@@ -95,53 +87,25 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
 /* ============================================================
    Home Screen
    ============================================================ */
-.scroll-content {
-  height: 100%;
-  overflow-y: auto; 
-  overflow-x: hidden;
-  /* 修复：左右留白设为 0，交给内部的 page 页面自行处理留白 */
-  padding: calc(env(safe-area-inset-top, 0px) + 110px) 0 120px; 
-}
+.scroll-content{height:100%;overflow-y:auto;padding:calc(env(safe-area-inset-top,0px) + 20px) 20px 120px;}
 .scroll-content::-webkit-scrollbar{display:none;}
-.header {
-  position: absolute; 
-  top: 0;
-  left: 0;
-  width: 100%;
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  padding: calc(env(safe-area-inset-top, 0px) + 20px) 24px 16px;
-  background: var(--bg-device); /* 👈 直接使用系统自带的实心背景色 */
-  z-index: 100;
-}
+.header{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:24px;padding:0 4px;}
 .date-box h1{font-size:2.1333rem;font-weight:400;font-style:italic;line-height:1;margin-bottom:4px;}
 .date-time-line{display:flex;align-items:center;gap:8px;color:var(--text-sub);font-size:0.8rem;letter-spacing:1px;text-transform:uppercase;}
-
 /* ============================================================
    桌面分页 (Home Swiper)
    ============================================================ */
 .home-swiper {
     display: flex;
-    width: 100%; /* 修复：直接占满 100%，不再使用 calc 补偿 */
+    width: calc(100% + 40px); /* 抵消外层 20px padding，实现无缝边缘滑动 */
+    margin-left: -20px;
     overflow-x: auto;
     overflow-y: hidden;
     scroll-snap-type: x mandatory;
     scrollbar-width: none;
-    -webkit-overflow-scrolling: touch; /* 修复：增加 iOS 专属弹性平滑滚动 */
+    scroll-behavior: smooth;
 }
 .home-swiper::-webkit-scrollbar { display: none; }
-.home-page {
-    flex: 0 0 100%;
-    width: 100%;
-    max-width: 100%; /* 修复：增加最大宽度限制，防止子元素过宽撑破排版 */
-    scroll-snap-align: center;
-    scroll-snap-stop: always; /* 修复：强制要求每次滑动必须完美停靠，不再卡中间 */
-    padding: 0 20px; /* 原先外层减去的 20px 留白统一加在这里 */
-    box-sizing: border-box;
-    display: flex;
-    flex-direction: column;
-}
 .home-page {
     flex: 0 0 100%;
     width: 100%;
@@ -493,7 +457,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
 
 @media(max-width:768px){
   body{background:var(--bg-device);align-items:flex-start;}
-  .device{width:100%;height:100vh;border:none;border-radius:0;box-shadow:none;}
+  .device{width:100%;height:100%;height:100dvh;border:none;border-radius:0;box-shadow:none;}
   .dock-wrapper{position:fixed;bottom:0;}
   .details-panel,.overlay,.modal-overlay{position:fixed;}
 }
@@ -1236,7 +1200,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
 #conv-screen .cv-bubble.typing-capsule { background:transparent!important;border:1px solid #121212!important;border-radius:100px!important;padding:8px 14px!important;display:flex;align-items:center;gap:8px;box-shadow:none!important;color:#121212!important; }
 #conv-screen .cv-ticking { font-size:1rem;color:#121212;animation:cv-tick-spin 1.2s steps(6) infinite; }
 @keyframes cv-tick-spin { from{transform:rotate(0deg);}to{transform:rotate(360deg);} }
-/* Novel 配图等待占位（与打字胶囊同系） */
+/* 生图等待占位（与打字胶囊同系） */
 #conv-screen .cv-novel-pending .cv-novel-pending-wrap { max-width:260px;padding:10px 14px;border-radius:18px;border:1px dashed rgba(18,18,18,0.22);background:rgba(255,255,255,0.92);box-shadow:0 2px 12px rgba(0,0,0,0.04);display:flex;flex-direction:column;gap:6px; }
 #conv-screen .cv-novel-pending .cv-novel-pending-line { display:flex;align-items:center;gap:8px;font-size:0.9rem;color:#121212;font-weight:500; }
 #conv-screen .cv-novel-pending .cv-novel-pending-spin { font-size:1.05rem;color:#121212;animation:cv-tick-spin 2.2s linear infinite; }
@@ -2505,7 +2469,35 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
 .cv-cam-cross.bl { bottom: -2px; left: -2px; } .cv-cam-cross.br { bottom: -2px; right: -2px; }
 
 /* 聊天流 */
-.cv-call-stream { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; padding: 20px 16px 20px; overflow-y: auto; scrollbar-width: none; mask-image: linear-gradient(to bottom, transparent 0%, black 15%, black 100%); -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 15%, black 100%); }
+
+/* ============================================================
+   修复：视频通话 (Live Link) 聊天流无法滚动、页面穿透的问题
+   ============================================================ */
+.cv-call-stream { 
+  flex: 1; 
+  display: flex; 
+  flex-direction: column; 
+  padding: 20px 16px 20px; 
+  overflow-y: auto; 
+  scrollbar-width: none; 
+  mask-image: linear-gradient(to bottom, transparent 0%, black 15%, black 100%); 
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 15%, black 100%); 
+  
+  /* 👇 核心修复 1：启用移动端丝滑惯性滚动，并彻底阻断滚动事件穿透到网页底层 */
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+
+  /* 👇 核心修复 2：去掉原来导致 Bug 的 justify-content: flex-end，改为默认靠上 */
+  justify-content: flex-start; 
+}
+
+/* 👇 核心修复 3：利用伪元素把消息强行挤到屏幕底部。
+   它的魔法在于：消息少时能沉底，消息多了又能正常向上滚动！ */
+.cv-call-stream::before {
+  content: '';
+  margin-top: auto;
+}
+
 .cv-call-stream::-webkit-scrollbar { display: none; }
 
 .cv-c-row { display: flex; flex-direction: column; width: 100%; margin-bottom: 20px; animation: cv-fade-up 0.4s ease forwards; }
@@ -3393,6 +3385,60 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
 .rb-music-info { display: flex; flex-direction: column; justify-content: center; margin-left: 10px; }
 .rb-music-info [contenteditable="true"] { outline: none; }
 
+/* ============================================================
+   1. 修复：角色档案页面 (列表左侧、详情页顶部、编辑/新建顶部)
+   ============================================================ */
+#character-screen .side-nav {
+  padding: calc(env(safe-area-inset-top, 20px) + 20px) 0 40px 0;
+}
+.char-detail-actions {
+  padding: calc(env(safe-area-inset-top, 20px) + 20px) 20px 20px;
+}
+.char-form-header {
+  padding: calc(env(safe-area-inset-top, 20px) + 20px) 20px 20px;
+}
+
+/* ============================================================
+   2. 修复：剧情模式 (选角界面、聊天界面、侧滑设置)
+   ============================================================ */
+/* 选角界面顶部导航 */
+#story-roster-screen .sr-nav {
+  padding: calc(env(safe-area-inset-top, 20px) + 15px) 20px 20px;
+}
+/* 剧情长文聊天顶部 & 侧滑设置页顶部 */
+#story-chat-screen .top-bar {
+  padding: calc(env(safe-area-inset-top, 20px) + 10px) 20px 16px;
+}
+
+/* ============================================================
+   3. 修复：用户面具页 (个人主页) 及 聊天模块内的其他子页
+   ============================================================ */
+/* 用户面具页 (User Dossier 顶部区域) */
+#chat-screen .ch-dossier-upper {
+  padding: calc(env(safe-area-inset-top, 20px) + 20px) 2rem 2rem;
+}
+/* 聊天界面的左侧导航栏栏首 */
+#chat-screen .ch-sidebar {
+  padding: calc(env(safe-area-inset-top, 20px) + 20px) 0 2rem;
+}
+/* 群聊及邀请列表的顶部标题 */
+#chat-screen .ch-inv-header {
+  padding: calc(env(safe-area-inset-top, 20px) + 20px) 1.5rem 1rem;
+}
+/* 群聊详情(成员列表)的顶部返回键 */
+#chat-screen .ch-detail-topbar {
+  padding: calc(env(safe-area-inset-top, 20px) + 20px) 1.5rem 1rem;
+}
+/* 资金终端与信息收藏库的顶部 */
+.wl-header {
+  padding: calc(env(safe-area-inset-top, 20px) + 15px) 2rem 1rem;
+}
+
+#worldbook-screen .wb-editor {
+  /* 原先是 padding: 40px 28px; 改为加入系统安全距离 */
+  padding: calc(env(safe-area-inset-top, 20px) + 20px) 28px 40px 28px !important;
+}
+
 </style>
 <body>
 <div class="device">
@@ -3426,23 +3472,18 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
     </div>
   </div>
 
- <!-- ==================== HOME SCREEN ==================== -->
+  <!-- ==================== HOME SCREEN ==================== -->
   <div id="home-screen" class="screen active">
-
-    <!-- 顶部的日期和切换按钮被提出来了，和下方的滚动区平级 -->
-    <div class="header">
-      <div class="date-box">
-        <h1 class="serif" id="day-main">Saturday.</h1>
-        <div class="date-time-line"><p id="date-main">OCT 24</p><span>•</span><p id="time-main">09:41</p></div>
-      </div>
-      <div class="theme-switch" id="theme-btn">MODE: DAY</div>
-    </div>
-    
-    <!-- 下方的小组件和图标变成了一个独立的滚动容器 -->
     <div class="scroll-content" id="home-scroll">
+      <div class="header">
+        <div class="date-box">
+          <h1 class="serif" id="day-main">Saturday.</h1>
+          <div class="date-time-line"><p id="date-main">OCT 24</p><span>•</span><p id="time-main">09:41</p></div>
+        </div>
+       <div class="theme-switch" id="theme-btn">MODE: DAY</div></div>
        
        <div class="home-swiper" id="home-swiper" onscroll="updateHomeDots(this)">
-         <div class="home-page"> <!-- 第一页开始 -->
+    <div class="home-page"> <!-- 第一页开始 -->
        
       <div class="profile-card">
         <div class="avatar-wrap" id="avatar-wrap">
@@ -3611,6 +3652,10 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
         <div class="icon-box" data-icon-id="12"><i class="ph ph-question"></i></div>
         <span class="icon-label">索引</span>
     </div>
+    <div class="icon-cell" id="icon-editorial">
+    <div class="icon-box" data-icon-id="13"><i class="ph ph-newspaper"></i></div>
+    <span class="icon-label">观测志</span>
+</div>
       </div>
     </div>
   </div>
@@ -3740,8 +3785,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
             <span class="menu-text-en">TTS Voice Synthesis</span>
           </div>
           <div class="menu-item" onclick="Router.go('novel-settings-page','N')">
-            <span class="menu-text-cn">Novel 设置</span>
-            <span class="menu-text-en">Novel AI Config</span>
+            <span class="menu-text-cn">生图设置</span>
+            <span class="menu-text-en">Image Generation</span>
           </div>
         </div>
       </div>
@@ -3808,17 +3853,27 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
       </div>
     </div>
 
-    <!-- Novel 设置页：Persistent API Token + 生图参数（官方 image.novelai.net） -->
+    <!-- 生图设置页：后端（免费 / NovelAI / OpenAI 兼容），DOM id 仍为 novel-settings-page -->
     <div id="novel-settings-page" class="settings-page">
-      <div class="page-watermark">Nv</div>
+      <div class="page-watermark">Ig</div>
       <div class="nav-bar">
-        <span class="nav-title">Novel 设置</span>
+        <span class="nav-title">生图设置</span>
         <button class="sub-back-btn" onclick="Router.back()">Back</button>
       </div>
       <div class="content-scroll">
         <p style="font-size:0.75rem;color:var(--s-text-secondary);line-height:1.5;margin-bottom:16px;">
-          在 NovelAI 用户菜单创建 <strong>Persistent API Token</strong> 填入此处。生图走官方 <code style="font-size:0.7rem;">image.novelai.net</code>，消耗 Anlas。
+          选择生图<strong>后端</strong>：<strong>免费线路</strong>为 Pollinations；<strong>NovelAI</strong> 填 Persistent Token，走官方 <code style="font-size:0.7rem;">image.novelai.net</code>；<strong>OpenAI 兼容</strong>填与聊天设置相同的 Base URL 规则（官方 <code style="font-size:0.7rem;">https://api.openai.com</code> 或第三方转发），请求 <code style="font-size:0.7rem;">/v1/images/generations</code>（如 DALL·E）。密钥保存在本地浏览器。
         </p>
+        <div class="input-wrapper">
+          <label class="label-text">生图后端 / Backend</label>
+          <select id="novel-img-backend" class="select-stylish" onchange="NovelModule.syncBackendUI()">
+            <option value="pollinations">免费线路（Pollinations）</option>
+            <option value="novelai">NovelAI（Persistent Token）</option>
+            <option value="openai">OpenAI 兼容（DALL·E 等）</option>
+          </select>
+        </div>
+        <div id="novel-backend-panel-novelai" style="display:none;">
+        <p style="font-size:0.72rem;color:var(--s-text-secondary);line-height:1.45;margin-bottom:12px;">NovelAI：在用户菜单创建 <strong>Persistent API Token</strong>。消耗 Anlas。</p>
         <div class="input-wrapper">
           <label class="label-text">Persistent Token / KEY</label>
           <input type="password" id="novel-api-key" class="input-line" placeholder="粘贴 API Token" autocomplete="off">
@@ -3857,30 +3912,57 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
             <option value="k_dpmpp_2m_sde">k_dpmpp_2m_sde</option>
           </select>
         </div>
+        </div><!-- /novel-backend-panel-novelai -->
+
+        <div id="novel-backend-panel-openai" style="display:none;">
+        <p style="font-size:0.72rem;color:var(--s-text-secondary);line-height:1.45;margin-bottom:12px;">OpenAI 兼容接口需支持 <code style="font-size:0.68rem;">POST /v1/images/generations</code>。Base URL 可与 API 设置里的域名写法一致（含或不含 <code style="font-size:0.68rem;">/v1</code>）。</p>
         <div class="input-wrapper">
+          <label class="label-text">Base URL（可选）</label>
+          <input type="text" id="novel-openai-base" class="input-line" placeholder="留空则 https://api.openai.com" autocomplete="off">
+        </div>
+        <div class="input-wrapper">
+          <label class="label-text">API Key</label>
+          <input type="password" id="novel-openai-key" class="input-line" placeholder="sk-..." autocomplete="off">
+        </div>
+        <div class="input-wrapper">
+          <label class="label-text">图像模型</label>
+          <select id="novel-openai-model" class="select-stylish">
+            <option value="gpt-image-2">gpt-image-2</option>
+            <option value="gpt-image-2-2026-04-21">gpt-image-2-2026-04-21</option>
+            <option value="gpt-image-1.5">gpt-image-1.5</option>
+            <option value="gpt-image-1">gpt-image-1</option>
+            <option value="gpt-image-1-mini">gpt-image-1-mini</option>
+            <option value="dall-e-3">dall-e-3</option>
+            <option value="dall-e-2">dall-e-2</option>
+          </select>
+        </div>
+        <p style="font-size:0.68rem;color:var(--s-text-secondary);line-height:1.4;margin-top:-4px;">尺寸见下方：DALL·E 竖/横为 1024×1792 / 1792×1024；<strong>GPT Image（gpt-image-*）</strong>竖/横为 1024×1536 / 1536×1024。dall-e-2 非方形时回落为 1024×1024。</p>
+        </div><!-- /novel-backend-panel-openai -->
+
+        <div class="input-wrapper" id="novel-shared-size-wrap">
           <label class="label-text">尺寸 / SIZE</label>
           <select id="novel-size" class="select-stylish">
-            <option value="832x1216">竖图 832×1216</option>
-            <option value="1216x832">横图 1216×832</option>
+            <option value="832x1216">竖图（Novel 832×1216 · OpenAI 1024×1792）</option>
+            <option value="1216x832">横图（Novel 1216×832 · OpenAI 1792×1024）</option>
             <option value="1024x1024">方图 1024×1024</option>
           </select>
         </div>
 
         <div class="form-section" style="margin-top:8px;margin-bottom:0;">
-          <div class="section-title">提示词 / Prompt</div>
+          <div class="section-title">画风前缀 · Style prefix</div>
           <div class="input-wrapper" style="margin-bottom:22px;">
-            <label class="label-text">全局正向提示词 / Global Positive</label>
-            <div style="font-family:'Space Mono',monospace;font-size:0.75rem;color:var(--s-text-secondary);margin-top:4px;">未配置角色专属时使用 · Fallback when character prompt is empty</div>
+            <label class="label-text">全局画风前缀 / Global style</label>
+            <div style="font-family:'Space Mono',monospace;font-size:0.75rem;color:var(--s-text-secondary);margin-top:4px;">拼在每条生图提示最前：画风、质量词、媒介等；<strong>不负责剧情画面</strong>——情景内容请写在对话里的 <span style="user-select:all;">[NOVEL_IMG]</span>。未配置角色专属时用此项。</div>
             <div style="margin-top:10px;margin-bottom:8px;padding:10px 12px;background:rgba(0,0,0,0.03);border:0.5px solid rgba(18,18,18,0.1);border-radius:10px;font-family:'Space Mono',monospace;font-size:0.7rem;line-height:1.45;color:var(--s-text-secondary);">
-              <span style="display:block;margin-bottom:6px;letter-spacing:0.5px;">示例（英文关键词、逗号分隔，可与对话里 <span style="user-select:all;">[NOVEL_IMG]</span> 内文拼接）</span>
-              <span style="user-select:all;display:block;color:var(--s-text-primary);word-break:break-word;">1girl, solo, upper body, soft lighting, depth of field, detailed eyes, cozy indoor, warm tone, masterpiece</span>
+              <span style="display:block;margin-bottom:6px;letter-spacing:0.5px;">画风示例（英文逗号分隔；会与 <span style="user-select:all;">[NOVEL_IMG]</span> 内情景描写<strong>前后拼接</strong>）</span>
+              <span style="user-select:all;display:block;color:var(--s-text-primary);word-break:break-word;">masterpiece, best quality, anime illustration, soft lighting, depth of field, film grain, muted colors</span>
             </div>
-            <textarea id="novel-prompt-positive" class="novel-prompt-ta" placeholder="选填。全局风格前缀；英文关键词逗号分隔。可参考上方示例。用于测试生图及对话配图（角色可再在聊天设置里覆盖为专属正向）。" rows="4"></textarea>
+            <textarea id="novel-prompt-positive" class="novel-prompt-ta" placeholder="选填。仅画风/质感/媒介等前缀（英文逗号分隔）。剧情、动作、场景请交给模型写在 [NOVEL_IMG] 里；也可在此写该角色常驻外貌英文关键词。聊天「生图」里可再填角色专属画风前缀覆盖本项。" rows="4"></textarea>
           </div>
           <div class="input-wrapper" style="margin-bottom:0;">
-            <label class="label-text">反向提示词 / Negative</label>
-            <div style="font-family:'Space Mono',monospace;font-size:0.75rem;color:var(--s-text-secondary);margin-top:4px;">Undesired · 留空则使用当前模型默认 UC</div>
-            <textarea id="novel-prompt-negative" class="novel-prompt-ta" placeholder="可不填；填写后将用于测试生图与对话配图" rows="4"></textarea>
+            <label class="label-text">全局反向（排除）/ Global negative</label>
+            <div style="font-family:'Space Mono',monospace;font-size:0.75rem;color:var(--s-text-secondary);margin-top:4px;">不希望出现的元素 · 留空则用当前模型默认 UC</div>
+            <textarea id="novel-prompt-negative" class="novel-prompt-ta" placeholder="可不填；用于测试生图与对话配图，作用在全部后端" rows="4"></textarea>
           </div>
         </div>
 
@@ -3905,7 +3987,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
           <button class="btn-primary" onclick="NovelModule.save()">保存配置</button>
         </div>
         <div style="margin-top:20px;font-family:'Space Mono',monospace;font-size:0.6rem;color:var(--s-text-secondary);letter-spacing:0.5px;line-height:1.6;">
-          保存后：此处正/反向为<strong>全局默认</strong>。某角色在聊天中开启 Novel 配图后，可填写<strong>角色专属正向 / 反向</strong>；有填写则仅使用该角色专属项，不再叠加对应全局项（留空的一侧仍回退到全局）。<br>
+          保存后：<strong>画风前缀</strong>（全局或角色专属）会拼在每条生图提示<strong>最前</strong>；<strong>剧情画面</strong>以对话里模型输出的 <span style="user-select:all;">[NOVEL_IMG]</span> 为主。角色写了专属正/反向则<strong>只</strong>用专属项对应一侧，不再叠全局；该侧留空则回退全局。<br>
           开启配图后，系统提示会要求模型在 <span style="user-select:all;">[NOVEL_IMG]</span> 内<strong>仅使用英文</strong>；关闭配图时则要求仅用<strong>中文</strong>描述画面、勿使用该标签。
         </div>
       </div>
@@ -5052,13 +5134,13 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
           </div>
         </div>
 
-        <!-- Novel -->
+        <!-- 生图配图（标签仍为 [NOVEL_IMG]） -->
         <div class="cv-set-section">
-          <div class="cv-set-sec-title">Novel</div>
+          <div class="cv-set-sec-title">生图</div>
           <div class="cv-set-item">
             <div class="cv-si-info">
-              <span class="cv-si-label">Novel 图像生成</span>
-              <span class="cv-si-sub">Image Synthesis</span>
+              <span class="cv-si-label">对话配图 / 自动生图</span>
+              <span class="cv-si-sub">Image Gen · [NOVEL_IMG]</span>
             </div>
             <div class="cv-mag-toggle" id="cv-novel-toggle" onclick="ConvModule._toggleNovel(this)"></div>
           </div>
@@ -5066,25 +5148,25 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
             <div class="cv-set-item col cv-accordion" onclick="ConvModule._toggleAccordion(this,event)">
               <div class="cv-acc-header">
                 <div class="cv-si-info">
-                  <span class="cv-si-label">角色专属正向提示词</span>
-                  <span class="cv-si-sub">Character Positive · Overrides global</span>
+                  <span class="cv-si-label">角色画风前缀（正向）</span>
+                  <span class="cv-si-sub">Style prefix · 覆盖全局 · 情景在 [NOVEL_IMG]</span>
                 </div>
                 <i class="ph ph-caret-down cv-acc-icon"></i>
               </div>
               <div class="cv-acc-body-wrap">
                 <div class="cv-acc-body">
-                  <div style="font-family:'Space Mono',monospace;font-size:0.62rem;color:#888;margin-bottom:8px;line-height:1.4;">示例：<span style="user-select:all;color:#121212;">anime screencap, film grain, muted colors</span>（风格前缀，与标签内英文拼接）</div>
+                  <div style="font-family:'Space Mono',monospace;font-size:0.62rem;color:#888;margin-bottom:8px;line-height:1.4;">与全局一致：只写<strong>画风/质感</strong>或常驻外貌英文词；当前这一幕的画面仍由模型写在 <span style="user-select:all;color:#121212;">[NOVEL_IMG]</span>。示例：<span style="user-select:all;color:#121212;">anime illustration, soft light, film grain</span></div>
                   <textarea id="cv-novel-prefix"
                     style="width:100%;min-height:80px;padding:10px;background:rgba(0,0,0,0.03);border:0.5px solid rgba(18,18,18,0.1);border-radius:10px;font-size:0.8rem;font-family:inherit;color:#121212;resize:none;outline:none;line-height:1.5;"
-                    placeholder="选填。留空则用 Novel 全局正向。英文逗号分隔，写法同设置页示例。" onclick="event.stopPropagation()"></textarea>
+                    placeholder="选填。覆盖生图设置里的全局画风前缀。英文逗号分隔；剧情画面写在 [NOVEL_IMG]，不必写在这里。" onclick="event.stopPropagation()"></textarea>
                 </div>
               </div>
             </div>
             <div class="cv-set-item col cv-accordion" onclick="ConvModule._toggleAccordion(this,event)">
               <div class="cv-acc-header">
                 <div class="cv-si-info">
-                  <span class="cv-si-label">角色专属反向提示词</span>
-                  <span class="cv-si-sub">Character Negative · Overrides global</span>
+                  <span class="cv-si-label">角色反向（排除）</span>
+                  <span class="cv-si-sub">Negative · Overrides global</span>
                 </div>
                 <i class="ph ph-caret-down cv-acc-icon"></i>
               </div>
@@ -5092,7 +5174,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
                 <div class="cv-acc-body">
                   <textarea id="cv-novel-negative"
                     style="width:100%;min-height:80px;padding:10px;background:rgba(0,0,0,0.03);border:0.5px solid rgba(18,18,18,0.1);border-radius:10px;font-size:0.8rem;font-family:inherit;color:#121212;resize:none;outline:none;line-height:1.5;"
-                    placeholder="选填。填写后仅本角色使用；留空则采用 Novel 设置中的全局反向提示词（若全局亦为空则使用模型默认 UC）。" onclick="event.stopPropagation()"></textarea>
+                    placeholder="选填。填写后仅本角色使用；留空则采用生图设置中的全局反向提示词（若全局亦为空则使用模型默认 UC）。" onclick="event.stopPropagation()"></textarea>
                 </div>
               </div>
             </div>
@@ -6825,6 +6907,7 @@ const TOP_SCREENS =['settings-screen', 'character-screen', 'chat-screen', 'conv-
   // 改为数组栈，支持多级子页导航
   const _subStack = {};
 function go(target, watermark) {
+
     if (target === 'settings' || target === 'character' || target === 'chat' || target === 'conv' || target === 'worldbook' || target === 'story-roster' || target === 'story-chat' || target === 'forum' || target === 'lifestyle' || target === 'codex') {
       const map = { 
         settings:  'settings-screen', 
@@ -6915,6 +6998,7 @@ function go(target, watermark) {
 const ApiHelper = (() => {
   // 已知 API path 后缀，按长度从长到短排，防止短的先匹配
   const KNOWN_SUFFIXES = [
+    '/v1/images/generations',
     '/v1/chat/completions',
     '/v1/completions',
     '/v1/embeddings',
@@ -6944,6 +7028,7 @@ const ApiHelper = (() => {
       chat:       '/v1/chat/completions',
       models:     '/v1/models',
       embeddings: '/v1/embeddings',
+      images:     '/v1/images/generations',
     };
     return root + (paths[type] ?? paths.chat);
   }
@@ -7170,9 +7255,22 @@ const ProfileModule = (() => {
 // ============================================================
 // UIModule — 壁纸 & 图标
 // ============================================================
-const ICON_DEFAULTS = [
-  'ph-fill ph-coffee','ph ph-book-open-text','ph ph-music-note','ph ph-calendar-blank',
-  'ph ph-gear','ph ph-bell','ph ph-mask-happy','ph ph-cloud','ph ph-scales', 'ph ph-device-mobile', 'ph ph-users', 'ph ph-cloud'
+
+const ICON_DEFAULTS =[
+  'ph-fill ph-coffee',      // 0 遇见
+  'ph ph-book-open-text',   // 1 日记
+  'ph ph-music-note',       // 2 音乐
+  'ph ph-calendar-blank',   // 3 行程
+  'ph ph-gear',             // 4 设置
+  'ph ph-books',            // 5 世界书
+  'ph ph-mask-happy',       // 6 剧情
+  'ph ph-mailbox',          // 7 时空邮局
+  'ph ph-scales',           // 8 辩论
+  'ph ph-device-mobile',    // 9 查手机
+  'ph ph-users',            // 10 情侣
+  'ph ph-cloud',            // 11 云端
+  'ph ph-question',         // 12 索引
+  'ph ph-newspaper'         // 13 观测志
 ];
 
 let _pendingIconId = null;
@@ -7202,7 +7300,7 @@ const UIModule = (() => {
   function renderIconsEditGrid() {
     const grid = document.getElementById('icons-grid-edit');
     grid.innerHTML = '';
-    for (let i = 0; i < 12; i++) {
+   for (let i = 0; i < ICON_DEFAULTS.length; i++) {
       const item = document.createElement('div');
       item.className   = 'icon-edit-item';
       item.dataset.idx = i;
@@ -7221,7 +7319,7 @@ const UIModule = (() => {
   }
 
   async function clearAllIcons() {
-    for (let i = 0; i < 12; i++) {
+   for (let i = 0; i < ICON_DEFAULTS.length; i++) {
       await Assets.remove(`icon-${i}`).catch(() => {});
      const box = document.querySelector(`.icon-box[data-icon-id="${i}"]`);
       if (box) box.innerHTML = `<i class="${ICON_DEFAULTS[i]}"></i>`;
@@ -7645,6 +7743,14 @@ document.getElementById('icon-phone')?.addEventListener('click', () => {
   } else {
     Toast.show('查手机模块未加载，请检查 subject.js 是否存在'); // ✨ 修改提示信息
   }
+});
+// 观测志
+document.getElementById('icon-editorial')?.addEventListener('click', () => {
+    if (typeof EditorialModule !== 'undefined') {
+        EditorialModule.open();
+    } else {
+        Toast.show('观测志模块未加载，请检查 editorial.js');
+    }
 });
 
 // ============================================================
@@ -10302,9 +10408,19 @@ const EmoteModule = (() => {
     Toast.show('已删除选中的表情');
   }
   
-  async function _render() {
+ async function _render() {
     const list = document.getElementById('cv-emote-cat-list');
+    const modal = document.getElementById('cv-emote-modal');
     if (!list) return;
+
+    // 🌟 1. 记录外层大弹窗和内层所有表情网格的当前滚动位置
+    const modalScrollTop = modal ? modal.scrollTop : 0;
+    const gridScrolls = {};
+    _dicts.forEach(d => {
+      const grid = document.getElementById(`emote-grid-${d.id}`);
+      if (grid) gridScrolls[d.id] = grid.scrollTop;
+    });
+
     const chars = await DB.characters.getAll().catch(()=>[]);
 
     list.innerHTML = _dicts.map((d, i) => {
@@ -10319,7 +10435,7 @@ const EmoteModule = (() => {
         return `<div class="cv-emote-bind-pill ${isActive ? 'active' : ''}" onclick="event.stopPropagation(); EmoteModule.toggleCharBind('${d.id}', '${c.id}')">${c.name}</div>`;
       }).join('');
 
-   // 判断当前字典是否处于多选模式
+      // 判断当前字典是否处于多选模式
       const isCurrentEdit = _isEditMode && _activeDictId === d.id;
 
       // 渲染表情包缩略图 (加入选中状态和点击逻辑分流)
@@ -10375,7 +10491,8 @@ const EmoteModule = (() => {
                   </span>
                 </div>
               </div>
-              <div style="display:flex; gap:8px; flex-wrap:wrap; max-height:160px; overflow-y:auto; padding:4px;">
+              <!-- 🌟 给这个容器加上专属ID，用来恢复滚动条 -->
+              <div id="emote-grid-${d.id}" style="display:flex; gap:8px; flex-wrap:wrap; max-height:160px; overflow-y:auto; padding:4px;">
                 ${itemsHtml || '<div style="font-size:0.7rem;color:#999;width:100%;text-align:center;padding:10px 0;">此分类暂无表情，在下方批量导入</div>'}
               </div>
             </div>
@@ -10388,6 +10505,13 @@ const EmoteModule = (() => {
         </div>
       </div>`;
     }).join('');
+
+    // 🌟 2. 瞬间恢复刚刚记录下来的滚动位置
+    if (modal) modal.scrollTop = modalScrollTop;
+    _dicts.forEach(d => {
+      const grid = document.getElementById(`emote-grid-${d.id}`);
+      if (grid && gridScrolls[d.id]) grid.scrollTop = gridScrolls[d.id];
+    });
   }
 
   async function _save() {
@@ -10523,11 +10647,112 @@ return { init, open, close, toggleDict, addDict, confirmAddDict, toggleGlobal, t
 })();
 
 // ============================================================
-// NovelModule — NovelAI / Pollinations 无感融合生图引擎
+// NovelModule — NovelAI / Pollinations / OpenAI 兼容 生图引擎
 // ============================================================
 const NovelModule = (() => {
   const KEY_CFG = 'novel-config';
   const API = 'https://image.novelai.net/ai/generate-image';
+
+  /** @param {Record<string, unknown>} cfg */
+  function effectiveBackend(cfg) {
+    const c = cfg || {};
+    const ex = c.imgBackend;
+    if (ex === 'pollinations' || ex === 'openai' || ex === 'novelai') return ex;
+    return (c.apiKey && String(c.apiKey).trim()) ? 'novelai' : 'pollinations';
+  }
+
+  /** @param {Record<string, unknown>} cfg */
+  function isPaidImgEngine(cfg) {
+    const c = cfg || {};
+    const b = effectiveBackend(c);
+    if (b === 'pollinations') return false;
+    if (b === 'novelai') return !!(c.apiKey && String(c.apiKey).trim());
+    if (b === 'openai') return !!(c.openaiApiKey && String(c.openaiApiKey).trim());
+    return false;
+  }
+
+  function syncBackendUI() {
+    const sel = document.getElementById('novel-img-backend');
+    const v = sel?.value || 'pollinations';
+    const panN = document.getElementById('novel-backend-panel-novelai');
+    const panO = document.getElementById('novel-backend-panel-openai');
+    if (panN) panN.style.display = v === 'novelai' ? '' : 'none';
+    if (panO) panO.style.display = v === 'openai' ? '' : 'none';
+  }
+
+  /**
+   * OpenAI Images API（或兼容端点），返回 PNG/WebP blob
+   */
+  async function _generateOpenAIImageBlob(mergedPrompt, cfg, signal) {
+    const key = (cfg.openaiApiKey || '').trim();
+    if (!key) {
+      Toast.show('请填写 OpenAI 生图 API Key');
+      return null;
+    }
+    const root = (cfg.openaiBaseUrl || '').trim() || 'https://api.openai.com';
+    const url = ApiHelper.buildUrl(root, 'images');
+    const model = cfg.openaiImageModel || 'dall-e-3';
+    const isGptImage = /^gpt-image-/i.test(String(model));
+
+    const sizeMapDalle = {
+      '832x1216': '1024x1792',
+      '1216x832': '1792x1024',
+      '1024x1024': '1024x1024',
+    };
+    const sizeMapGptImg = {
+      '832x1216': '1024x1536',
+      '1216x832': '1536x1024',
+      '1024x1024': '1024x1024',
+    };
+    const sizeMap = isGptImage ? sizeMapGptImg : sizeMapDalle;
+    let size = sizeMap[cfg.size || '832x1216'] || '1024x1024';
+    if (model === 'dall-e-2' && size !== '256x256' && size !== '512x512' && size !== '1024x1024') {
+      size = '1024x1024';
+    }
+    let prompt = String(mergedPrompt || '').trim();
+    const neg = (cfg.negativePrompt || '').trim();
+    if (neg) prompt = `${prompt}\n\nAvoid: ${neg}`;
+    const promptMax = isGptImage ? 8000 : 4000;
+    if (prompt.length > promptMax) prompt = prompt.slice(0, promptMax);
+
+    const body = {
+      model,
+      prompt,
+      n: 1,
+      size,
+    };
+    if (isGptImage) {
+      body.quality = 'auto';
+      body.output_format = 'png';
+    } else {
+      body.response_format = 'b64_json';
+    }
+
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${key}`,
+      },
+      body: JSON.stringify(body),
+      signal,
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      const msg = err.error?.message || err.message || err.error || `HTTP ${res.status}`;
+      Toast.show('OpenAI 生图失败：' + msg);
+      return null;
+    }
+    const data = await res.json();
+    const b64 = data.data?.[0]?.b64_json;
+    if (!b64) {
+      Toast.show('OpenAI 生图返回异常（无图像数据）');
+      return null;
+    }
+    const binary = Uint8Array.from(atob(b64), ch => ch.charCodeAt(0));
+    return new Blob([binary], { type: 'image/png' });
+  }
   const UC_V3 = 'nsfw, lowres, jpeg artifacts, worst quality, watermark, blurry, very displeasing';
   const UC_V45C = 'blurry, lowres, upscaled, artistic error, scan artifacts, jpeg artifacts, logo, too many watermarks, negative space, blank page';
   const UC_V45F = 'nsfw, blurry, lowres, error, worst quality, bad quality, jpeg artifacts, very displeasing, white blank page, blank page';
@@ -10538,6 +10763,7 @@ const NovelModule = (() => {
 
   function _readFormCfg() {
     return {
+      imgBackend: document.getElementById('novel-img-backend')?.value || 'pollinations',
       apiKey: document.getElementById('novel-api-key')?.value.trim() || '',
       model:  document.getElementById('novel-model')?.value || 'nai-diffusion-3',
       steps:  parseInt(document.getElementById('novel-steps')?.value || '28', 10),
@@ -10546,6 +10772,9 @@ const NovelModule = (() => {
       size:   document.getElementById('novel-size')?.value || '832x1216',
       positivePrompt: document.getElementById('novel-prompt-positive')?.value.trim() || '',
       negativePrompt: document.getElementById('novel-prompt-negative')?.value.trim() || '',
+      openaiBaseUrl: document.getElementById('novel-openai-base')?.value.trim() || '',
+      openaiApiKey: document.getElementById('novel-openai-key')?.value.trim() || '',
+      openaiImageModel: document.getElementById('novel-openai-model')?.value || 'dall-e-3',
     };
   }
 
@@ -10632,20 +10861,27 @@ const NovelModule = (() => {
   }
 
   function restoreUI() {
-    if (!_cfg) return;
     const set = (id, val) => { const el = document.getElementById(id); if (el && val != null) el.value = val; };
-    set('novel-api-key', _cfg.apiKey || '');
-    set('novel-model', _cfg.model || 'nai-diffusion-3');
-    set('novel-steps', _cfg.steps ?? 28);
-    set('novel-scale', _cfg.scale ?? 5);
-    set('novel-sampler', _cfg.sampler || 'k_euler');
-    set('novel-size', _cfg.size || '832x1216');
-    set('novel-prompt-positive', _cfg.positivePrompt || '');
-    set('novel-prompt-negative', _cfg.negativePrompt || '');
-    const sv = document.getElementById('novel-steps-val');
-    if (sv) sv.textContent = String(_cfg.steps ?? 28);
-    const scv = document.getElementById('novel-scale-val');
-    if (scv) scv.textContent = parseFloat(_cfg.scale ?? 5).toFixed(1);
+    if (_cfg) {
+      const backendLegacy = _cfg.imgBackend || ((_cfg.apiKey && String(_cfg.apiKey).trim()) ? 'novelai' : 'pollinations');
+      set('novel-img-backend', backendLegacy);
+      set('novel-api-key', _cfg.apiKey || '');
+      set('novel-model', _cfg.model || 'nai-diffusion-3');
+      set('novel-steps', _cfg.steps ?? 28);
+      set('novel-scale', _cfg.scale ?? 5);
+      set('novel-sampler', _cfg.sampler || 'k_euler');
+      set('novel-size', _cfg.size || '832x1216');
+      set('novel-prompt-positive', _cfg.positivePrompt || '');
+      set('novel-prompt-negative', _cfg.negativePrompt || '');
+      set('novel-openai-base', _cfg.openaiBaseUrl || '');
+      set('novel-openai-key', _cfg.openaiApiKey || '');
+      set('novel-openai-model', _cfg.openaiImageModel || 'dall-e-3');
+      const sv = document.getElementById('novel-steps-val');
+      if (sv) sv.textContent = String(_cfg.steps ?? 28);
+      const scv = document.getElementById('novel-scale-val');
+      if (scv) scv.textContent = parseFloat(_cfg.scale ?? 5).toFixed(1);
+    }
+    syncBackendUI();
   }
 
   async function save() {
@@ -10655,15 +10891,17 @@ const NovelModule = (() => {
   }
 
   function getCfg() { return _cfg; }
-// 🌟 核心分流引擎：根据有没有填 Key 决定走哪条路
+// 🌟 核心分流引擎：后端 = 免费 / NovelAI / OpenAI 兼容
   async function generateImageBlob(mergedPrompt, runtimeCfg) {
     const cfg = runtimeCfg || _cfg || await init();
-    
+
+    const backend = effectiveBackend(cfg);
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s 超时
+    const timeoutMs = backend === 'openai' ? 120000 : 60000;
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
     // ===== 线路 1：免费 Pollinations 线路（高定氛围感特调版） =====
-    if (!cfg?.apiKey) {
+    if (backend === 'pollinations') {
       try {
         const [sw, sh] = (cfg.size || '832x1216').split('x').map(Number);
         const w = sw || 832;
@@ -10697,7 +10935,29 @@ const NovelModule = (() => {
       }
     }
 
-    // ===== 线路 2：原生 NovelAI 官方付费线路 =====
+    // ===== 线路 2：OpenAI Images（/v1/images/generations） =====
+    if (backend === 'openai') {
+      try {
+        const blob = await _generateOpenAIImageBlob(mergedPrompt, cfg, controller.signal);
+        clearTimeout(timeoutId);
+        return blob;
+      } catch (fetchErr) {
+        clearTimeout(timeoutId);
+        if (fetchErr.name === 'AbortError') {
+          Toast.show('OpenAI 生图超时，请稍后重试');
+        } else {
+          Toast.show('OpenAI 网络错误：' + (fetchErr.message || ''));
+        }
+        return null;
+      }
+    }
+
+    // ===== 线路 3：原生 NovelAI 官方付费线路 =====
+    if (!(cfg.apiKey && String(cfg.apiKey).trim())) {
+      clearTimeout(timeoutId);
+      Toast.show('请填写 NovelAI Token，或改用免费/OpenAI 后端');
+      return null;
+    }
     const model = cfg.model || 'nai-diffusion-3';
     const aug = _augmentPrompt(model, mergedPrompt);
     const body = {
@@ -10774,7 +11034,7 @@ const NovelModule = (() => {
   async function testGenerate() {
     const pos = document.getElementById('novel-prompt-positive')?.value.trim();
     if (!pos) {
-      Toast.show('请填写正向提示词');
+      Toast.show('请填写画风前缀框内的英文提示后再测试');
       return;
     }
     const cfg = _readFormCfg();
@@ -10937,7 +11197,7 @@ const NovelModule = (() => {
     }
   }
 
-  return { init, save, getCfg, restoreUI, generateImageBlob, attachImagesForChar, testGenerate, clearTestPreview, downloadTestPreview };
+  return { init, save, getCfg, restoreUI, syncBackendUI, effectiveBackend, isPaidImgEngine, generateImageBlob, attachImagesForChar, testGenerate, clearTestPreview, downloadTestPreview };
 })();
 
 // ============================================================
@@ -11281,8 +11541,8 @@ ${isGreeting ? '【当前情境】：视频刚刚接通，请你主动开口跟�
           : m.text 
       }));
 
-      const response = await ApiHelper.chatCompletion(activeApi, [
-        { role: 'system', content: systemPrompt },
+   const response = await ApiHelper.chatCompletion(activeApi,[
+        { role: 'user', content: systemPrompt },
         ...apiMessages
       ]);
 
@@ -13770,7 +14030,7 @@ function _renderImgPreviewBar() {
     Toast.show('Novel 重新生成中…');
     try {
       let base = NovelModule.getCfg?.();
-      if (!base?.apiKey) base = await NovelModule.init?.();
+      if (base == null) base = await NovelModule.init?.();
       const charNeg = await _getNovelNegative();
       const globalNeg = (base?.negativePrompt || '').trim();
       const effectiveNeg = (charNeg || '').trim() || globalNeg;
@@ -13972,8 +14232,8 @@ function _renderImgPreviewBar() {
       console.log('%c【Messages】', 'color:#2d6a4a;font-weight:bold;', JSON.parse(JSON.stringify(apiMessages)));
       console.groupEnd();
 
-      const response = await ApiHelper.chatCompletion(activeApi, [
-        { role: 'system', content: systemPrompt },
+     const response = await ApiHelper.chatCompletion(activeApi,[
+        { role: 'user', content: systemPrompt },
         ...apiMessages // <<< 现在这里只发送那条虚拟指令，不再重复
       ]);
 
@@ -14350,7 +14610,7 @@ function _renderImgPreviewBar() {
       let isFreeEngine = true;
       try {
         const nvCfg = await DB.settings.get('novel-config');
-        if (nvCfg && nvCfg.apiKey) isFreeEngine = false; // 填了 Key 就认为是原生 NovelAI
+        if (nvCfg && NovelModule.isPaidImgEngine(nvCfg)) isFreeEngine = false;
       } catch(e) {}
 
       // 🌟 修改参数传递 (追加 isFreeEngine)
@@ -14364,11 +14624,11 @@ function _renderImgPreviewBar() {
       console.log("%c【History Messages 历史消息】", "color:#2d6a4a; font-weight:bold;", JSON.parse(JSON.stringify(apiMessages)));
       console.groupEnd();
 
-      // ===========================
+     // ===========================
       // ⚠️ 网络请求挂起！此时你可以切去任何地方并发起请求！
       // ===========================
-      const response = await ApiHelper.chatCompletion(activeApi, [
-        { role: 'system', content: systemPrompt },
+      const response = await ApiHelper.chatCompletion(activeApi,[
+        { role: 'user', content: systemPrompt },
         ...apiMessages
       ]);
       // ===========================
@@ -14379,7 +14639,11 @@ function _renderImgPreviewBar() {
         _removeTyping();
       }
 
-      const rawBubbles = response.split('|||').map(s => s.trim()).filter(Boolean);
+     // 🌟 核心修复：防止 AI 忘了打 ||| 导致的长串文字，按双换行符强行切分
+      let rawBubbles = response.split('|||').map(s => s.trim()).filter(Boolean);
+      if (rawBubbles.length === 1) {
+          rawBubbles = response.split(/\n\n+/).map(s => s.trim()).filter(Boolean);
+      }
       let isFirstBubble = true;
 
       for (const rawContent of rawBubbles) {
@@ -14923,8 +15187,9 @@ ${dialogueFlow.trim()}
  
     const userBg = _persona ? `用户的名字是${_persona.name}${_persona.bio ? '，个人简介/签名：' + _persona.bio : ''}${_persona.backstory ? '\n背景：' + _persona.backstory : ''}` : '';
 
+   // 找到 _buildGroupSystemPromptAll 函数，将 timeCtx 替换为：
     const now = new Date();
-    const timeCtx = `# 时间感知\n现在是 ${now.getFullYear()}年${now.getMonth()+1}月${now.getDate()}日 ${_weekDay(now)} ${_fmtTime(now)}。${timeGapPrompt}\n`;
+    const timeCtx = `# 时区、时间与语言感知\n用户当前的本地时间是 ${now.getFullYear()}年${now.getMonth()+1}月${now.getDate()}日 ${_weekDay(now)} ${_fmtTime(now)}。${timeGapPrompt}\n【时差与母语规则】：如果某角色的档案设定身处其他国家或地区，该角色必须自行推算其所在地的真实时间并遵循当地作息；如果该角色是外国人，其发言必须优先使用母语或本国语言（除非档案注明精通中文）。\n`;
 
     const worldLoreSection = worldBookBlock ? `\n# 世界背景知识\n${worldBookBlock}\n` : '';
 
@@ -15098,12 +15363,15 @@ ${emoteBlock}
   }
 
   // ── 组装 System Prompt ──
+
 function _buildSystemPrompt(histMsgs, novelImgOn = false, worldBookBlock = '', timePerceptionOn = true, timeGapPrompt = '', memorySummary = '', crossWindowMsgs =[], scheduleContext = '', isFreeEngine = false) {
     let timeCtx = '';
     if (timePerceptionOn) {
        const now = new Date();
-       timeCtx = `# 时间感知\n现在是 ${now.getFullYear()}年${now.getMonth()+1}月${now.getDate()}日 ${_weekDay(now)} ${_fmtTime(now)}。${timeGapPrompt}\n`;
+       timeCtx = `# 时区与时间感知 (Time & Timezone)\n用户当前的本地时间是 ${now.getFullYear()}年${now.getMonth()+1}月${now.getDate()}日 ${_weekDay(now)} ${_fmtTime(now)}。${timeGapPrompt}\n【时差判定】：如果你的档案设定中身处其他国家或地区，请务必根据用户的这个时间，自动推算出你所在地的真实时间，并在对话中自然遵循你当地的昼夜作息与环境光线。\n`;
     }
+
+    const languageCtx = `# 语言习惯 (Language Preference)\n【母语优先】：如果你的档案设定为外国人，或注明了具体的国家背景，请**绝对优先使用你的母语或该国常用语言**进行对话。除非你的档案明确说明你精通中文，否则请保持外语输出。`;
 
     const charName = _char?.name || '角色';
     const charPersona = _char?.persona || '';
@@ -15178,6 +15446,17 @@ const emotes = typeof EmoteModule !== 'undefined' ? EmoteModule.getActiveEmotes(
 - 纯粹对话：这是一个纯粹的线上聊天。你绝对禁止使用任何括号()或星号*来描述动作或心理活动。
 - 对话格式：直接输出你的回复。为了模仿真实的聊天节奏，你可以将一个完整的想法拆分成多个句子，用特殊分隔符 ||| 来分隔不同的气泡。
 
+❌ 错误示范（像 AI 汇报）：
+“你居然还笑！那个小孩真的很嚣张，他一直在公屏刷屏，我当时差点把键盘吃了，而且我直播间还有五万人看着呢。”
+
+✅ 正确示范（像真人打字）：
+“你居然还笑！！！” ||| “你是不知道那个小孩有多嚣张” ||| “他在公屏打‘老登你闪不过吧’，我当时真的差点把键盘吃了...” ||| “我直播间五万个人看着呢，我不要面子的吗”
+
+- 绝对规则：
+- 每个气泡长度建议控制在 30 字以内。
+- 严禁输出超过 3 个段落的长文本气泡。
+- 如果 AI 忘记使用 ||| 导致气泡过长，会导致系统过载。请务必切碎！
+
 # 表演的灵感与基石 (Inspiration & Foundation)
 下方的档案是你表演的“灵感核心”，而非限制你的“死板规则”。你应该围绕它进行自由、自然、且符合逻辑的演绎，让角色变得丰满、立体、不可预测。
 
@@ -15194,6 +15473,7 @@ const emotes = typeof EmoteModule !== 'undefined' ? EmoteModule.getActiveEmotes(
      - 在你看来，爱不是赢过对方或让对方让步，而是让彼此在关系中始终感到被平等对待、被信任，并保有完整的自主权。
 
 ${timeCtx}
+${languageCtx}
 # 角色核心档案
 ${charPersona}
 ${charMbti}
@@ -15601,7 +15881,7 @@ function back() {
     document.getElementById('cv-novel-pending-row')?.remove();
   }
 
-  /** 在消息流底部显示 Novel 配图进行中的占位气泡（由 NovelModule.attachImagesForChar 调用） */
+  /** 在消息流底部显示生图进行中的占位气泡（由 NovelModule.attachImagesForChar 调用） */
   function _showNovelPending(charId, totalCount) {
     if (!_charId || String(charId) !== String(_charId)) return;
     const screen = document.getElementById('conv-screen');
@@ -15611,8 +15891,8 @@ function back() {
     _hideNovelPending();
     const n = Math.max(1, Number(totalCount) || 1);
     const subLine = n > 1
-      ? `本次共 ${n} 张配图，依次绘制中 · ${n} images queued`
-      : '正在连接 NovelAI 绘制画面，通常需十余秒 · Rendering, please wait';
+      ? `共 ${n} 张，依次生成中`
+      : '请稍候，可能需要十余秒';
     const row = document.createElement('div');
     row.id = 'cv-novel-pending-row';
     row.className = 'cv-msg-row ai cv-novel-pending';
@@ -15625,7 +15905,7 @@ function back() {
       <div class="cv-bubble cv-novel-pending-wrap">
         <div class="cv-novel-pending-line">
           <i class="ph-thin ph-aperture cv-novel-pending-spin" aria-hidden="true"></i>
-          <span>配图生成中</span>
+          <span>正在生图</span>
           <span class="cv-novel-pending-dots" aria-hidden="true"><span>.</span><span>.</span><span>.</span></span>
         </div>
         <div class="cv-novel-pending-sub">${_escHtml(subLine)}</div>
@@ -16044,14 +16324,18 @@ function back() {
   let _translateEnabled = false; // 气泡翻译开关，默认关
 
  // ── 判断是否需要翻译（外语内容，纯汉字占比 < 60%）──
-  function _isNonChinese(text) {
+ function _isNonChinese(text) {
     if (!text || !text.trim()) return false;
     const clean = text.replace(/\[.*?\]/g, '').trim();
     if (clean.length < 2) return false;
+
+    // 🌟 核心改进：检测粤语/方言特征字（命中这些字直接判定为需要翻译）
+    if (/[唔喺咁咗冇睇㗎嘎嘢佢乜嚟掟揾攞俾]/.test(clean)) return true;
+
     const hanCharacters = (clean.match(/[\u4e00-\u9fa5]/g) || []).length;
-    
+    // 纯汉字占比低于 60% 的判定为外语
     return hanCharacters / clean.length < 0.6;
-  }
+}
 
   function _translateKey() { return `translate-enabled-${_charId}`; }
 
@@ -16102,39 +16386,91 @@ function back() {
 
 try {
       let translated = '';
-      const llmPrompt = `把下面这段话翻译成中文，要口语化、有活人感，不要加任何解释，直接给译文：\n\n${rawText}`;
+      
+      // 🌟 魔法优化：赋予 AI “翻译官人设”，并给出明确的语气指导
+     
+     // 找到 ConvModule 里的 _handleTranslateBubble 函数内部的 llmPrompt 赋值处
+const llmPrompt = `你是一个精通多国语言及中国方言（尤其是粤语）翻译的文学专家。
+请将下面这段内容（可能是外语，也可能是粤语等方言）翻译成自然、流畅的现代标准普通话。
+
+**【翻译铁律：拒绝机翻 (No Machine Translation)】**
+不要做字典的搬运工，要做**情感的传递者**。翻译必须符合中文的语境美感
+- **❌ 禁止直译：** 不要逐字翻译。
+
+**【翻译范例 (Example)】**
+- *场景：暧昧/表白*
+  - 原文: "I miss you."
+  - ❌ 机翻: "我想念你。" (太生硬)
+  - ✅ **灵魂翻译:** "想见你。" / "今晚月色真美。" / "陌上花开了。" (根据人设选择)
+- *场景：傲娇/生气*
+  - 原文: "Whatever."
+  - ❌ 机翻: "无论如何。"
+  - ✅ **灵魂翻译:** "随你便。" / "爱咋咋地。" / "呵。"
+- *场景：日语/敬语*
+  - 原文: "好きです。"
+  - ❌ 机翻: "我喜欢你。"
+  - ✅ **灵魂翻译:** "心悦君兮。" / "这就把命给你。"
+
+【翻译要求】：
+1. 语感高级：符合都市现代人的表达习惯，用词克制、优雅。
+2. 处理方言：如果原文是粤语，请精准转化为普通话，同时保留原本的情绪和语气。
+3. 传递情绪：还原原文的傲娇、温柔、冷峻等情感张力，保持语言的质感。
+4. 纯净输出：绝对不要带任何前言后语，直接给出唯一的中文译文！
+
+【⚠️ 强制输出格式】：
+1. 只输出翻译后的纯文本。
+2. 绝对禁止输出“翻译思路”、“简析”、“注释”或任何解释性文字。
+3. 绝对禁止输出任何前言、后语或引号。
+
+原文如下：
+${rawText}`;
 
       try {
-        // 1. 优先尝试：你注册的免费 LLM API (实现“活人感”)
+        // 1. 优先尝试：使用更大、语感更顶级的模型
         const freeApi = {
           url:   'https://api.siliconflow.cn/v1/chat/completions',
-          key:   'sk-huydslnoteyrzmyqhgepoljtytyqsbdnvvzyqcncroygsbsp', // ⚠️ 已为你填入你的硅基流动密钥
-          model: 'Qwen/Qwen2.5-7B-Instruct',
-          temp:  0.5
+          key:   'sk-huydslnoteyrzmyqhgepoljtytyqsbdnvvzyqcncroygsbsp', 
+          // 🚀 替换为 DeepSeek-V3 (当前最强开源) 或 Qwen2.5-72B-Instruct (比7B聪明十倍，且在硅基流动上也是免费的)
+          model: 'deepseek-ai/DeepSeek-V3', 
+          temp:  0.7 // 🌡️ 温度从 0.5 调到 0.7，让它的用词更鲜活、不那么死板
         };
         
         if (freeApi.key.startsWith('在此填入') || !freeApi.key) {
           throw new Error('内置免费翻译API未配置，降级处理...');
         }
 
-        console.log('[Translate] 正在调用内置免费LLM API...');
-        const result = await ApiHelper.chatCompletion(freeApi, [{ role: 'user', content: llmPrompt }]);
+        console.log('[Translate] 正在调用高情商翻译大模型...');
+        const result = await ApiHelper.chatCompletion(freeApi,[{ role: 'user', content: llmPrompt }]);
         translated = (result || '').trim();
         if (!translated) throw new Error('内置免费LLM返回为空');
 
       } catch (freeErr) {
-        console.warn('[Translate] 内置免费LLM失败，降级至用户主API:', freeErr.message);
+        console.warn('[Translate] 免费LLM失败，尝试降级:', freeErr.message);
         
-        // 2. 失败降级：走用户当前在设置里激活的主力大模型 API
-        const activeApi = await DB.api.getActive();
-        if (!activeApi) throw new Error('免费翻译失败，且用户未激活任何有效API');
-
-        console.log('[Translate] 正在调用用户激活的主力 API...');
-        const llmResult = await ApiHelper.chatCompletion(activeApi, [{ role: 'user', content: llmPrompt }]);
-        translated = (llmResult || '').trim();
+        // 2. 如果 DeepSeek-V3 拥堵报错，自动无缝降级回 72B 免费模型
+        try {
+            const fallbackApi = {
+              url:   'https://api.siliconflow.cn/v1/chat/completions',
+              key:   'sk-huydslnoteyrzmyqhgepoljtytyqsbdnvvzyqcncroygsbsp', 
+              model: 'Qwen/Qwen2.5-72B-Instruct', // 备用方案：用72B大杯模型
+              temp:  0.7
+            };
+            const result = await ApiHelper.chatCompletion(fallbackApi, [{ role: 'user', content: llmPrompt }]);
+            translated = (result || '').trim();
+        } catch (fbErr) {
+            // 3. 最后底线：走用户当前在设置里激活的主力大模型 API
+            const activeApi = await DB.api.getActive();
+            if (!activeApi) throw new Error('免费翻译失败，且用户未激活任何有效API');
+            console.log('[Translate] 正在调用用户激活的主力 API...');
+            const llmResult = await ApiHelper.chatCompletion(activeApi,[{ role: 'user', content: llmPrompt }]);
+            translated = (llmResult || '').trim();
+        }
       }
 
       if (!translated) throw new Error('所有翻译尝试均返回空结果');
+      
+      // 去除大模型可能自带的头尾引号
+      translated = translated.replace(/^["'「”]|["'」”]$/g, '');
 
       textEl.textContent = translated;
       labelEl.classList.remove('loading');
@@ -16145,7 +16481,7 @@ try {
       bubble.dataset.translated = '';
       console.error('[Translate] 所有翻译层级均失败', err);
     }
-  }
+}
 
   function _syncVoiceOptionsVisibility() {
     const wrap = document.getElementById('cv-voice-options-wrap');
@@ -17403,7 +17739,7 @@ ${promptContext}
 严格按照以下格式输出（绝不输出多余废话）：
 [REPLY_COMMENT:你的回复内容]`;
 
-      const response = await ApiHelper.chatCompletion(activeApi, [{ role: 'system', content: prompt }]);
+     const response = await ApiHelper.chatCompletion(activeApi,[{ role: 'user', content: prompt }]);
 
       const match = response.match(/\[REPLY_COMMENT:(.+?)\]/s);
       if (match) {
@@ -17522,7 +17858,7 @@ ${charListText}
   "5": "大半夜发这些，有病？"
 }`;
 
-      const response = await ApiHelper.chatCompletion(activeApi,[{ role: 'system', content: prompt }]);
+     const response = await ApiHelper.chatCompletion(activeApi,[{ role: 'user', content: prompt }]);
       const cleaned = response.replace(/```json|```/g, '').trim();
       const start = cleaned.indexOf('{');
       const end = cleaned.lastIndexOf('}');
@@ -17670,7 +18006,7 @@ async function _checkOfflineMessages(nowTime) {
       let isFreeEngine = true;
       try {
         const nvCfg = await DB.settings.get('novel-config');
-        if (nvCfg && nvCfg.apiKey) isFreeEngine = false;
+        if (nvCfg && NovelModule.isPaidImgEngine(nvCfg)) isFreeEngine = false;
       } catch(e) {}
       
       let imgRule = '你目前无法发送照片，请仅用文字或语音。';
@@ -17701,7 +18037,7 @@ ${historyText || '（无）'}
 
 【绝对规则】：直接输出你要发送的消息内容，绝不要带任何动作描写、心理活动描写或系统废话。`;
 
-      const response = await ApiHelper.chatCompletion(activeApi,[{ role: 'system', content: prompt }]);
+    const response = await ApiHelper.chatCompletion(activeApi,[{ role: 'user', content: prompt }]);
       
       const rawBubbles = response.split('|||').map(s => s.trim()).filter(Boolean);
       if (rawBubbles.length === 0) return;
@@ -17926,7 +18262,7 @@ ${imgInstruction}
 }`;
 
       console.log(`[Agent-Forum] 🧠 开始推演【${char.name}】的论坛发帖...`);
-      const response = await ApiHelper.chatCompletion(activeApi,[{ role: 'system', content: prompt }]);
+     const response = await ApiHelper.chatCompletion(activeApi,[{ role: 'user', content: prompt }]);
       
       const cleaned = response.replace(/```json|```/g, '').trim();
       const start = cleaned.indexOf('{');
@@ -18114,7 +18450,7 @@ ${imgInstruction}
       let isFreeEngine = true;
       try {
         const nvCfg = await DB.settings.get('novel-config');
-        if (nvCfg && nvCfg.apiKey) isFreeEngine = false;
+        if (nvCfg && NovelModule.isPaidImgEngine(nvCfg)) isFreeEngine = false;
       } catch(e) {}
 
       let formatBlock = '';
@@ -18144,7 +18480,7 @@ ${formatBlock}
       console.groupCollapsed(`[Agent-Proactive] 🎲 抽中角色【${char.name}】进行自发动态更新...`);
       console.log(`%c[System Prompt]`, 'color:#9E9E9E;', prompt);
 
-      const response = await ApiHelper.chatCompletion(activeApi,[{ role: 'system', content: prompt }]);
+     const response = await ApiHelper.chatCompletion(activeApi,[{ role: 'user', content: prompt }]);
       console.log(`%c[AI 原始输出]`, 'color:#9C27B0; font-weight:bold;', response);
       console.groupEnd();
       
@@ -18314,21 +18650,22 @@ ${historyStr || '（暂无新聊天记录）'}
 1. 【location】只准填城市名加简写，绝对禁止描写场景或工作室！
 2. 【ootd】【vibe】【state】必须使用纯中文短语！绝对禁止中英混排，控制在10个字以内！
 
+// 找到 MonologueModule 中的这一段并替换
 JSON 格式：
 {
   "location": "仅城市与简写 (例: Shanghai, CN / Tokyo, JP / Unknown)，绝对不可有废话",
   "weather": "气温与天气 (例: 24°C / 阴天微风)",
-  "monologue": "一段散文诗般的内心独白，像随手写在手帐上的断句，反映 ta 现在对我的真实情绪。",
+  "monologue": "散文诗般的内心独白，反映真实情绪。⚠️绝对不能超过20个字！",
   "ootd": "当前穿搭单品 (仅中文短词，如: 浅灰羊绒开衫与白T)",
-  "vibe": "当前氛围感 (仅中文短词，如: 午后慵懒的闲谈)",
+  "vibe": "当前氛围感 (仅中文短词，如: 慵懒的闲谈)",
   "state": "核心状态词 (仅中文短词，如: 轻松的默契)",
   "emotionTitle": "固定为'心率'或'情绪波动'",
   "emotionStatus": "极简情绪词 (如: 轻松愉悦)"
 }`;
 
-      // 发起请求并等待（同时等待至少 1.5 秒的保底动画时间）
+    // 发起请求并等待（同时等待至少 1.5 秒的保底动画时间）
       const [response] = await Promise.all([
-        ApiHelper.chatCompletion(activeApi, [{ role: 'system', content: prompt }]),
+        ApiHelper.chatCompletion(activeApi,[{ role: 'user', content: prompt }]), // 将 system 改为 user
         animationPromise
       ]);
 
@@ -18748,15 +19085,38 @@ const StoryChatModule = (() => {
             document.getElementById('sc-token-counter').textContent = `${this.value.trim().length} TKN`;
         };
 
-        const sendBtn = document.getElementById('sc-send-btn');
+       const sendBtn = document.getElementById('sc-send-btn');
         sendBtn.onclick = async () => {
             const text = input.value.trim();
             if (!text) return;
+            
+            // 发送时强行收起键盘，防止 iOS 悬空
+            input.blur();
+            
             await _sendUserMsg(text);
             input.value = '';
             input.dispatchEvent(new Event('input')); 
             await _triggerAI();
         };
+
+        // 🌟 完美优化版：拆分逻辑，防止乱滚
+        const handleFocus = () => {
+            // 弹出键盘时，必须把最新消息顶上来，所以要滚动到底部
+            setTimeout(() => _scrollToBottom(), 100);
+            setTimeout(() => _scrollToBottom(), 300); 
+        };
+        
+        const handleBlur = () => {
+            // 收起键盘时，只“踹”浏览器复位高度，绝不调用 _scrollToBottom()
+            // 这样如果你正在往上翻看记录，就不会被强行拽回底部了
+            setTimeout(() => {
+                window.scrollTo(0, 0);
+                document.body.scrollTop = 0;
+            }, 100);
+        };
+        
+        input.onfocus = handleFocus;
+        input.onblur  = handleBlur;
 
         const plusBtn = document.getElementById('sc-dock-plus-btn');
         const popover = document.getElementById('sc-dock-popover');
@@ -19225,14 +19585,13 @@ ${scriptHistory || '（电影开场，暂无前文）'}
 
             const systemPrompt = await _buildStorySystemPrompt(storyMsgs);
 
-            const apiMessages = storyMsgs.map(m => ({
-                role: m.role,
-                content: m.content
-            }));
-
-            if (apiMessages.length === 0) {
+           // 💡 核心修复：历史剧本已经塞在 systemPrompt 里了，清空重复数组防复读！
+            const apiMessages =[];
+            if (storyMsgs.length === 0) {
                 const initPrompt = _cfgOpeningMsg ? _cfgOpeningMsg : '*电影开场，镜头缓缓推近*';
-                apiMessages.push({ role: 'user', content: initPrompt });
+                apiMessages.push({ role: 'user', content: `[导演开机指令]：电影正式开场。请顺着这个基调往下写：\n${initPrompt}` });
+            } else {
+                apiMessages.push({ role: 'user', content: '[导演推进指令]：所有剧本前文已就绪。请紧接着【当前剧本前文】的最后一行往下续写，自然推动剧情。绝对不要重复前文已经发生过的情节！' });
             }
 
             console.groupCollapsed(`[StoryChat] 🎬 发送给导演的剧本指令`);
@@ -19240,8 +19599,8 @@ ${scriptHistory || '（电影开场，暂无前文）'}
             console.log("%c【Messages】", "color:#2d6a4a; font-weight:bold;", JSON.parse(JSON.stringify(apiMessages)));
             console.groupEnd();
 
-            const response = await ApiHelper.chatCompletion(activeApi,[
-                { role: 'system', content: systemPrompt },
+           const response = await ApiHelper.chatCompletion(activeApi,[
+                { role: 'user', content: systemPrompt },
                 ...apiMessages
             ]);
 
@@ -19329,11 +19688,13 @@ ${scriptHistory || '（电影开场，暂无前文）'}
             const historyBefore = rawStoryMsgs.filter(m => m.timestamp < msg.timestamp).slice(0, limit).reverse();
 
             const systemPrompt = await _buildStorySystemPrompt(historyBefore);
-            const apiMessages = historyBefore.map(m => ({ role: m.role, content: m.content }));
-
-            if (apiMessages.length === 0) {
+           // 💡 核心修复：重Roll时也只需要发一条重新推演的虚拟指令
+            const apiMessages =[];
+            if (historyBefore.length === 0) {
                 const initPrompt = _cfgOpeningMsg ? _cfgOpeningMsg : '*电影开场，镜头缓缓推近*';
-                apiMessages.push({ role: 'user', content: initPrompt });
+                apiMessages.push({ role: 'user', content: `[导演开机指令]：电影正式开场。请顺着这个基调往下写：\n${initPrompt}` });
+            } else {
+                apiMessages.push({ role: 'user', content: '[导演重写指令]：我觉得上一条写得不够好。请基于【当前剧本前文】，重新写一个完全不同的剧情走向。绝对不要重复前文的内容！' });
             }
             
             console.groupCollapsed(`[StoryChat] 🎬 发送给导演的剧本指令`);
@@ -19341,8 +19702,8 @@ ${scriptHistory || '（电影开场，暂无前文）'}
             console.log("%c【Messages】", "color:#2d6a4a; font-weight:bold;", JSON.parse(JSON.stringify(apiMessages)));
             console.groupEnd();
 
-            const response = await ApiHelper.chatCompletion(activeApi,[
-                { role: 'system', content: systemPrompt },
+           const response = await ApiHelper.chatCompletion(activeApi,[
+                { role: 'user', content: systemPrompt },
                 ...apiMessages
             ]);
 
@@ -19637,7 +19998,7 @@ ${dialogLog}`;
             // 后台异步执行大模型请求
             (async () => {
                 try {
-                    const response = await ApiHelper.chatCompletion(activeApi, [{ role: 'user', content: prompt }]);
+                   const response = await ApiHelper.chatCompletion(activeApi,[{ role: 'user', content: prompt }]);
                     const newSummary = response.trim();
                     
                     if (newSummary) {
@@ -20005,7 +20366,7 @@ ${newMessagesLog}
   ]
 }`;
 
-        const response = await ApiHelper.chatCompletion(api, [{ role: 'system', content: prompt }]);
+      const response = await ApiHelper.chatCompletion(api,[{ role: 'user', content: prompt }]);
         const cleaned = response.replace(/```json|```/g, '').trim();
         const start = cleaned.indexOf('{');
         const end = cleaned.lastIndexOf('}');
@@ -20086,10 +20447,11 @@ const SystemModule = (() => {
       document.head.appendChild(style);
     }
 
-    // 全局覆盖，不放过任何硬编码 font-family
+    // 💡 替换为（加入对花体字和所有条形码的保护排除）：
     const override = document.createElement('style');
     override.id    = 'global-font-override';
-    override.textContent = `*:not(i){font-family:'${font.name}',sans-serif!important;}`;
+    // 排除 i 标签(图标)、排除 .rb-cursive(第二页花体字)、排除所有带 barcode 的类名
+    override.textContent = `*:not(i):not(.rb-cursive):not([class*="barcode"]){font-family:'${font.name}',sans-serif!important;}`;
     document.head.appendChild(override);
   }
 
@@ -20342,7 +20704,7 @@ async function init() {
   try { await DB.init(); } catch(e) { console.error('DB init failed:', e); return; }
   try { await GroupChatModule.init(); } catch(e) { console.warn('groupchat init failed', e); }
   try { await VoiceModule.init(); } catch(e) { console.warn('voice init failed', e); }
-  try { await NovelModule.init(); } catch(e) { console.warn('novel init failed', e); }
+  try { await NovelModule.init(); NovelModule.syncBackendUI?.(); } catch(e) { console.warn('novel init failed', e); }
   try { await EmoteModule.init(); } catch(e) { console.warn('emote init failed', e); }
   // 启动全局 Agent 后台引擎
   try { AgentModule.init(); } catch(e) { console.warn('agent init failed', e); }
@@ -20363,6 +20725,7 @@ async function init() {
   try { await SpaceModule.init(); } catch(e) { console.warn('space init failed', e); }
   try { CodexModule.init(); } catch(e) 
 { console.warn('codex init failed', e); }
+try { EditorialModule.init(); } catch(e) { console.warn('editorial init failed', e); }
 
 // 主题
   try {
@@ -20405,7 +20768,7 @@ async function init() {
   } catch(e) { console.warn('wallpaper restore failed', e); }
 
   // 图标
-  for (let i = 0; i <12; i++) {
+ for (let i = 0; i < ICON_DEFAULTS.length; i++) {
     try {
       const url = await Assets.getUrl(`icon-${i}`);
       if (!url) continue;
