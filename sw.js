@@ -66,7 +66,7 @@ self.addEventListener('message', (event) => {
     icon: icon || 'apple-touch-icon.png',
     badge: 'apple-touch-icon.png',
     vibrate: [200, 100, 200],
-    tag: 'chat-message',
+    tag: event.data.tag || ('msg-' + Date.now()),
     renotify: true,
     data: { url: '/' }
   });
