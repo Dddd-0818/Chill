@@ -6916,37 +6916,44 @@ const Toast = (() => {
 // ============================================================
 // KeepAliveModule — 无声音频后台保活机制 (防杀进程)
 // ============================================================
-
 const KeepAliveModule = (() => {
   let audio = null;
-  let _wakeLock = null;
+  let unlocked = false;
 
-  async function start() {
-    // ① WakeLock — 优先，防止 Android 后台 CPU 节流导致 fetch 中断
-    if ('wakeLock' in navigator) {
-      try {
-        if (!_wakeLock || _wakeLock.released) {
-          _wakeLock = await navigator.wakeLock.request('screen');
-        }
-      } catch(e) {} // 权限拒绝时静默降级
+  function unlock() {
+    if (unlocked) return;
+    // 极小体积的纯静音 WAV 文件的 Base64
+    audio = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA');
+    audio.loop = true;
+    // 🌟 核心：必须在用户初次点击屏幕的瞬间，立刻同步播放并暂停，获取 iOS 的后台播放豁免权！
+    audio.play().then(() => {
+      audio.pause();
+      unlocked = true;
+    }).catch(() => {});
+  }
+
+  function start() {
+    if (audio && unlocked) {
+      audio.play().catch(() => {});
+    } else if (!unlocked) {
+      unlock();
+      if (audio) audio.play().catch(() => {});
     }
-    // ② 静音音频 — 后备
-    if (!audio) {
-      audio = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA');
-      audio.loop = true;
-    }
-    audio.play().catch(() => {});
   }
 
   function stop() {
-    if (audio) { audio.pause(); audio.currentTime = 0; }
-    if (_wakeLock && !_wakeLock.released) {
-      _wakeLock.release().catch(() => {});
-      _wakeLock = null;
+    if (audio) {
+      audio.pause();
     }
   }
 
-  return { start, stop };
+  // 监听全局第一次触摸或点击，立刻解锁音频引擎
+  if (typeof window !== 'undefined') {
+    window.addEventListener('touchstart', unlock, { once: true });
+    window.addEventListener('click', unlock, { once: true });
+  }
+
+  return { start, stop, unlock };
 })();
 
 // ============================================================
@@ -7098,24 +7105,17 @@ const ApiHelper = (() => {
     return models;
   }
 
- async function chatCompletion(apiProfile, messages) {
-  const url = buildUrl(apiProfile.url, 'chat');
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 90000);
-  try {
+  async function chatCompletion(apiProfile, messages) {
+    const url = buildUrl(apiProfile.url, 'chat');
     const res = await fetch(url, {
-      method: 'POST',
+      method:  'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiProfile.key}` },
       body: JSON.stringify({ model: apiProfile.model, messages, temperature: parseFloat(apiProfile.temp) }),
-      signal: controller.signal,
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     return data.choices?.[0]?.message?.content ?? '';
-  } finally {
-    clearTimeout(timeout);
   }
-}
 
   return { buildUrl, fetchModels, chatCompletion };
 })();
@@ -10114,25 +10114,36 @@ const NotificationModule = (() => {
   let _timer;
   let _currentData = null;
 
-  // 1. 请求手机系统通知权限
- function requestPermission() {
-  if (!('Notification' in window)) return;
-  if (Notification.permission === 'default') {
-    Notification.requestPermission().then(result => {
-      if (result === 'granted') {
-        // 授权成功 → 立即弹一条 in-app 测试横幅
-        show({
-          avatar: 'apple-touch-icon.png',
-          name: 'ChillOS',
-          msg: '通知已开启，角色消息将实时推送 ✨',
-          type: 'system'
-        });
-      }
-    });
+  // 1. 请求手机系统通知权限，并在成功时弹出测试横幅
+  function requestPermission() {
+    if ('Notification' in window) {
+      if (Notification.permission === 'default') {
+        Notification.requestPermission().then(perm => {
+          if (perm === 'granted') _showTestBanner();
+        }).catch(() => {});
+      } 
+      // 如果你希望以后每次点输入框都弹测试，可以解除下面这行的注释
+      // else if (Notification.permission === 'granted') { _showTestBanner(); }
+    }
   }
-}
+
+  function _showTestBanner() {
+    const msg = '本地通知授权成功，已开启后台驻留提醒 ✦';
+    try {
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.ready.then(reg => {
+           reg.showNotification('Chill OS', { body: msg, icon: 'apple-touch-icon.png', vibrate:[200, 100, 200] });
+        }).catch(() => { new Notification('Chill OS', { body: msg }); });
+      } else {
+        new Notification('Chill OS', { body: msg });
+      }
+    } catch(e) {
+      new Notification('Chill OS', { body: msg });
+    }
+  }
 
   function show(data) {
+
     if (data.type === 'feed') {
       const chatScreen = document.getElementById('chat-screen');
       const feedView = document.getElementById('ch-view-sparkle');
@@ -14328,7 +14339,7 @@ function _renderImgPreviewBar() {
       console.log('%c【Messages】', 'color:#2d6a4a;font-weight:bold;', JSON.parse(JSON.stringify(apiMessages)));
       console.groupEnd();
 
-if (typeof KeepAliveModule !== 'undefined') await KeepAliveModule.start();// 开启保活
+    if (typeof KeepAliveModule !== 'undefined') KeepAliveModule.start(); // 开启保活
      const response = await ApiHelper.chatCompletion(activeApi,[
         { role: 'user', content: systemPrompt },
         ...apiMessages // <<< 现在这里只发送那条虚拟指令，不再重复
