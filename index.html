@@ -1163,7 +1163,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
 #conv-screen .cv-msg-time { position:absolute;top:calc(100% + 6px);left:50%;transform:translateX(-50%);font-family:'Space Mono',monospace;font-size:0.55rem;color:#888;white-space:nowrap; }
 
 /* Bubbles */
-#conv-screen .cv-bubble { max-width:75%;width:fit-content;padding:8px 12px;border-radius:14px;font-size:13px;line-height:1.4;border:0.5px solid #121212;position:relative;z-index:1;word-break:break-word; }
+#conv-screen .cv-bubble { max-width:75%;width:fit-content;padding:8px 12px;border-radius:14px;font-size:0.85rem;line-height:1.4;border:0.5px solid #121212;position:relative;z-index:1;word-break:break-word; }
 #conv-screen .cv-msg-row.ai  .cv-bubble { background:#121212;color:#fff;border-color:#121212; }
 #conv-screen .cv-msg-row.user .cv-bubble { background:#fff;color:#121212;box-shadow:0 4px 10px rgba(0,0,0,0.02); }
 /* ── HTML 自定义交互组件 ── */
@@ -2882,7 +2882,9 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
 .cv-mn-notebook { top: 80px; right: -10px; width: 240px; padding: 40px 24px 30px 24px; background-color: #FFFFFF; background-image: radial-gradient(rgba(0,0,0,0.08) 1px, transparent 1px); background-size: 12px 12px; background-position: -6px -6px; box-shadow: 0 20px 40px rgba(0,0,0,0.08), 0 8px 16px rgba(0,0,0,0.04); transform: translateY(40px) rotate(1deg); z-index: 2; }
 .cv-mn-board.show .cv-mn-notebook { transform: translateY(0) rotate(1deg); opacity: 1; transition-delay: 0.1s; }
 .cv-mn-nb-title { font-size: 9px; text-transform: uppercase; letter-spacing: 2px; color: #8B8B8B; border-bottom: 0.5px solid rgba(0,0,0,0.08); padding-bottom: 8px; margin-bottom: 12px; display: inline-block; }
-.cv-mn-nb-quote { font-family: 'Noto Serif SC', 'Playfair Display', serif; font-size: 13px; line-height: 1.8; color: #2A2A2A; font-weight: 400; letter-spacing: 1px; text-align: justify; }
+
+.cv-mn-nb-quote { font-family: 'Noto Serif SC', 'Playfair Display', serif; font-size: 13px; line-height: 1.8; color: #2A2A2A; font-weight: 400; letter-spacing: 1px; text-align: justify; max-height: 160px; overflow-y: auto; scrollbar-width: none; padding-right: 4px; }
+.cv-mn-nb-quote::-webkit-scrollbar { display: none; }
 
 /* Layer 3: 黑底水洗标 (恢复经典左下角堆叠，微加宽20px防太高) */
 .cv-mn-tag { bottom: 40px; left: 30px; background: #1E1E1E; color: #FFFFFF; padding: 16px 20px; width: 220px; transform: translateY(30px) rotate(-2deg); z-index: 4; }
@@ -2938,7 +2940,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
 /* 顶部导航 */
 #story-roster-screen .sr-nav {
     position: absolute; top: 0; width: 100%; padding: max(env(safe-area-inset-top, 20px), 24px) 20px 20px;
-    display: flex; justify-content: space-between; align-items: center; z-index: 20;
+    display: flex; justify-content: space-between; align-items: center; z-index: 100;
     background: linear-gradient(to bottom, rgba(10, 10, 10, 0.9) 0%, transparent 100%);
 }
 #story-roster-screen .sr-nav-left, #story-roster-screen .sr-nav-right { flex: 1; display: flex; }
@@ -6018,6 +6020,15 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
                           </div>
                       </div>
                       
+                     <!-- 线上记忆互通 -->
+                      <div class="set-group">
+                          <span class="set-label">Online Sync / 线上记忆互通</span>
+                          <select class="set-input" id="sc-set-cross-sync" style="padding: 10px; cursor: pointer; height: auto;">
+                              <option value="on">开启 (剧情能感知手机上的聊天和群聊)</option>
+                              <option value="off">关闭 (线下剧情与线上网络完全隔离)</option>
+                          </select>
+                      </div>
+                      
                       <!-- 叙事人称 -->
                       <div class="set-group">
                           <span class="set-label">Narrative POV / 叙事人称</span>
@@ -6895,6 +6906,28 @@ const Toast = (() => {
     timer = setTimeout(() => el.classList.remove('show'), duration);
   }
   return { show };
+})();
+
+// ============================================================
+// KeepAliveModule — 无声音频后台保活机制 (防杀进程)
+// ============================================================
+const KeepAliveModule = (() => {
+  let audio = null;
+  function start() {
+    if (!audio) {
+      // 极小体积的纯静音 WAV 文件的 Base64，骗过系统
+      audio = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA');
+      audio.loop = true;
+    }
+    audio.play().catch(() => {});
+  }
+  function stop() {
+    if (audio) {
+      audio.pause();
+      audio.currentTime = 0;
+    }
+  }
+  return { start, stop };
 })();
 
 // ============================================================
@@ -9509,10 +9542,10 @@ const ChatModule = (() => {
           console.warn(`获取角色 ${c.id} 最新消息失败`, e);
         }
 
-        return {
+       return {
           id:   String(c.id),
           name: c.name,
-          role: c.title || c.mbti || '',
+          role: c.title || 'MUSE', 
           img:  img || '',
           msg:  c.aiData?.intro || '',
           _lastActive: lastActiveTime // 存入一个临时属性用于后续排序
@@ -10050,9 +10083,17 @@ const NotifModule = (() => {
 // ============================================================
 // NotificationModule — 全局横幅通知控制 (修复动态跳转)
 // ============================================================
+
 const NotificationModule = (() => {
   let _timer;
   let _currentData = null;
+
+  // 1. 请求手机系统通知权限
+  function requestPermission() {
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+  }
 
   function show(data) {
     if (data.type === 'feed') {
@@ -10078,9 +10119,26 @@ const NotificationModule = (() => {
     void banner.offsetWidth; // 强制重绘
     banner.classList.add('active');
 
-    _timer = setTimeout(() => {
+   _timer = setTimeout(() => {
       banner.classList.remove('active');
     }, 5500);
+
+    // 2. 核心：如果网页在后台，触发真实的手机系统通知横幅！
+    if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
+       try {
+          navigator.serviceWorker.ready.then(reg => {
+             reg.showNotification(data.name || 'ChillOS', {
+                body: cleanMsg,
+                icon: 'apple-touch-icon.png',
+                vibrate:[200, 100, 200]
+             });
+          }).catch(() => {
+             new Notification(data.name || 'ChillOS', { body: cleanMsg, icon: 'apple-touch-icon.png' });
+          });
+       } catch(e) {
+          new Notification(data.name || 'ChillOS', { body: cleanMsg, icon: 'apple-touch-icon.png' });
+       }
+    }
   }
 
   function handleClick() {
@@ -10131,7 +10189,7 @@ const NotificationModule = (() => {
     }
   }
 
-  return { show, handleClick };
+return { show, handleClick, requestPermission };
 })();
 
 // ============================================================
@@ -14641,7 +14699,7 @@ function _renderImgPreviewBar() {
       }
 
      // 🌟 核心修复：防止 AI 忘了打 ||| 导致的长串文字，按双换行符强行切分
-      let rawBubbles = response.split('|||').map(s => s.trim()).filter(Boolean);
+     let rawBubbles = response.split(/\|\|\||<\|split\|>/).map(s => s.trim()).filter(Boolean);
       if (rawBubbles.length === 1) {
           rawBubbles = response.split(/\n\n+/).map(s => s.trim()).filter(Boolean);
       }
@@ -16324,18 +16382,28 @@ function back() {
   let _ttsEnabled = true; // MiniMax TTS 开关，默认开
   let _translateEnabled = false; // 气泡翻译开关，默认关
 
- // ── 判断是否需要翻译（外语内容，纯汉字占比 < 60%）──
+// ── 判断是否需要翻译（针对纯文本部分进行比例检测）──
  function _isNonChinese(text) {
     if (!text || !text.trim()) return false;
-    const clean = text.replace(/\[.*?\]/g, '').trim();
-    if (clean.length < 2) return false;
+    
+    // 1. 去掉 [NOVEL_IMG] 等方括号标签
+    let clean = text.replace(/\[.*?\]/g, '').trim();
+    
+    // 2. 核心修复：剔除所有中英文标点、特殊符号、数字和空格，只保留真正的“文字”
+    // 匹配范围包含：中文、英文字母、日文、韩文
+    const pureText = clean.replace(/[^\u4e00-\u9fa5a-zA-ZÀ-ÿぁ-ヿㄱ-퟿]/g, '');
+    
+    // 3. 如果去掉标点后根本没有字（例如只发了 "..." 或 "！！？"），直接不显示翻译
+    if (pureText.length === 0) return false;
 
-    // 🌟 核心改进：检测粤语/方言特征字（命中这些字直接判定为需要翻译）
-    if (/[唔喺咁咗冇睇㗎嘎嘢佢乜嚟掟揾攞俾]/.test(clean)) return true;
+    // 4. 优先判定：检测粤语/方言特征字，命中则直接开启翻译
+    if (/[唔喺咁咗冇睇㗎嘎嘢佢乜嚟掟揾攞俾]/.test(pureText)) return true;
 
-    const hanCharacters = (clean.match(/[\u4e00-\u9fa5]/g) || []).length;
-    // 纯汉字占比低于 60% 的判定为外语
-    return hanCharacters / clean.length < 0.6;
+    // 5. 比例计算：计算纯文字中汉字的占比
+    const hanCharacters = (pureText.match(/[\u4e00-\u9fa5]/g) || []).length;
+    
+    // 如果纯文字里汉字占比低于 60%，判定为需要翻译（如全英文、日英混排等）
+    return hanCharacters / pureText.length < 0.6;
 }
 
   function _translateKey() { return `translate-enabled-${_charId}`; }
@@ -16669,23 +16737,40 @@ ${rawText}`;
     }
     if (blurSlider && !blurSlider._bound) {
       blurSlider._bound = true;
+      // 拖动时实时改变样式
       blurSlider.addEventListener('input', e => {
         if (blurVal) blurVal.textContent = e.target.value + 'px';
         if (wl) wl.style.filter = `blur(${e.target.value}px)`;
       });
+      // 松手时持久化保存到数据库
+      blurSlider.addEventListener('change', async e => {
+        try { await DB.settings.set(`conv-blur-${_charId}`, e.target.value); } catch(err){}
+      });
     }
-    // 恢复壁纸
+    // 恢复壁纸和模糊度
     if (_charId && wl) {
       const url = await Assets.getUrl(`conv-wallpaper-${_charId}`).catch(() => null);
       wl.style.backgroundImage = url ? `url(${url})` : 'none';
+      
+      try {
+        const savedBlur = await DB.settings.get(`conv-blur-${_charId}`) || 0;
+        wl.style.filter = `blur(${savedBlur}px)`;
+        if (blurSlider) blurSlider.value = savedBlur;
+        if (blurVal) blurVal.textContent = savedBlur + 'px';
+      } catch(e){}
     }
   }
 
   async function clearWallpaper() {
     if (!_charId) return;
     await Assets.remove(`conv-wallpaper-${_charId}`).catch(() => {});
+    await DB.settings.del(`conv-blur-${_charId}`).catch(() => {});
+    
     const wl = document.querySelector('#conv-screen .cv-wallpaper');
-    if (wl) wl.style.backgroundImage = 'none';
+    if (wl) {
+        wl.style.backgroundImage = 'none';
+        wl.style.filter = 'blur(0px)';
+    }
     const inp = document.getElementById('cv-wp-input');
     if (inp) inp.value = '';
     const slider = document.getElementById('cv-blur-slider');
@@ -16893,7 +16978,7 @@ ${rawText}`;
       await DB.messages.delByChar(_charId);
 
       // 2. 清理该角色专属的所有偏好设置
-      const keysToDel = [
+      const keysToDel =[
         `memory-rounds-${_charId}`,
         `time-perception-${_charId}`,
         `voice-id-${_charId}`,
@@ -16903,7 +16988,8 @@ ${rawText}`;
         `translate-enabled-${_charId}`,
         `alias-mode-${_charId}`,
         `char-css-${_charId}`,
-       `css-presets-${_charId}` 
+       `css-presets-${_charId}`,
+       `conv-blur-${_charId}`
       ];
       for (const k of keysToDel) {
         await DB.settings.del(k).catch(()=>{});
@@ -18656,7 +18742,7 @@ JSON 格式：
 {
   "location": "仅城市与简写 (例: Shanghai, CN / Tokyo, JP / Unknown)，绝对不可有废话",
   "weather": "气温与天气 (例: 24°C / 阴天微风)",
-  "monologue": "散文诗般的内心独白，反映真实情绪。⚠️绝对不能超过20个字！",
+  "monologue": "散文诗般的内心独白，反映真实情绪。字数放宽至50-80字左右，情感要细腻充沛，画面感强。",
   "ootd": "当前穿搭单品 (仅中文短词，如: 浅灰羊绒开衫与白T)",
   "vibe": "当前氛围感 (仅中文短词，如: 慵懒的闲谈)",
   "state": "核心状态词 (仅中文短词，如: 轻松的默契)",
@@ -18898,6 +18984,7 @@ const StoryChatModule = (() => {
     let _cfgContextLimit = 20;
     let _cfgPov = '3rd'; 
     let _cfgAutoArchive = true;
+    let _cfgCrossSync = true;
 
     let _editingMsgId = null; 
     let _tempSwipes = {}; 
@@ -18925,10 +19012,15 @@ const StoryChatModule = (() => {
         try { _cfgMountedWBs = await DB.settings.get(`sc-mounted-wbs-${_storyCharId}`) || []; } catch(e){ _cfgMountedWBs =[]; }
         try { _cfgContextLimit = await DB.settings.get(`sc-context-${_storyCharId}`) || 20; } catch(e){}
         try { _cfgPov = await DB.settings.get(`sc-pov-${_storyCharId}`) || '3rd'; } catch(e){}
-        try { 
+       try { 
             const savedAuto = await DB.settings.get(`sc-autoarchive-${_storyCharId}`); 
             _cfgAutoArchive = savedAuto !== false; // 如果没存过，默认就是 true
         } catch(e){ _cfgAutoArchive = true; }
+        
+        try {
+            const savedSync = await DB.settings.get(`sc-cross-sync-${_storyCharId}`);
+            _cfgCrossSync = savedSync !== false;
+        } catch(e){ _cfgCrossSync = true; }
         
         try { 
             const savedColors = await DB.settings.get(`sc-colors-${_storyCharId}`);
@@ -18942,6 +19034,7 @@ const StoryChatModule = (() => {
         set('sc-mem-slider', _cfgContextLimit);
         set('sc-set-pov', _cfgPov);
         set('sc-set-auto-archive', _cfgAutoArchive ? 'on' : 'off');
+        set('sc-set-cross-sync', _cfgCrossSync ? 'on' : 'off');
         
         const memVal = document.getElementById('sc-mem-value');
         if (memVal) memVal.textContent = _cfgContextLimit;
@@ -18988,14 +19081,16 @@ const StoryChatModule = (() => {
         const opening = document.getElementById('sc-set-opening')?.value.trim() || '';
         const maxTkn = parseInt(document.getElementById('sc-set-maxtokens')?.value, 10) || 400;
         const context = parseInt(document.getElementById('sc-mem-slider')?.value, 10) || 20;
-        const pov = document.getElementById('sc-set-pov')?.value || '3rd';
+       const pov = document.getElementById('sc-set-pov')?.value || '3rd';
         const autoArch = document.getElementById('sc-set-auto-archive')?.value !== 'off';
+        const crossSync = document.getElementById('sc-set-cross-sync')?.value !== 'off';
 
         _cfgOpeningMsg = opening;
         _cfgMaxTokens = maxTkn;
         _cfgContextLimit = context;
         _cfgPov = pov;
         _cfgAutoArchive = autoArch;
+        _cfgCrossSync = crossSync;
 
         await DB.settings.set(`sc-opening-${_storyCharId}`, _cfgOpeningMsg);
         await DB.settings.set(`sc-maxtokens-${_storyCharId}`, _cfgMaxTokens);
@@ -19003,6 +19098,7 @@ const StoryChatModule = (() => {
         await DB.settings.set(`sc-mounted-wbs-${_storyCharId}`, _cfgMountedWBs);
         await DB.settings.set(`sc-pov-${_storyCharId}`, _cfgPov);
         await DB.settings.set(`sc-autoarchive-${_storyCharId}`, _cfgAutoArchive);
+        await DB.settings.set(`sc-cross-sync-${_storyCharId}`, _cfgCrossSync);
 
         Toast.show('DIRECTOR CONFIG SAVED');
     }
@@ -19086,17 +19182,22 @@ const StoryChatModule = (() => {
             document.getElementById('sc-token-counter').textContent = `${this.value.trim().length} TKN`;
         };
 
-       const sendBtn = document.getElementById('sc-send-btn');
+      const sendBtn = document.getElementById('sc-send-btn');
         sendBtn.onclick = async () => {
+            if (document.getElementById('sc-ai-loader')) return; // 防抖：如果在生成中则忽略点击
+            
             const text = input.value.trim();
-            if (!text) return;
             
             // 发送时强行收起键盘，防止 iOS 悬空
             input.blur();
             
-            await _sendUserMsg(text);
-            input.value = '';
-            input.dispatchEvent(new Event('input')); 
+            if (text) {
+                await _sendUserMsg(text);
+                input.value = '';
+                input.dispatchEvent(new Event('input')); 
+            }
+            
+            // 无论刚才有没有输入文字，都推动剧情
             await _triggerAI();
         };
 
@@ -19302,44 +19403,47 @@ const StoryChatModule = (() => {
         _scrollToBottom();
     }
 
-   async function _buildStorySystemPrompt(storyMsgs) {
+ async function _buildStorySystemPrompt(storyMsgs) {
         let crossMsgs =[];
+        let recentCrossMsgs =[];
+        let charNameMap = {}; // 🌟 修复：提出来放到 if 外面，确保全局都能访问到
         
-        let allChars =[];
-        try { allChars = await DB.characters.getAll(); } catch(e) {}
-        const charNameMap = {};
-        allChars.forEach(c => charNameMap[String(c.id)] = c.name);
+        if (_cfgCrossSync) {
+            let allChars =[];
+            try { allChars = await DB.characters.getAll(); } catch(e) {}
+            allChars.forEach(c => charNameMap[String(c.id)] = c.name);
 
-        const privateMsgs = await DB.messages.getPage(_realCharId, 0, 30).catch(() =>[]);
-        for (const m of privateMsgs) {
-            if (m.role === 'system_ticket') continue;
-            crossMsgs.push({
-                ...m,
-                _isGroup: false,
-                _sourceName: '手机单聊',
-                _readerNames: 'All'
-            });
-        }
-        
-        const allGCs = typeof GroupChatModule !== 'undefined' ? GroupChatModule.getAll() :[];
-        for (const gc of allGCs) {
-            if (gc.members.includes(_realCharId)) {
-                const gcMsgs = await DB.messages.getPage(gc.id, 0, 20).catch(() =>[]);
-                const readerNames = gc.members.map(mid => charNameMap[String(mid)] || mid).join(',');
-                for (const m of gcMsgs) {
-                    if (m.role === 'system_ticket') continue;
-                    crossMsgs.push({
-                        ...m,
-                        _isGroup: true,
-                        _sourceName: gc.name,
-                        _readerNames: readerNames
-                    });
+            const privateMsgs = await DB.messages.getPage(_realCharId, 0, 30).catch(() =>[]);
+            for (const m of privateMsgs) {
+                if (m.role === 'system_ticket') continue;
+                crossMsgs.push({
+                    ...m,
+                    _isGroup: false,
+                    _sourceName: '手机单聊',
+                    _readerNames: 'All'
+                });
+            }
+            
+            const allGCs = typeof GroupChatModule !== 'undefined' ? GroupChatModule.getAll() :[];
+            for (const gc of allGCs) {
+                if (gc.members.includes(_realCharId)) {
+                    const gcMsgs = await DB.messages.getPage(gc.id, 0, 20).catch(() =>[]);
+                    const readerNames = gc.members.map(mid => charNameMap[String(mid)] || mid).join(',');
+                    for (const m of gcMsgs) {
+                        if (m.role === 'system_ticket') continue;
+                        crossMsgs.push({
+                            ...m,
+                            _isGroup: true,
+                            _sourceName: gc.name,
+                            _readerNames: readerNames
+                        });
+                    }
                 }
             }
+            
+            crossMsgs.sort((a, b) => a.timestamp - b.timestamp);
+            recentCrossMsgs = crossMsgs.slice(-30); 
         }
-        
-        crossMsgs.sort((a, b) => a.timestamp - b.timestamp);
-        const recentCrossMsgs = crossMsgs.slice(-30); 
 
         const fmtTimeFull = (ts) => {
             const d = new Date(ts);
@@ -19477,13 +19581,14 @@ ${timeCtx}
 ${worldBookBlock ? `\n# 世界背景知识 (World Lore)\n${worldBookBlock}\n` : ''}
 
 # 跨维度记忆交叉点 (Cross-window Memories)
-在当前的剧本场景之外，你们在手机聊天软件上也有联系。以下是近期的线上聊天片段（如果有）。请将这些作为你们共同经历的底色，适时在剧情或心理活动中折射出这些羁绊：
+⚠️【参考底色，非剧本主轴】以下是你们在手机上的线上聊天记录，仅用于感知情绪氛围与关系温度。这些消息已经发生完毕，不属于当前剧本，请勿在剧情中直接回复、引用或重演这些线上消息。
 ${recentCrossMsgs.length > 0 ? crossStrText : '（近期无线上交流）'}
 
 ---
-# 当前剧本前文 (Recent Script)
-以下是你们最近的剧情演绎记录（附带精确时间戳），请严格感受前文的叙事节奏、时间和人称视角，接续往下写：
+# 当前剧本前文 (Recent Script) ← 【这才是你需要接续的主轴】
+以下是你们最近的剧情演绎记录（附带精确时间戳）。请以【${_char?.name || '角色'}】的身份（角色方），感受前文的叙事节奏与人称视角，从最后一行之后接续往下写。绝对不要重复或改写前文任何已有内容：
 ${scriptHistory || '（电影开场，暂无前文）'}
+▶ 剧本前文到此为止。请你以【${_char?.name || '角色'}】的身份，从此处开始续写新内容。
 ---
 
 # ⚠️ 字数与质量铁律 (LENGTH & QUALITY RULE) - 【最高优先级】
@@ -19592,7 +19697,7 @@ ${scriptHistory || '（电影开场，暂无前文）'}
                 const initPrompt = _cfgOpeningMsg ? _cfgOpeningMsg : '*电影开场，镜头缓缓推近*';
                 apiMessages.push({ role: 'user', content: `[导演开机指令]：电影正式开场。请顺着这个基调往下写：\n${initPrompt}` });
             } else {
-                apiMessages.push({ role: 'user', content: '[导演推进指令]：所有剧本前文已就绪。请紧接着【当前剧本前文】的最后一行往下续写，自然推动剧情。绝对不要重复前文已经发生过的情节！' });
+                apiMessages.push({ role: 'user', content: `[导演推进指令]：剧本前文已就绪。请以【${_char?.name || '角色'}】的身份（角色方），紧接着剧本前文的最后一行往下续写，推动剧情向前发展。⚠️ 严格禁止：① 重复前文任何已有的对话或情节；② 以用户（${_storyPersona?.name || '我'}）的视角或口吻来写；③ 在回复中以任何形式重现前文的句子。请直接开始新的剧情描写。` });
             }
 
             console.groupCollapsed(`[StoryChat] 🎬 发送给导演的剧本指令`);
@@ -19601,7 +19706,7 @@ ${scriptHistory || '（电影开场，暂无前文）'}
             console.groupEnd();
 
            const response = await ApiHelper.chatCompletion(activeApi,[
-                { role: 'user', content: systemPrompt },
+                { role: 'system', content: systemPrompt },
                 ...apiMessages
             ]);
 
@@ -19695,7 +19800,7 @@ ${scriptHistory || '（电影开场，暂无前文）'}
                 const initPrompt = _cfgOpeningMsg ? _cfgOpeningMsg : '*电影开场，镜头缓缓推近*';
                 apiMessages.push({ role: 'user', content: `[导演开机指令]：电影正式开场。请顺着这个基调往下写：\n${initPrompt}` });
             } else {
-                apiMessages.push({ role: 'user', content: '[导演重写指令]：我觉得上一条写得不够好。请基于【当前剧本前文】，重新写一个完全不同的剧情走向。绝对不要重复前文的内容！' });
+                apiMessages.push({ role: 'user', content: `[导演重写指令]：上一版写得不够精彩，需要一个全新的版本。请以【${_char?.name || '角色'}】的身份（角色方），针对剧本前文中最后一条用户行动，写一段完全不同的全新剧情回应。\n⚠️ 严格禁止：① 以用户（${_storyPersona?.name || '我'}）的视角或口吻来写，你是角色方而非用户方；② 重复、改写或延续前文任何已有的句子；③ 在新版本中出现前文已发生过的情节。请直接呈现全新的剧情。` });
             }
             
             console.groupCollapsed(`[StoryChat] 🎬 发送给导演的剧本指令`);
@@ -19704,7 +19809,7 @@ ${scriptHistory || '（电影开场，暂无前文）'}
             console.groupEnd();
 
            const response = await ApiHelper.chatCompletion(activeApi,[
-                { role: 'user', content: systemPrompt },
+                { role: 'system', content: systemPrompt },
                 ...apiMessages
             ]);
 
