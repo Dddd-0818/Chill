@@ -11,6 +11,11 @@
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#fafafa">
 <script src="https://unpkg.com/@phosphor-icons/web"></script>
+<script src="https://unpkg.com/vconsole@latest/dist/vconsole.min.js"></script>
+<script>
+  // 初始化 VConsole
+  var vConsole = new VConsole();
+</script>
 <script src="https://unpkg.com/fflate@0.8.2/umd/index.js"></script>
 <script src="https://unpkg.com/mammoth@1.6.0/mammoth.browser.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -12311,8 +12316,8 @@ const ConvModule = (() => {
       setTimeout(() => ConvModule._scrollToBottom(true), 100);
       setTimeout(() => ConvModule._scrollToBottom(true), 300);
     };
-    input.addEventListener('focus', forceScrollToBottom);
-    input.addEventListener('click', forceScrollToBottom);
+   input.addEventListener('focus', () => { forceScrollToBottom(); if(NotificationModule.requestPermission) NotificationModule.requestPermission(); });
+    input.addEventListener('click', () => { forceScrollToBottom(); if(NotificationModule.requestPermission) NotificationModule.requestPermission(); });
 
   // 输入框自适应 & 表情包【智能模糊联想】
     input.addEventListener('input', function() {
@@ -14291,10 +14296,12 @@ function _renderImgPreviewBar() {
       console.log('%c【Messages】', 'color:#2d6a4a;font-weight:bold;', JSON.parse(JSON.stringify(apiMessages)));
       console.groupEnd();
 
+    if (typeof KeepAliveModule !== 'undefined') KeepAliveModule.start(); // 开启保活
      const response = await ApiHelper.chatCompletion(activeApi,[
         { role: 'user', content: systemPrompt },
         ...apiMessages // <<< 现在这里只发送那条虚拟指令，不再重复
       ]);
+     if (typeof KeepAliveModule !== 'undefined') KeepAliveModule.stop(); // 关闭保活
 
       typingRow.remove();
 
@@ -14683,13 +14690,15 @@ function _renderImgPreviewBar() {
       console.log("%c【History Messages 历史消息】", "color:#2d6a4a; font-weight:bold;", JSON.parse(JSON.stringify(apiMessages)));
       console.groupEnd();
 
-     // ===========================
+    // ===========================
       // ⚠️ 网络请求挂起！此时你可以切去任何地方并发起请求！
       // ===========================
+      if (typeof KeepAliveModule !== 'undefined') KeepAliveModule.start(); // 开启保活
       const response = await ApiHelper.chatCompletion(activeApi,[
         { role: 'user', content: systemPrompt },
         ...apiMessages
       ]);
+      if (typeof KeepAliveModule !== 'undefined') KeepAliveModule.stop(); // 关闭保活
       // ===========================
       // ⚠️ 请求回来了！
       // ===========================
