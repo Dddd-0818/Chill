@@ -10173,19 +10173,26 @@ const NotificationModule = (() => {
 
     // 2. 核心：如果网页在后台，触发真实的手机系统通知横幅！
     if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
-       try {
-          navigator.serviceWorker.ready.then(reg => {
-             reg.showNotification(data.name || 'ChillOS', {
-                body: cleanMsg,
-                icon: 'apple-touch-icon.png',
-                vibrate:[200, 100, 200]
-             });
-          }).catch(() => {
-             new Notification(data.name || 'ChillOS', { body: cleanMsg, icon: 'apple-touch-icon.png' });
+      if (navigator.serviceWorker.controller) {
+        // 通过 postMessage 让 SW 自身发通知，兼容 iOS 后台限制
+        navigator.serviceWorker.controller.postMessage({
+          type: 'SHOW_NOTIFICATION',
+          title: data.name || 'Chill OS',
+          body: cleanMsg,
+          icon: 'apple-touch-icon.png'
+        });
+      } else {
+        // 降级：SW 未 claim，直接用 reg
+        navigator.serviceWorker.ready.then(reg => {
+          reg.showNotification(data.name || 'Chill OS', {
+            body: cleanMsg,
+            icon: 'apple-touch-icon.png',
+            vibrate: [200, 100, 200],
+            tag: 'chat-message',
+            renotify: true
           });
-       } catch(e) {
-          new Notification(data.name || 'ChillOS', { body: cleanMsg, icon: 'apple-touch-icon.png' });
-       }
+        });
+      }
     }
   }
 

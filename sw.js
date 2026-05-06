@@ -57,3 +57,17 @@ self.addEventListener('notificationclick', (event) => {
     })
   );
 });
+// 监听页面发来的本地通知指令（前台保活时的后台提醒）
+self.addEventListener('message', (event) => {
+  if (!event.data || event.data.type !== 'SHOW_NOTIFICATION') return;
+  const { title, body, icon } = event.data;
+  self.registration.showNotification(title || 'Chill OS', {
+    body: body || '发来了一条新消息',
+    icon: icon || 'apple-touch-icon.png',
+    badge: 'apple-touch-icon.png',
+    vibrate: [200, 100, 200],
+    tag: 'chat-message',
+    renotify: true,
+    data: { url: '/' }
+  });
+});
