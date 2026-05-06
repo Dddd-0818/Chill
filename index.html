@@ -6916,22 +6916,36 @@ const Toast = (() => {
 // ============================================================
 // KeepAliveModule — 无声音频后台保活机制 (防杀进程)
 // ============================================================
+
 const KeepAliveModule = (() => {
   let audio = null;
-  function start() {
+  let _wakeLock = null;
+
+  async function start() {
+    // ① WakeLock — 优先，防止 Android 后台 CPU 节流导致 fetch 中断
+    if ('wakeLock' in navigator) {
+      try {
+        if (!_wakeLock || _wakeLock.released) {
+          _wakeLock = await navigator.wakeLock.request('screen');
+        }
+      } catch(e) {} // 权限拒绝时静默降级
+    }
+    // ② 静音音频 — 后备
     if (!audio) {
-      // 极小体积的纯静音 WAV 文件的 Base64，骗过系统
       audio = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA');
       audio.loop = true;
     }
     audio.play().catch(() => {});
   }
+
   function stop() {
-    if (audio) {
-      audio.pause();
-      audio.currentTime = 0;
+    if (audio) { audio.pause(); audio.currentTime = 0; }
+    if (_wakeLock && !_wakeLock.released) {
+      _wakeLock.release().catch(() => {});
+      _wakeLock = null;
     }
   }
+
   return { start, stop };
 })();
 
@@ -7084,17 +7098,24 @@ const ApiHelper = (() => {
     return models;
   }
 
-  async function chatCompletion(apiProfile, messages) {
-    const url = buildUrl(apiProfile.url, 'chat');
+ async function chatCompletion(apiProfile, messages) {
+  const url = buildUrl(apiProfile.url, 'chat');
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 90000);
+  try {
     const res = await fetch(url, {
-      method:  'POST',
+      method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiProfile.key}` },
       body: JSON.stringify({ model: apiProfile.model, messages, temperature: parseFloat(apiProfile.temp) }),
+      signal: controller.signal,
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     return data.choices?.[0]?.message?.content ?? '';
+  } finally {
+    clearTimeout(timeout);
   }
+}
 
   return { buildUrl, fetchModels, chatCompletion };
 })();
@@ -10094,11 +10115,22 @@ const NotificationModule = (() => {
   let _currentData = null;
 
   // 1. 请求手机系统通知权限
-  function requestPermission() {
-    if ('Notification' in window && Notification.permission === 'default') {
-      Notification.requestPermission();
-    }
+ function requestPermission() {
+  if (!('Notification' in window)) return;
+  if (Notification.permission === 'default') {
+    Notification.requestPermission().then(result => {
+      if (result === 'granted') {
+        // 授权成功 → 立即弹一条 in-app 测试横幅
+        show({
+          avatar: 'apple-touch-icon.png',
+          name: 'ChillOS',
+          msg: '通知已开启，角色消息将实时推送 ✨',
+          type: 'system'
+        });
+      }
+    });
   }
+}
 
   function show(data) {
     if (data.type === 'feed') {
@@ -14296,7 +14328,7 @@ function _renderImgPreviewBar() {
       console.log('%c【Messages】', 'color:#2d6a4a;font-weight:bold;', JSON.parse(JSON.stringify(apiMessages)));
       console.groupEnd();
 
-    if (typeof KeepAliveModule !== 'undefined') KeepAliveModule.start(); // 开启保活
+if (typeof KeepAliveModule !== 'undefined') await KeepAliveModule.start();// 开启保活
      const response = await ApiHelper.chatCompletion(activeApi,[
         { role: 'user', content: systemPrompt },
         ...apiMessages // <<< 现在这里只发送那条虚拟指令，不再重复
