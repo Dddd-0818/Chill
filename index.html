@@ -10174,8 +10174,6 @@ const NotificationModule = (() => {
     // 2. 核心：如果网页在后台，触发真实的手机系统通知横幅！
     if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
       if (navigator.serviceWorker.controller) {
-        // 通过 postMessage 让 SW 自身发通知，兼容 iOS 后台限制
-        // tag 用时间戳，保证每条消息独立堆叠不互相覆盖
         navigator.serviceWorker.controller.postMessage({
           type: 'SHOW_NOTIFICATION',
           title: data.name || 'Chill OS',
@@ -10184,7 +10182,6 @@ const NotificationModule = (() => {
           tag: 'msg-' + Date.now()
         });
       } else {
-        // 降级：SW 未 claim，直接用 reg
         navigator.serviceWorker.ready.then(reg => {
           reg.showNotification(data.name || 'Chill OS', {
             body: cleanMsg,
@@ -14966,14 +14963,13 @@ function _renderImgPreviewBar() {
             const charNeg = await _getNovelNegative();
             NovelModule.attachImagesForChar(sessionCharId, novelPrompts, charPos, charNeg).catch(err => console.error('[ConvModule] Novel attach', err));
             
-            if (isFirstBubble) {
+            {
               const convScreen = document.getElementById('conv-screen');
               const isConvActive = convScreen.classList.contains('active');
               const isQuickReply = convScreen.classList.contains('qr-active');
-              if ((!isConvActive && !isQuickReply) || _charId !== sessionCharId) {
+              if (document.hidden || (!isConvActive && !isQuickReply) || _charId !== sessionCharId) {
                 NotificationModule.show({ charId: sessionCharId, personaId: sessionPersonaId, name: sessionCharName, msg: '[发来了一张图片]', avatar: sessionCharImgUrl });
               }
-              isFirstBubble = false;
             }
             if (rawBubbles.length > 1) await _sleep(400);
             continue;
@@ -15014,7 +15010,7 @@ function _renderImgPreviewBar() {
           NovelModule.attachImagesForChar(sessionCharId, novelPrompts, charPos, charNeg, { mergeIntoMsgId: msg.id }).catch(err => console.error('[ConvModule] Novel attach', err));
         }
         
-        if (isFirstBubble) {
+        {
           const convScreen = document.getElementById('conv-screen');
           const isConvActive = convScreen.classList.contains('active');
           const isQuickReply = convScreen.classList.contains('qr-active');
@@ -15028,7 +15024,6 @@ function _renderImgPreviewBar() {
               avatar: sessionCharImgUrl
             });
           }
-          isFirstBubble = false;
         }
 
         if (isRecall) {
@@ -18237,8 +18232,8 @@ ${historyText || '（无）'}
            }
         }
 
-        if (isFirstBubble) {
-           if (!isChatActive) {
+        {
+           if (document.hidden || !isChatActive) {
              let charAvatar = await Assets.getUrl(`char-avatar-${charId}`).catch(()=>'');
              NotificationModule.show({
                 charId: charId, 
@@ -18248,7 +18243,6 @@ ${historyText || '（无）'}
                 avatar: charAvatar 
              });
            }
-           isFirstBubble = false;
         }
 
         if (novelPrompts.length > 0 && novelImgOn) {
