@@ -6914,40 +6914,58 @@ const Toast = (() => {
 })();
 
 // ============================================================
-// KeepAliveModule — 无声音频后台保活机制 (防杀进程)
+// KeepAliveModule — AudioContext 静音振荡器后台保活机制 (防杀进程)
+// 比空白 WAV 更可靠：持续产生音频帧，iOS 会认定为真实 audio session
 // ============================================================
 const KeepAliveModule = (() => {
-  let audio = null;
+  let ctx = null;
+  let source = null;
+  let gainNode = null;
   let unlocked = false;
+  let running = false;
 
   function unlock() {
     if (unlocked) return;
-    // 极小体积的纯静音 WAV 文件的 Base64
-    audio = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA');
-    audio.loop = true;
-    // 🌟 核心：必须在用户初次点击屏幕的瞬间，立刻同步播放并暂停，获取 iOS 的后台播放豁免权！
-    audio.play().then(() => {
-      audio.pause();
+    try {
+      ctx = new (window.AudioContext || window.webkitAudioContext)();
+      gainNode = ctx.createGain();
+      gainNode.gain.value = 0.001; // 极小但非零，防止 iOS 引擎优化掉整个图
+      gainNode.connect(ctx.destination);
+      // 用一帧静音 buffer resume 解锁 AudioContext（iOS 要求用户手势内调用）
+      const buf = ctx.createBuffer(1, 1, 22050);
+      const tmp = ctx.createBufferSource();
+      tmp.buffer = buf;
+      tmp.connect(ctx.destination);
+      tmp.start(0);
       unlocked = true;
-    }).catch(() => {});
+    } catch(e) {}
   }
 
   function start() {
-    if (audio && unlocked) {
-      audio.play().catch(() => {});
-    } else if (!unlocked) {
-      unlock();
-      if (audio) audio.play().catch(() => {});
-    }
+    if (!unlocked) unlock();
+    if (!ctx || running) return;
+    try {
+      if (ctx.state === 'suspended') ctx.resume();
+      source = ctx.createOscillator();
+      source.type = 'sine';
+      source.frequency.value = 1; // 1Hz，人耳完全听不到，但持续产生音频帧
+      source.connect(gainNode);
+      source.start();
+      running = true;
+    } catch(e) {}
   }
 
   function stop() {
-    if (audio) {
-      audio.pause();
-    }
+    if (!running) return;
+    try {
+      source.stop();
+      source.disconnect();
+      source = null;
+      running = false;
+    } catch(e) {}
   }
 
-  // 监听全局第一次触摸或点击，立刻解锁音频引擎
+  // 监听全局第一次触摸或点击，立刻解锁 AudioContext
   if (typeof window !== 'undefined') {
     window.addEventListener('touchstart', unlock, { once: true });
     window.addEventListener('click', unlock, { once: true });
