@@ -79,8 +79,70 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
   opacity:0; visibility:hidden;
 }
 .screen.active{transform:translateX(0); opacity:1; visibility:visible;}
+
 /* home 特殊：初始就显示，不从右边进入 */
 #home-screen{transform:translateX(0); opacity:1; visibility:visible; z-index:1;}
+
+/* ============================================================
+   Auth / Claim 页面专属样式
+   ============================================================ */
+.auth-screen {
+  background-color: #0a0a0a !important;
+  color: #F4F3EE !important;
+  z-index: 1000;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+}
+.auth-screen::before {
+  content: ""; position: absolute; inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.15'/%3E%3C/svg%3E");
+  pointer-events: none; z-index: 0;
+}
+.auth-wrap { width: 100%; max-width: 440px; padding: 40px 24px; z-index: 1; position: relative; display: flex; flex-direction: column; }
+.auth-wrap.hidden { display: none; }
+.auth-header { margin-bottom: 48px; }
+.auth-title { font-family: 'Playfair Display', serif; font-size: 3.5rem; line-height: 0.95; font-weight: 400; letter-spacing: -0.02em; margin-bottom: 16px; color:#F4F3EE;}
+.auth-title .italic { font-style: italic; padding-left: 10%; display: block; }
+.auth-subtitle { font-family: 'DM Sans', sans-serif; font-size: 14px; line-height: 1.5; color: rgba(244, 243, 238, 0.8); padding-left: 2px; max-width: 90%; margin:0;}
+.auth-subtitle strong { color: #F4F3EE; font-weight: 500; font-family: 'Playfair Display', serif; font-style: italic; font-size: 16px; }
+
+.auth-form-group { margin-bottom: 32px; position: relative; }
+.auth-form-group label { display: flex; align-items: baseline; font-size: 13px; font-weight: 500; margin-bottom: 8px; color: #F4F3EE; letter-spacing: 0.05em; font-family: 'Space Mono', monospace; text-transform: uppercase;}
+.auth-form-group label .en-deco { font-family: 'Space Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.2em; color: rgba(244, 243, 238, 0.5); margin-left: 8px; font-weight: 400; }
+.auth-form-group input { width: 100%; padding: 12px 0; border: none; border-bottom: 1px solid rgba(244, 243, 238, 0.3); background: transparent; color: #F4F3EE; font-size: 20px; border-radius: 0; transition: all 0.3s; font-family: 'Playfair Display', serif; box-sizing: border-box; }
+.auth-form-group input:focus { outline: none; border-bottom-color: #F4F3EE; }
+.auth-form-group input::placeholder { color: rgba(244, 243, 238, 0.2); font-family: 'DM Sans', sans-serif; font-size: 16px; }
+
+.auth-btn { width: 100%; padding: 16px; border: 1px solid #F4F3EE; background: #F4F3EE; color: #0a0a0a; font-size: 12px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.15em; cursor: pointer; transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94); margin-top: 16px; font-family:'Space Mono', monospace; box-sizing: border-box; }
+.auth-btn:hover:not(:disabled) { background: transparent; color: #F4F3EE; }
+.auth-btn:disabled { opacity: 0.4; cursor: not-allowed; background: transparent; color: #F4F3EE; }
+
+.auth-switch { text-align: center; margin-top: 40px; font-size: 13px; color: rgba(244, 243, 238, 0.5); letter-spacing: 0.05em; font-family:'DM Sans', sans-serif;}
+.auth-switch a { color: #F4F3EE; text-decoration: none; border-bottom: 1px solid transparent; transition: all 0.3s; padding-bottom: 2px; cursor: pointer; }
+.auth-switch a:hover { border-bottom-color: #F4F3EE; }
+.auth-switch .divider { margin: 0 12px; color: rgba(244, 243, 238, 0.2); }
+
+.auth-msg { font-family: 'Space Mono', monospace; font-size: 11px; padding: 12px; margin-bottom: 24px; display: none; letter-spacing: 0.05em; text-align: center; text-transform: uppercase; }
+.auth-msg.error { display: block; color: #a32a2a; border: 1px solid #a32a2a; }
+.auth-msg.success { display: block; color: #F4F3EE; border: 1px solid #F4F3EE; }
+
+/* Claim Specific styles */
+.claim-result-box { display: none; margin-top: 48px; background: #F4F3EE; color: #0a0a0a; padding: 24px; border-radius: 8px; position: relative; text-align: center; box-shadow: 0 20px 40px rgba(0,0,0,0.5), inset 0 0 20px rgba(0,0,0,0.05); transform-origin: center; transform: perspective(1000px) rotateY(90deg); opacity: 0; }
+.claim-result-box.show { display: block; animation: authFlipCard 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+@keyframes authFlipCard { 100% { transform: perspective(1000px) rotateY(0deg); opacity: 1; } }
+.claim-result-box::before { content: ''; position: absolute; top: 10px; bottom: 10px; left: 10px; right: 10px; border: 1.5px solid #0a0a0a; border-radius: 4px; pointer-events: none; }
+.claim-tarot-header { display: flex; justify-content: space-between; align-items: center; padding: 0 16px; font-family: 'Playfair Display', serif; margin-bottom: 32px; margin-top: 8px; }
+.claim-tarot-header .star { font-size: 14px; }
+.claim-tarot-header .num { font-size: 16px; letter-spacing: 0.1em; }
+.claim-result-box .code { font-family: 'Space Mono', monospace; font-size: 28px; font-weight: 700; letter-spacing: 0.15em; margin: 20px 0; position: relative; z-index: 2; }
+.claim-tarot-footer { font-family: 'Playfair Display', serif; font-style: italic; font-size: 18px; margin-top: 32px; margin-bottom: 8px; }
+.claim-copy-btn { position: absolute; bottom: -16px; left: 50%; transform: translateX(-50%); background: #0a0a0a; color: #F4F3EE; border: 1px solid #F4F3EE; padding: 6px 16px; font-family: 'Space Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; cursor: pointer; z-index: 10; transition: all 0.2s; }
+.claim-copy-btn:hover { background: #F4F3EE; color: #0a0a0a; }
+
+.no-transition { transition: none !important; }
+
 /* settings 从下往上弹出 */
 #settings-screen{transform:translateY(100%); z-index:200; background:var(--s-bg); font-family:'Noto Sans SC',sans-serif;}
 #settings-screen.active{transform:translateY(0); opacity:1; visibility:visible;}
@@ -3452,6 +3514,90 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
 <body>
 <div class="device">
 
+<!-- ==================== AUTH SCREENS ==================== -->
+  <div id="auth-screen" class="screen auth-screen">
+    <!-- Login Wrap -->
+    <div id="page-login" class="auth-wrap">
+      <header class="auth-header">
+        <h1 class="auth-title">The<br><span class="italic">Gate</span></h1>
+        <p class="auth-subtitle">欢迎回到 <strong>Chill Mono OS</strong>。</p>
+      </header>
+      <div>
+        <div id="login-msg" class="auth-msg"></div>
+        <div class="auth-form-group">
+          <label>邮箱 <span class="en-deco">/ EMAIL</span></label>
+          <input type="email" id="login-email" placeholder="you@example.com">
+        </div>
+        <div class="auth-form-group">
+          <label>密码 <span class="en-deco">/ PASSWORD</span></label>
+          <input type="password" id="login-password" placeholder="请输入密码">
+        </div>
+        <button class="auth-btn" id="login-btn">登录</button>
+        <div class="auth-switch">
+          没有账号？<a id="to-register">注册</a>
+          <span class="divider">|</span>
+          <a id="to-claim">领取邀请码</a>
+        </div>
+      </div>
+    </div>
+    <!-- Register Wrap -->
+    <div id="page-register" class="auth-wrap hidden">
+      <header class="auth-header">
+        <h1 class="auth-title">New<br><span class="italic">Soul</span></h1>
+        <p class="auth-subtitle">加入 <strong>Chill Mono OS</strong>，需要邀请码。</p>
+      </header>
+      <div>
+        <div id="register-msg" class="auth-msg"></div>
+        <div class="auth-form-group">
+          <label>邀请码 <span class="en-deco">/ INVITE CODE</span></label>
+          <input type="text" id="register-code" placeholder="INVITE-XXX">
+        </div>
+        <div class="auth-form-group">
+          <label>邮箱 <span class="en-deco">/ EMAIL</span></label>
+          <input type="email" id="register-email" placeholder="you@example.com">
+        </div>
+        <div class="auth-form-group">
+          <label>密码 <span class="en-deco">/ PASSWORD</span></label>
+          <input type="password" id="register-password" placeholder="至少 6 位">
+        </div>
+        <button class="auth-btn" id="register-btn">注册</button>
+        <div class="auth-switch">
+          已有账号？<a id="to-login">去登录</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="claim-screen" class="screen auth-screen">
+    <div class="auth-wrap">
+      <header class="auth-header">
+        <h1 class="auth-title">You're<br><span class="italic">Invited!</span></h1>
+        <p class="auth-subtitle">to join <strong>Chill Mono OS</strong>, despite all of the chaos.</p>
+      </header>
+      <div>
+        <div id="claim-msg" class="auth-msg"></div>
+        <div class="auth-form-group">
+          <label>Your QQ Identifier</label>
+          <input type="text" id="qq-input" placeholder="请输入 QQ 号" inputmode="numeric">
+        </div>
+        <button class="auth-btn" id="claim-btn">Reveal Your Fate</button>
+        <div class="claim-result-box" id="claim-result-box">
+          <div class="claim-tarot-header">
+            <span class="star">★</span>
+            <span class="num">I</span>
+            <span class="star">★</span>
+          </div>
+          <div class="code" id="claim-result-code"></div>
+          <div class="claim-tarot-footer">L'Invitation</div>
+          <button class="claim-copy-btn" id="claim-copy-btn">Copy</button>
+        </div>
+        <div class="auth-switch" style="text-align: right; margin-top: 64px;">
+          <a id="claim-to-login" style="font-family: 'Playfair Display', 'DM Sans', sans-serif; font-style: italic; font-size: 14px;">返回登录 / Back to login ⤣</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Hidden file inputs -->
   <input type="file" id="file-avatar"         accept="image/*" style="display:none">
   <input type="file" id="file-polaroid-front" accept="image/*" style="display:none">
@@ -6168,19 +6314,205 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
 'use strict';
 
 // ============================================================
-// Supabase 登录守卫 — 没有 session 就踢回登录页
-// ⚠️ 把下面两行换成你自己的 Supabase 项目信息
+// Supabase 登录守卫 & 鉴权模块 (完全内联、PWA友善)
 // ============================================================
 const SUPABASE_URL      = 'https://kjtvtyfibkklwsievlgt.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtqdHZ0eWZpYmtrbHdzaWV2bGd0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgxNzE4MjgsImV4cCI6MjA5Mzc0NzgyOH0.jXFV79-PHPbu14C9LwmrNlL4cIw0HLnTc67svJC3ovA';
 
 const _sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-(async () => {
-  const { data: { session } } = await _sb.auth.getSession();
-  if (!session) {
-    window.location.replace('login.html');
+
+const AuthModule = (() => {
+  function showMsg(id, text, type) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = text;
+    el.className = 'auth-msg ' + type;
   }
+  function clearMsg(id) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.className = 'auth-msg';
+    el.textContent = '';
+  }
+
+  function bindEvents() {
+    const pageLogin    = document.getElementById('page-login');
+    const pageRegister = document.getElementById('page-register');
+
+    document.getElementById('to-register')?.addEventListener('click', () => {
+      pageLogin.classList.add('hidden');
+      pageRegister.classList.remove('hidden');
+    });
+    document.getElementById('to-login')?.addEventListener('click', () => {
+      pageRegister.classList.add('hidden');
+      pageLogin.classList.remove('hidden');
+    });
+    document.getElementById('to-claim')?.addEventListener('click', () => {
+      Router.go('claim');
+    });
+    document.getElementById('claim-to-login')?.addEventListener('click', () => {
+      Router.go('auth');
+    });
+
+    // --- Login ---
+    document.getElementById('login-btn')?.addEventListener('click', async () => {
+      clearMsg('login-msg');
+      const email    = document.getElementById('login-email').value.trim();
+      const password = document.getElementById('login-password').value;
+      const btn      = document.getElementById('login-btn');
+
+      if (!email || !password) return showMsg('login-msg', '请填写邮箱和密码', 'error');
+
+      btn.disabled = true;
+      btn.textContent = '登录中...';
+      try {
+        const { error } = await _sb.auth.signInWithPassword({ email, password });
+        if (error) {
+          showMsg('login-msg', '邮箱或密码错误', 'error');
+        } else {
+         Router.back(); // 撤下登录面板，露出下方主页
+          initApp();
+        }
+      } catch (err) {
+        showMsg('login-msg', '网络错误，请重试', 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '登录';
+      }
+    });
+
+    // --- Register ---
+    document.getElementById('register-btn')?.addEventListener('click', async () => {
+      clearMsg('register-msg');
+      const code     = document.getElementById('register-code').value.trim();
+      const email    = document.getElementById('register-email').value.trim();
+      const password = document.getElementById('register-password').value;
+      const btn      = document.getElementById('register-btn');
+
+      if (!code || !email || !password) return showMsg('register-msg', '请填写所有字段', 'error');
+      if (password.length < 6) return showMsg('register-msg', '密码至少6位', 'error');
+
+      btn.disabled = true;
+      btn.textContent = '注册中...';
+      try {
+        const { data: codeData, error: codeError } = await _sb
+          .from('invitation_codes')
+          .select('id, current_uses, max_uses')
+          .eq('code', code)
+          .single();
+
+        if (codeError || !codeData) {
+          btn.disabled = false;
+          btn.textContent = '注册';
+          return showMsg('register-msg', '邀请码无效', 'error');
+        }
+        if (codeData.current_uses >= codeData.max_uses) {
+          btn.disabled = false;
+          btn.textContent = '注册';
+          return showMsg('register-msg', '该邀请码已用完', 'error');
+        }
+
+        const { error: authError } = await _sb.auth.signUp({ email, password });
+        if (authError) {
+          btn.disabled = false;
+          btn.textContent = '注册';
+          if (authError.message.includes('already registered')) return showMsg('register-msg', '该邮箱已被注册', 'error');
+          return showMsg('register-msg', '注册失败：' + authError.message, 'error');
+        }
+
+        const { data: redeemed } = await _sb.rpc('redeem_invite_code', { code_input: code });
+        if (!redeemed) {
+          btn.disabled = false;
+          btn.textContent = '注册';
+          return showMsg('register-msg', '邀请码刚好用完了，请联系管理员', 'error');
+        }
+
+        showMsg('register-msg', '注册成功，正在进入...', 'success');
+       setTimeout(() => {
+          Router.back(); // 撤下注册面板，露出下方主页
+          initApp();
+        }, 800);
+      } catch (err) {
+        showMsg('register-msg', '网络错误，请重试', 'error');
+        btn.disabled = false;
+        btn.textContent = '注册';
+      }
+    });
+
+    // --- Claim ---
+    document.getElementById('claim-btn')?.addEventListener('click', async () => {
+      clearMsg('claim-msg');
+      const qq  = document.getElementById('qq-input').value.trim();
+      const btn = document.getElementById('claim-btn');
+
+      if (!qq) return showMsg('claim-msg', '请输入 QQ 号', 'error');
+      if (!/^\d{5,12}$/.test(qq)) return showMsg('claim-msg', 'QQ 号格式不对', 'error');
+
+      btn.disabled = true;
+      btn.textContent = 'Drawing...';
+
+      try {
+        const { data: code, error } = await _sb.rpc('claim_code_for_qq', { qq_input: qq });
+
+        if (error) {
+          btn.disabled = false;
+          btn.textContent = 'Reveal Your Fate';
+          return showMsg('claim-msg', '领取失败，请稍后重试', 'error');
+        }
+
+        if (!code) {
+          btn.disabled = false;
+          btn.textContent = 'Reveal Your Fate';
+          return showMsg('claim-msg', '邀请码已发完，请联系管理员', 'error');
+        }
+
+        document.getElementById('claim-result-code').textContent = code;
+        document.getElementById('claim-result-box').classList.add('show');
+        btn.textContent = 'Destiny Revealed';
+
+      } catch (err) {
+        showMsg('claim-msg', '网络错误，请重试', 'error');
+        btn.disabled = false;
+        btn.textContent = 'Reveal Your Fate';
+      }
+    });
+
+    document.getElementById('claim-copy-btn')?.addEventListener('click', () => {
+      const code = document.getElementById('claim-result-code').textContent;
+      navigator.clipboard.writeText(code).then(() => {
+        const btn = document.getElementById('claim-copy-btn');
+        btn.textContent = 'COPIED ✓';
+        setTimeout(() => btn.textContent = 'COPY', 1500);
+      });
+    });
+  }
+
+  return { bindEvents };
 })();
+
+document.addEventListener('DOMContentLoaded', async () => {
+  AuthModule.bindEvents();
+
+  // 避免报错中断，包裹一下异常处理
+  let session = null;
+  try {
+    const res = await _sb.auth.getSession();
+    session = res.data.session;
+  } catch(e) {
+    console.warn("Supabase 鉴权失败", e);
+  }
+
+  if (!session) {
+    // 未登录：瞬间盖上 Auth 面板（消除滑入动画，防闪烁）
+    const authScreen = document.getElementById('auth-screen');
+    if (authScreen) authScreen.classList.add('no-transition');
+    Router.go('auth');
+    setTimeout(() => { if (authScreen) authScreen.classList.remove('no-transition'); }, 50);
+  } else {
+    // 已登录：Auth 面板自动在右侧隐藏不出来，直接初始化数据
+    initApp();
+  }
+});
 
 // ============================================================
 // 注册 Service Worker (离线信使)
@@ -6992,17 +7324,16 @@ const KeepAliveModule = (() => {
 
 // ============================================================
 // Router — 统一管理页面跳转
-// 支持层级：home → top-level screen → sub-page
-// 顶层 screen 注册表：{ id, subPageStack }
 // ============================================================
 const Router = (() => {
-  // 顶层 screen id 列表
-const TOP_SCREENS =['settings-screen', 'character-screen', 'chat-screen', 'conv-screen', 'worldbook-screen', 'story-roster-screen', 'story-chat-screen', 'forum-screen','lifestyle-screen', 'codex-screen'];
-  // 改为数组栈，支持多级子页导航
+  // 恢复原状，不把 home-screen 放在这里，让它永远沉在最底部
+  const TOP_SCREENS =['settings-screen', 'character-screen', 'chat-screen', 'conv-screen', 'worldbook-screen', 'story-roster-screen', 'story-chat-screen', 'forum-screen','lifestyle-screen', 'codex-screen', 'auth-screen', 'claim-screen'];
+  
   const _subStack = {};
-function go(target, watermark) {
-
-    if (target === 'settings' || target === 'character' || target === 'chat' || target === 'conv' || target === 'worldbook' || target === 'story-roster' || target === 'story-chat' || target === 'forum' || target === 'lifestyle' || target === 'codex') {
+  
+  function go(target, watermark) {
+    if (target === 'settings' || target === 'character' || target === 'chat' || target === 'conv' || target === 'worldbook' || target === 'story-roster' || target === 'story-chat' || target === 'forum' || target === 'lifestyle' || target === 'codex' || target === 'auth' || target === 'claim') {
+      
       const map = { 
         settings:  'settings-screen', 
         character: 'character-screen', 
@@ -7013,13 +7344,18 @@ function go(target, watermark) {
         'story-chat': 'story-chat-screen',
         forum:     'forum-screen',
         lifestyle: 'lifestyle-screen',
-        codex: 'codex-screen' ,
-      
+        codex:     'codex-screen',
+        auth:      'auth-screen',
+        claim:     'claim-screen'
       };
       
       const screenId = map[target];
-      TOP_SCREENS.forEach(id => { if (id !== screenId) document.getElementById(id)?.classList.remove('active'); });
-      document.getElementById(screenId).classList.add('active');
+      if (!screenId) return;
+
+      TOP_SCREENS.forEach(id => { 
+        if (id !== screenId) document.getElementById(id)?.classList.remove('active'); 
+      });
+      document.getElementById(screenId)?.classList.add('active');
       _onEnterScreen(target);
       return;
     }
@@ -7028,9 +7364,8 @@ function go(target, watermark) {
     const el = document.getElementById(target);
     if (!el) return;
     const parentScreen = 'settings-screen';
-    if (!_subStack[parentScreen]) _subStack[parentScreen] = [];
+    if (!_subStack[parentScreen]) _subStack[parentScreen] =[];
     const stack = _subStack[parentScreen];
-    // 隐藏当前栈顶页
     if (stack.length) document.getElementById(stack[stack.length - 1])?.classList.remove('active');
     el.classList.add('active');
     stack.push(target);
@@ -7045,33 +7380,29 @@ function go(target, watermark) {
   }
 
   function back() {
-    // 先检查 settings sub-page
     const stack = _subStack['settings-screen'];
     if (stack?.length && document.getElementById('settings-screen')?.classList.contains('active')) {
       const current = stack.pop();
       document.getElementById(current)?.classList.remove('active');
-      // 恢复上一级（如果有），否则回到 settings 主菜单
       const bg = document.getElementById('bg-letter');
       if (stack.length) {
         document.getElementById(stack[stack.length - 1])?.classList.add('active');
-        // 不需要改水印，保持当前
       } else {
         if (bg) { bg.style.opacity = '0'; setTimeout(() => { bg.innerText = 'S'; bg.style.opacity = '1'; }, 250); }
       }
       return;
     }
-    // 关闭所有顶层 screen，回到 home
+    // 关闭所有顶层面板，露出底部的 home-screen
     TOP_SCREENS.forEach(id => document.getElementById(id)?.classList.remove('active'));
   }
 
- function _onEnterScreen(target) {
+  function _onEnterScreen(target) {
     if (target === 'character') CharacterModule.renderRoster();
     if (target === 'chat')      ChatModule.onEnter();
     if (target === 'worldbook') WBModule.onEnter();
     if (target === 'story-roster') StoryModule.onEnter();
-    if (target === 'forum')     ForumModule.onEnter(); 
-    if (target === 'lifestyle') LifestyleModule.onEnter();
-  
+    if (target === 'forum' && typeof ForumModule !== 'undefined') ForumModule.onEnter(); 
+    if (target === 'lifestyle' && typeof LifestyleModule !== 'undefined') LifestyleModule.onEnter();
   }
 
   function _onEnterPage(pageId) {
@@ -20947,7 +21278,7 @@ const SpaceModule = (() => {
   return { init, saveText, saveImg };
 })();
 
-async function init() {
+async function initApp() {
   try { await DB.init(); } catch(e) { console.error('DB init failed:', e); return; }
   try { await GroupChatModule.init(); } catch(e) { console.warn('groupchat init failed', e); }
   try { await VoiceModule.init(); } catch(e) { console.warn('voice init failed', e); }
@@ -21028,7 +21359,6 @@ try { EditorialModule.init(); } catch(e) { console.warn('editorial init failed',
   try { await NotifModule.refresh(); } catch(e) { console.warn('notif refresh failed', e); }
 }
 
-init();
 </script>
 </body>
 </html>
