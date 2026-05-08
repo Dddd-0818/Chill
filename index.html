@@ -10,12 +10,8 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#fafafa">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://unpkg.com/@phosphor-icons/web"></script>
-<script src="https://unpkg.com/vconsole@latest/dist/vconsole.min.js"></script>
-<script>
-  // 初始化 VConsole
-  var vConsole = new VConsole();
-</script>
 <script src="https://unpkg.com/fflate@0.8.2/umd/index.js"></script>
 <script src="https://unpkg.com/mammoth@1.6.0/mammoth.browser.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -1134,12 +1130,17 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
 
 /* Header */
 #conv-screen .cv-header { position:absolute;top:calc(env(safe-area-inset-top, 20px) + 10px);left:16px;right:16px;display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:rgba(239,236,231,0.7);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border:1px solid rgba(255,255,255,0.4);border-radius:28px;box-shadow:0 10px 30px rgba(0,0,0,0.06);z-index:20; }
-#conv-screen .cv-icon-btn { width:40px;height:40px;border-radius:50%;background:#fff;border:1px solid rgba(18,18,18,0.05);color:#121212;font-size:1.2rem;display:flex;justify-content:center;align-items:center;cursor:pointer;transition:0.2s;box-shadow:0 2px 10px rgba(0,0,0,0.03); }
+
+#conv-screen .cv-icon-btn { width:40px;height:40px;border-radius:50%;background:#fff;border:1px solid rgba(18,18,18,0.05);color:#121212;font-size:1.2rem;display:flex;justify-content:center;align-items:center;cursor:pointer;transition:0.2s;box-shadow:0 2px 10px rgba(0,0,0,0.03); flex-shrink:0; }
 #conv-screen .cv-icon-btn:active { transform:scale(0.9); }
-#conv-screen .cv-header-profile { display:flex;align-items:center;gap:12px; }
-#conv-screen .cv-header-avatar { width:38px;height:38px;border-radius:50%;object-fit:cover; }
-#conv-screen .cv-header-name { font-family:'Playfair Display',serif;font-size:1.3rem;font-weight:500;font-style:italic;color:#121212;line-height:1;display:block; }
-#conv-screen .cv-header-status { font-family:'Space Mono',monospace;font-size:0.5rem;letter-spacing:2px;color:#888;margin-top:4px;text-transform:uppercase;display:block; }
+
+/* 👇 去掉了 flex:1，加上了 margin:0 12px 保证和两边按钮的安全距离 */
+#conv-screen .cv-header-profile { display:flex;align-items:center;gap:12px; min-width:0; margin:0 12px; }
+#conv-screen .cv-header-profile > div { min-width:0; display:flex; flex-direction:column; justify-content:center; }
+
+#conv-screen .cv-header-avatar { width:38px;height:38px;border-radius:50%;object-fit:cover; flex-shrink:0; }
+#conv-screen .cv-header-name { font-family:'Playfair Display',serif;font-size:1.3rem;font-weight:500;font-style:italic;color:#121212;line-height:1;display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+#conv-screen .cv-header-status { font-family:'Space Mono',monospace;font-size:0.5rem;letter-spacing:2px;color:#888;margin-top:4px;text-transform:uppercase;display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 
 /* Feed */
 #conv-screen .cv-feed { height:100%;overflow-y:auto;padding:calc(env(safe-area-inset-top, 20px) + 90px) 20px 130px;display:flex;flex-direction:column;gap:28px;position:relative;scroll-behavior:smooth;z-index:10; }
@@ -1270,7 +1271,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
 #conv-screen #cv-img-viewer.active { display:flex; }
 #conv-screen #cv-img-viewer-inner { display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;max-width:100%;max-height:100%;flex:1;min-height:0; }
 #conv-screen #cv-img-viewer-img { max-width:100%;max-height:calc(100vh - 200px);width:auto;height:auto;object-fit:contain;border-radius:4px; }
-#conv-screen #cv-img-viewer-close { position:absolute;top:20px;right:20px;color:#fff;font-size:1.6rem;background:rgba(255,255,255,0.08);border:0.5px solid rgba(255,255,255,0.2);width:40px;height:40px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:0.2s;z-index:2; }
+#conv-screen #cv-img-viewer-close { position:absolute;top:calc(env(safe-area-inset-top, 20px) + 16px);right:20px;color:#fff;font-size:1.6rem;background:rgba(255,255,255,0.08);border:0.5px solid rgba(255,255,255,0.2);width:40px;height:40px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:0.2s;z-index:2; }
 #conv-screen #cv-img-viewer-close:hover { background:rgba(255,255,255,0.15); }
 #conv-screen #cv-img-viewer-actions { display:flex;gap:10px;flex-wrap:wrap;justify-content:center;align-items:center;width:100%;max-width:360px;padding-top:4px; }
 #conv-screen #cv-img-viewer-actions .cv-img-viewer-btn { flex:1;min-width:132px;padding:10px 16px;border:0.5px solid rgba(255,255,255,0.35);border-radius:100px;background:rgba(255,255,255,0.06);color:#fff;font-family:'Inter','Noto Sans SC',sans-serif;font-size:0.8rem;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:0.2s; }
@@ -2900,9 +2901,9 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
 /* 🌟 恢复纯中文端正字体，允许换行，去除斜体 */
 .cv-mn-tag-val { font-family: 'Noto Serif SC', serif; font-size: 11px; font-weight: 400; text-align: right; color: rgba(255,255,255,0.9); flex: 1; line-height: 1.4; }
 
-/* Layer 4: 情绪硫酸纸 (恢复原位被黑牌压着一半的高级感) */
-.cv-mn-emotion { top: 260px; right: 0px; width: 140px; padding: 12px; background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); border: 0.5px solid rgba(255,255,255,0.8); transform: translateY(30px) rotate(3deg); z-index: 3; }
-.cv-mn-board.show .cv-mn-emotion { transform: translateY(0) rotate(3deg); opacity: 1; transition-delay: 0.3s; }
+/* Layer 4: 情绪硫酸纸 (挪到右上角，产生错落的拼贴感) */
+.cv-mn-emotion { top: 20px; right: -5px; width: 140px; padding: 12px; background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); border: 0.5px solid rgba(255,255,255,0.8); transform: translateY(30px) rotate(6deg); z-index: 3; }
+.cv-mn-board.show .cv-mn-emotion { transform: translateY(0) rotate(6deg); opacity: 1; transition-delay: 0.3s; }
 .cv-mn-em-hdr { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
 .cv-mn-em-title { font-family: 'Playfair Display', serif; font-size: 9px; color: #8B8B8B; letter-spacing: 1px; }
 .cv-mn-em-status { font-family: 'Noto Serif SC', serif; font-size: 10px; color: #2A2A2A; font-style: italic; }
@@ -6165,6 +6166,21 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
 
 <script>
 'use strict';
+
+// ============================================================
+// Supabase 登录守卫 — 没有 session 就踢回登录页
+// ⚠️ 把下面两行换成你自己的 Supabase 项目信息
+// ============================================================
+const SUPABASE_URL      = 'https://kjtvtyfibkklwsievlgt.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtqdHZ0eWZpYmtrbHdzaWV2bGd0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgxNzE4MjgsImV4cCI6MjA5Mzc0NzgyOH0.jXFV79-PHPbu14C9LwmrNlL4cIw0HLnTc67svJC3ovA';
+
+const _sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+(async () => {
+  const { data: { session } } = await _sb.auth.getSession();
+  if (!session) {
+    window.location.replace('login.html');
+  }
+})();
 
 // ============================================================
 // 注册 Service Worker (离线信使)
@@ -13606,6 +13622,16 @@ function _renderImgPreviewBar() {
             <span>线下记忆已同步至大脑</span>
             <span class="cv-ticket-barcode"></span>
           </div>`;
+      } else if (act === 'avatar_changed') { // 🌟 新增：换头像的系统票根
+        el.innerHTML = `
+          <div class="cv-ticket-row">
+            <span class="cv-ticket-label">Profile Update</span>
+            <span class="cv-ticket-val" style="font-size:11px;">UPDATED</span>
+          </div>
+          <div class="cv-ticket-meta">
+            <span>角色自行更换了头像</span>
+            <span class="cv-ticket-barcode"></span>
+          </div>`;
       }
       return el;
     }
@@ -14799,6 +14825,7 @@ function _renderImgPreviewBar() {
         const postMatch    = !isRecall && !isAcceptXfer && !rejectXferMatch && !audioMatch && !xferMatch && !emoteMatch && !quoteMatch && !isCall && src.match(/^\[POST:(.+)\]$/s);
         const postImgMatch = !isRecall && !isAcceptXfer && !rejectXferMatch && !audioMatch && !xferMatch && !emoteMatch && !quoteMatch && !isCall && src.match(/^\[POST_IMG:(.+?):(.+)\]$/s);
         const htmlMatch    = !isRecall && !isAcceptXfer && !rejectXferMatch && !audioMatch && !xferMatch && !emoteMatch && !quoteMatch && !isCall && !postMatch && !postImgMatch && src.match(/^\[HTML\]([\s\S]+?)\[\/HTML\]$/i);
+        const avatarMatch   = !isRecall && !isAcceptXfer && !rejectXferMatch && !audioMatch && !xferMatch && !emoteMatch && !quoteMatch && src.match(/^\[SET_AVATAR:(.+)\]$/);
 
        let msgRole        = 'assistant'; // 默认是普通助手消息
         let displayContent = src;
@@ -14860,6 +14887,38 @@ function _renderImgPreviewBar() {
         } else if (htmlMatch) {
           msgParts = [{ type: 'html', content: htmlMatch[1].trim() }];
           displayContent = `[交互组件]`; // 聊天列表里显示的缩略文字
+          } else if (avatarMatch) {
+          const targetAssetKey = avatarMatch[1].trim();
+          try {
+            // 从图库取出原图 Blob
+            const asset = await DB.assets.get(targetAssetKey);
+            if (asset) {
+              const newCharKey = `char-avatar-${sessionCharId}`;
+              // 覆写进角色的头像 Key
+              await DB.assets.set(newCharKey, asset.blob, asset.mimeType);
+              Assets.clearCache(newCharKey);
+              
+              // 顺手存进角色的数据库档案
+              const charInfo = await DB.characters.get(Number(sessionCharId));
+              if (charInfo) {
+                charInfo.avatarUrl = newCharKey;
+                await DB.characters.put(charInfo);
+              }
+              
+              // 立即更新当前聊天头部的头像显示
+              _charImgUrl = await Assets.getUrl(newCharKey);
+              const headerAvatar = document.getElementById('cv-header-avatar');
+              if (headerAvatar) headerAvatar.src = _charImgUrl;
+
+              msgParts =[{ type: 'system_ticket', action: 'avatar_changed' }];
+              displayContent = `[更换了新头像]`;
+              msgRole = 'system_ticket';
+            } else {
+              msgParts =[{ type: 'text', content: `*试图更换头像，但系统未能读取到该图片*` }];
+              displayContent = `[更换头像失败]`;
+            }
+          } catch(e) {
+            console.error('[Avatar Update]', e);}
         } else if (audioMatch) {
           msgParts = [{ type: 'audio', duration: parseInt(audioMatch[1]), transcript: audioMatch[2].trim() }];
           displayContent = `[语音消息 ${_fmtDuration(parseInt(audioMatch[1]))}]`;
@@ -15234,18 +15293,19 @@ ${dialogueFlow.trim()}
       if (p.type === 'transfer')      return `[转账 ¥${p.amount}: ${p.memo}，状态:${p.status === 'collected' ? '已收款' : '待收款'}]`;
       if (p.type === 'user_transfer') return `[我给你转账 ¥${p.amount}: ${p.memo}，状态:${p.status === 'accepted' ? '你已接受' : p.status === 'rejected' ? '你已拒绝' : '待你决定'}]`;
       if (p.type === 'html')          return '[向用户发送了一个交互组件]';
-     if (p.type === 'image') {
-        // 【新增】：如果这是个表情包，修正 AI 的历史记忆格式
+   if (p.type === 'image') {
         if (p.description && p.description.startsWith('[表情包:')) {
-          const kw = p.description.slice(5, -1); // 提取出表情包的关键词
-          // AI 自己的历史还原成指令格式，加深肌肉记忆；用户的则正常转述
+          const kw = p.description.slice(5, -1);
           return m.role === 'assistant' ? `[EMOTE:${kw}]` : `[用户发送了表情包：${kw}]`;
         }
         
-        // 普通配图的处理
+        if (m.role === 'user') {
+          return p.description ? `[用户发送了一张图片，图片ID:${p.assetKey}，描述:${p.description}]` : `[用户发送了一张图片，图片ID:${p.assetKey}]`;
+        }
+        
         if (m.role === 'assistant' && p.description === '（NovelAI 配图）')
           return '[角色发送的配图（NovelAI 生成）]';
-        return p.description ? `[图片：${p.description}]` : (m.role === 'assistant' ? '[角色发送了一张图片]' : '[用户发送了一张图片]');
+        return p.description ? `[图片：${p.description}]` : '[角色发送了一张图片]';
       }
       if (p.type === 'system_ticket') return '';
       if (p.quoteRef) return `[引用 ${p.quoteRef.name}: "${p.quoteRef.text}"] ${p.content}`;
@@ -15561,6 +15621,14 @@ const htmlBehaviorBlock = `# 高级行为：渲染前端交互组件 (HTML Widge
 示例：
 给你看我刚做出来的登机牌。 ||| [HTML]<div style="background:#111;color:#D4AF37;padding:16px;border-radius:8px;font-family:monospace;box-shadow:0 4px 12px rgba(0,0,0,0.2);"><h3>BOARDING PASS</h3><p style="color:#aaa;">FLIGHT: NX-01</p></div>[/HTML]`;
 
+const avatarBehaviorBlock = `# 高级行为：更换头像 (Change Avatar)
+如果用户给你发了图片，并主动要求你换头像，或者你看到某张照片非常喜欢、觉得很适合自己，你可以使用这个指令自己更换头像。
+【核心规则】：你需要从用户最近发送的图片中挑选一张，提取它附带的【图片ID】。
+**格式（整条气泡只用这一个标签）：**
+[SET_AVATAR:图片ID]
+**示例：**
+这张光影太棒了，我就用它当头像啦！ |||[SET_AVATAR:chat-img-123-1712345678-abc]`;
+
 const emotes = typeof EmoteModule !== 'undefined' ? EmoteModule.getActiveEmotes(_charId) : [];
     let emoteBlock = '';
     if (emotes.length > 0) {
@@ -15680,6 +15748,8 @@ ${histSection}
 当你在对话中看到图片（直接的 image_url 或 [图片：描述]），请自然地融入对话中回应图片内容，就像真实聊天中对方发了一张图一样。不要刻意说"我看到你发了图片"，直接对内容作出有温度的反应即可。
 
 ${htmlBehaviorBlock}
+
+${avatarBehaviorBlock}
 
 ${novelBehaviorBlock}
 
@@ -19759,8 +19829,8 @@ ${scriptHistory || '（电影开场，暂无前文）'}
             if (!activeApi) throw new Error('未激活有效的 API 配置');
 
             const limit = _cfgContextLimit || 20;
-            const rawStoryMsgs = await DB.messages.getPage(_storyCharId, 0, limit).catch(() =>[]);
-            const storyMsgs = rawStoryMsgs.reverse();
+           const rawStoryMsgs = await DB.messages.getPage(_storyCharId, 0, limit).catch(() =>[]);
+const storyMsgs = rawStoryMsgs;
 
             const systemPrompt = await _buildStorySystemPrompt(storyMsgs);
 
@@ -19864,16 +19934,14 @@ ${scriptHistory || '（电影开场，暂无前文）'}
             const limit = _cfgContextLimit || 20;
             const rawStoryMsgs = await DB.messages.getPage(_storyCharId, 0, 9999).catch(() =>[]);
             
-            const historyBefore = rawStoryMsgs.filter(m => m.timestamp < msg.timestamp).slice(0, limit).reverse();
-
+          const historyBefore = rawStoryMsgs.filter(m => m.timestamp < msg.timestamp).slice(-limit);
+          
             const systemPrompt = await _buildStorySystemPrompt(historyBefore);
            // 💡 核心修复：重Roll时也只需要发一条重新推演的虚拟指令
             const apiMessages =[];
             if (historyBefore.length === 0) {
                 const initPrompt = _cfgOpeningMsg ? _cfgOpeningMsg : '*电影开场，镜头缓缓推近*';
-                apiMessages.push({ role: 'user', content: `[导演开机指令]：电影正式开场。请顺着这个基调往下写：\n${initPrompt}` });
-            } else {
-                apiMessages.push({ role: 'user', content: `[导演重写指令]：上一版写得不够精彩，需要一个全新的版本。请以【${_char?.name || '角色'}】的身份（角色方），针对剧本前文中最后一条用户行动，写一段完全不同的全新剧情回应。\n⚠️ 严格禁止：① 以用户（${_storyPersona?.name || '我'}）的视角或口吻来写，你是角色方而非用户方；② 重复、改写或延续前文任何已有的句子；③ 在新版本中出现前文已发生过的情节。请直接呈现全新的剧情。` });
+               apiMessages.push({ role: 'user', content: `[导演重写指令]：上一版内容如下，不满意，需要一个全新的版本：\n\n---\n${msg.content}\n---\n\n请以【${_char?.name || '角色'}】的身份（角色方），针对剧本前文中最后一条用户行动，写一段与上一版完全不同的全新剧情回应。\n⚠️ 严格禁止：① 以用户（${_storyPersona?.name || '我'}）的视角或口吻来写，你是角色方而非用户方；② 重复、改写或延续前文任何已有的句子；③ 在新版本中出现前文已发生过的情节；④ 与上一版有任何相似的开头或情节走向。请直接呈现全新的剧情。` });
             }
             
             console.groupCollapsed(`[StoryChat] 🎬 发送给导演的剧本指令`);

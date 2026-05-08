@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Chill Mono OS</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://unpkg.com/vconsole@latest/dist/vconsole.min.js"></script>
+<script>
+  // 初始化 VConsole
+  var vConsole = new VConsole();
+</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=DM+Sans:wght@400;500&family=Space+Mono&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --bg: #f5f3ef;
+      --card: #ffffff;
+      --text: #1a1a1a;
+      --muted: #8a8a8a;
+      --accent: #1a1a1a;
+      --border: #e0ddd8;
+      --error-bg: #fdf0ef;
+      --error: #c1574e;
+      --error-border: #f0d0cd;
+      --success-bg: #eef5f0;
+      --success: #5a8a6a;
+      --success-border: #c8dec8;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .wrap {
+      width: 100%;
+      max-width: 360px;
+      padding: 24px 20px;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 40px 32px 36px;
+    }
+
+    .logo {
+      font-family: 'Playfair Display', serif;
+      font-size: 22px;
+      font-weight: 600;
+      letter-spacing: 0.01em;
+      margin-bottom: 4px;
+    }
+
+    .subtitle {
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 32px;
+      font-family: 'Space Mono', monospace;
+      letter-spacing: -0.02em;
+    }
+
+    .form-group {
+      margin-bottom: 14px;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+      color: var(--muted);
+    }
+
+    .form-group input {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 14px;
+      font-family: 'DM Sans', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      transition: border-color 0.15s;
+    }
+
+    .form-group input:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    .form-group input::placeholder { color: #c8c5c0; }
+
+    .btn {
+      width: 100%;
+      padding: 11px;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 500;
+      font-family: 'DM Sans', sans-serif;
+      cursor: pointer;
+      transition: opacity 0.15s;
+      margin-top: 10px;
+      background: var(--accent);
+      color: #fff;
+      letter-spacing: 0.02em;
+    }
+
+    .btn:hover { opacity: 0.85; }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .switch {
+      text-align: center;
+      margin-top: 20px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .switch a {
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 500;
+      cursor: pointer;
+    }
+
+    .switch a:hover { text-decoration: underline; }
+
+    .msg {
+      font-size: 13px;
+      padding: 10px 12px;
+      border-radius: 6px;
+      margin-bottom: 16px;
+      display: none;
+      line-height: 1.5;
+    }
+
+    .msg.error {
+      display: block;
+      background: var(--error-bg);
+      color: var(--error);
+      border: 1px solid var(--error-border);
+    }
+
+    .msg.success {
+      display: block;
+      background: var(--success-bg);
+      color: var(--success);
+      border: 1px solid var(--success-border);
+    }
+
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+
+  <!-- 登录 -->
+  <div id="page-login" class="wrap">
+    <div class="card">
+      <div class="logo">Chill Mono OS</div>
+      <div class="subtitle">welcome back</div>
+
+      <div id="login-msg" class="msg"></div>
+
+      <div class="form-group">
+        <label>邮箱</label>
+        <input type="email" id="login-email" placeholder="you@example.com">
+      </div>
+      <div class="form-group">
+        <label>密码</label>
+        <input type="password" id="login-password" placeholder="输入密码">
+      </div>
+
+      <button class="btn" id="login-btn">登录</button>
+
+      <div class="switch">
+        没有账号？<a id="to-register">注册</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- 注册 -->
+  <div id="page-register" class="wrap hidden">
+    <div class="card">
+      <div class="logo">Chill Mono OS</div>
+      <div class="subtitle">需要邀请码才能注册</div>
+
+      <div id="register-msg" class="msg"></div>
+
+      <div class="form-group">
+        <label>邀请码</label>
+        <input type="text" id="register-code" placeholder="INVITE-XXX">
+      </div>
+      <div class="form-group">
+        <label>邮箱</label>
+        <input type="email" id="register-email" placeholder="you@example.com">
+      </div>
+      <div class="form-group">
+        <label>密码</label>
+        <input type="password" id="register-password" placeholder="至少6位">
+      </div>
+
+      <button class="btn" id="register-btn">注册</button>
+
+      <div class="switch">
+        已有账号？<a id="to-login">去登录</a>
+      </div>
+    </div>
+  </div>
+
+
+  <script>
+    // =============================================
+    // ⚠️ 换成你自己的 Supabase 项目信息
+    // Settings → API 里找
+    // =============================================
+    const SUPABASE_URL      = 'https://kjtvtyfibkklwsievlgt.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtqdHZ0eWZpYmtrbHdzaWV2bGd0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgxNzE4MjgsImV4cCI6MjA5Mzc0NzgyOH0.jXFV79-PHPbu14C9LwmrNlL4cIw0HLnTc67svJC3ovA';
+
+    let supabase = null;
+    try {
+      supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    } catch(e) {
+      console.warn('[login] Supabase 初始化失败，请检查 URL 和 Key', e);
+    }
+
+    function sbReady() {
+      if (!supabase) {
+        showMsg('login-msg', '⚠️ 请先填入 Supabase URL 和 Key', 'error');
+        return false;
+      }
+      return true;
+    }
+
+    // --- 页面切换 ---
+    const pageLogin    = document.getElementById('page-login');
+    const pageRegister = document.getElementById('page-register');
+
+    document.getElementById('to-register').onclick = () => {
+      pageLogin.classList.add('hidden');
+      pageRegister.classList.remove('hidden');
+    };
+    document.getElementById('to-login').onclick = () => {
+      pageRegister.classList.add('hidden');
+      pageLogin.classList.remove('hidden');
+    };
+
+    // --- 消息提示 ---
+    function showMsg(id, text, type) {
+      const el = document.getElementById(id);
+      el.textContent = text;
+      el.className = 'msg ' + type;
+    }
+    function clearMsg(id) {
+      const el = document.getElementById(id);
+      el.className = 'msg';
+      el.textContent = '';
+    }
+
+    // --- 登录成功后跳转 ---
+    function enterApp() {
+      window.location.replace('index.html');
+    }
+
+    // =============================================
+    // 注册
+    // =============================================
+    document.getElementById('register-btn').onclick = async () => {
+      clearMsg('register-msg');
+      if (!sbReady()) return;
+      const code     = document.getElementById('register-code').value.trim();
+      const email    = document.getElementById('register-email').value.trim();
+      const password = document.getElementById('register-password').value;
+      const btn      = document.getElementById('register-btn');
+
+      if (!code || !email || !password) {
+        return showMsg('register-msg', '请填写所有字段', 'error');
+      }
+      if (password.length < 6) {
+        return showMsg('register-msg', '密码至少6位', 'error');
+      }
+
+      btn.disabled = true;
+      btn.textContent = '注册中...';
+
+      try {
+        // 第一步：检查邀请码
+        const { data: codeData, error: codeError } = await supabase
+          .from('invitation_codes')
+          .select('id, current_uses, max_uses')
+          .eq('code', code)
+          .single();
+
+        if (codeError || !codeData) {
+          return showMsg('register-msg', '邀请码无效', 'error');
+        }
+        if (codeData.current_uses >= codeData.max_uses) {
+          return showMsg('register-msg', '该邀请码已用完', 'error');
+        }
+
+        // 第二步：创建账号
+        const { data: authData, error: authError } = await supabase.auth.signUp({ email, password });
+
+        if (authError) {
+          if (authError.message.includes('already registered')) {
+            return showMsg('register-msg', '该邮箱已被注册', 'error');
+          }
+          return showMsg('register-msg', '注册失败：' + authError.message, 'error');
+        }
+
+        // 第三步：扣减邀请码（原子操作）
+        const { data: redeemed } = await supabase.rpc('redeem_invite_code', { code_input: code });
+
+        if (!redeemed) {
+          return showMsg('register-msg', '邀请码刚好用完了，请联系管理员', 'error');
+        }
+
+        showMsg('register-msg', '注册成功，正在进入...', 'success');
+        setTimeout(enterApp, 800);
+
+      } catch (err) {
+        showMsg('register-msg', '网络错误，请重试', 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '注册';
+      }
+    };
+
+    // =============================================
+    // 登录
+    // =============================================
+    document.getElementById('login-btn').onclick = async () => {
+      clearMsg('login-msg');
+      if (!sbReady()) return;
+      const email    = document.getElementById('login-email').value.trim();
+      const password = document.getElementById('login-password').value;
+      const btn      = document.getElementById('login-btn');
+
+      if (!email || !password) {
+        return showMsg('login-msg', '请填写邮箱和密码', 'error');
+      }
+
+      btn.disabled = true;
+      btn.textContent = '登录中...';
+
+      try {
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) {
+          return showMsg('login-msg', '邮箱或密码错误', 'error');
+        }
+        enterApp();
+      } catch (err) {
+        showMsg('login-msg', '网络错误，请重试', 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '登录';
+      }
+    };
+
+    // =============================================
+    // 页面加载：如果已经登录直接进
+    // =============================================
+    (async () => {
+      if (!supabase) return;
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) enterApp();
+    })();
+  </script>
+</body>
+</html>
