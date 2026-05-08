@@ -5,11 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Chill Mono OS</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="https://unpkg.com/vconsole@latest/dist/vconsole.min.js"></script>
-<script>
-  // 初始化 VConsole
-  var vConsole = new VConsole();
-</script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=DM+Sans:wght@400;500&family=Space+Mono&display=swap" rel="stylesheet">
 
@@ -187,6 +182,8 @@
 
       <div class="switch">
         没有账号？<a id="to-register">注册</a>
+        &nbsp;·&nbsp;
+        <a href="claim.html">领取邀请码</a>
       </div>
     </div>
   </div>
@@ -229,154 +226,135 @@
     const SUPABASE_URL      = 'https://kjtvtyfibkklwsievlgt.supabase.co';
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtqdHZ0eWZpYmtrbHdzaWV2bGd0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgxNzE4MjgsImV4cCI6MjA5Mzc0NzgyOH0.jXFV79-PHPbu14C9LwmrNlL4cIw0HLnTc67svJC3ovA';
 
-    let supabase = null;
-    try {
-      supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    } catch(e) {
-      console.warn('[login] Supabase 初始化失败，请检查 URL 和 Key', e);
-    }
-
-    function sbReady() {
-      if (!supabase) {
-        showMsg('login-msg', '⚠️ 请先填入 Supabase URL 和 Key', 'error');
-        return false;
-      }
-      return true;
-    }
-
-    // --- 页面切换 ---
-    const pageLogin    = document.getElementById('page-login');
-    const pageRegister = document.getElementById('page-register');
-
-    document.getElementById('to-register').onclick = () => {
-      pageLogin.classList.add('hidden');
-      pageRegister.classList.remove('hidden');
-    };
-    document.getElementById('to-login').onclick = () => {
-      pageRegister.classList.add('hidden');
-      pageLogin.classList.remove('hidden');
-    };
-
-    // --- 消息提示 ---
+    // --- 工具函数（最先定义，不依赖任何外部状态）---
     function showMsg(id, text, type) {
       const el = document.getElementById(id);
+      if (!el) return;
       el.textContent = text;
       el.className = 'msg ' + type;
     }
     function clearMsg(id) {
       const el = document.getElementById(id);
+      if (!el) return;
       el.className = 'msg';
       el.textContent = '';
     }
-
-    // --- 登录成功后跳转 ---
     function enterApp() {
       window.location.replace('index.html');
     }
 
-    // =============================================
-    // 注册
-    // =============================================
-    document.getElementById('register-btn').onclick = async () => {
-      clearMsg('register-msg');
-      if (!sbReady()) return;
-      const code     = document.getElementById('register-code').value.trim();
-      const email    = document.getElementById('register-email').value.trim();
-      const password = document.getElementById('register-password').value;
-      const btn      = document.getElementById('register-btn');
-
-      if (!code || !email || !password) {
-        return showMsg('register-msg', '请填写所有字段', 'error');
-      }
-      if (password.length < 6) {
-        return showMsg('register-msg', '密码至少6位', 'error');
-      }
-
-      btn.disabled = true;
-      btn.textContent = '注册中...';
-
+    // --- Supabase 懒初始化，用时再拿 ---
+    let _sb = null;
+    function getSB(msgId) {
+      if (_sb) return _sb;
       try {
-        // 第一步：检查邀请码
-        const { data: codeData, error: codeError } = await supabase
-          .from('invitation_codes')
-          .select('id, current_uses, max_uses')
-          .eq('code', code)
-          .single();
+        _sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        return _sb;
+      } catch(e) {
+        console.warn('[login] Supabase 初始化失败', e);
+        if (msgId) showMsg(msgId, '⚠️ Supabase 配置有误，请检查 URL 和 Key', 'error');
+        return null;
+      }
+    }
 
-        if (codeError || !codeData) {
-          return showMsg('register-msg', '邀请码无效', 'error');
-        }
-        if (codeData.current_uses >= codeData.max_uses) {
-          return showMsg('register-msg', '该邀请码已用完', 'error');
-        }
+    // --- 页面切换（纯 DOM，零依赖）---
+    document.addEventListener('DOMContentLoaded', () => {
+      const pageLogin    = document.getElementById('page-login');
+      const pageRegister = document.getElementById('page-register');
 
-        // 第二步：创建账号
-        const { data: authData, error: authError } = await supabase.auth.signUp({ email, password });
+      document.getElementById('to-register').addEventListener('click', () => {
+        pageLogin.classList.add('hidden');
+        pageRegister.classList.remove('hidden');
+      });
+      document.getElementById('to-login').addEventListener('click', () => {
+        pageRegister.classList.add('hidden');
+        pageLogin.classList.remove('hidden');
+      });
 
-        if (authError) {
-          if (authError.message.includes('already registered')) {
-            return showMsg('register-msg', '该邮箱已被注册', 'error');
+      // --- 注册 ---
+      document.getElementById('register-btn').addEventListener('click', async () => {
+        clearMsg('register-msg');
+        const sb = getSB('register-msg');
+        if (!sb) return;
+
+        const code     = document.getElementById('register-code').value.trim();
+        const email    = document.getElementById('register-email').value.trim();
+        const password = document.getElementById('register-password').value;
+        const btn      = document.getElementById('register-btn');
+
+        if (!code || !email || !password) return showMsg('register-msg', '请填写所有字段', 'error');
+        if (password.length < 6) return showMsg('register-msg', '密码至少6位', 'error');
+
+        btn.disabled = true;
+        btn.textContent = '注册中...';
+        try {
+          // 第一步：检查邀请码
+          const { data: codeData, error: codeError } = await sb
+            .from('invitation_codes')
+            .select('id, current_uses, max_uses')
+            .eq('code', code)
+            .single();
+
+          if (codeError || !codeData) return showMsg('register-msg', '邀请码无效', 'error');
+          if (codeData.current_uses >= codeData.max_uses) return showMsg('register-msg', '该邀请码已用完', 'error');
+
+          // 第二步：创建账号
+          const { error: authError } = await sb.auth.signUp({ email, password });
+          if (authError) {
+            if (authError.message.includes('already registered')) return showMsg('register-msg', '该邮箱已被注册', 'error');
+            return showMsg('register-msg', '注册失败：' + authError.message, 'error');
           }
-          return showMsg('register-msg', '注册失败：' + authError.message, 'error');
+
+          // 第三步：扣减邀请码（原子操作，防并发）
+          const { data: redeemed } = await sb.rpc('redeem_invite_code', { code_input: code });
+          if (!redeemed) return showMsg('register-msg', '邀请码刚好用完了，请联系管理员', 'error');
+
+          showMsg('register-msg', '注册成功，正在进入...', 'success');
+          setTimeout(enterApp, 800);
+        } catch (err) {
+          showMsg('register-msg', '网络错误，请重试', 'error');
+        } finally {
+          btn.disabled = false;
+          btn.textContent = '注册';
         }
+      });
 
-        // 第三步：扣减邀请码（原子操作）
-        const { data: redeemed } = await supabase.rpc('redeem_invite_code', { code_input: code });
+      // --- 登录 ---
+      document.getElementById('login-btn').addEventListener('click', async () => {
+        clearMsg('login-msg');
+        const sb = getSB('login-msg');
+        if (!sb) return;
 
-        if (!redeemed) {
-          return showMsg('register-msg', '邀请码刚好用完了，请联系管理员', 'error');
+        const email    = document.getElementById('login-email').value.trim();
+        const password = document.getElementById('login-password').value;
+        const btn      = document.getElementById('login-btn');
+
+        if (!email || !password) return showMsg('login-msg', '请填写邮箱和密码', 'error');
+
+        btn.disabled = true;
+        btn.textContent = '登录中...';
+        try {
+          const { error } = await sb.auth.signInWithPassword({ email, password });
+          if (error) return showMsg('login-msg', '邮箱或密码错误', 'error');
+          enterApp();
+        } catch (err) {
+          showMsg('login-msg', '网络错误，请重试', 'error');
+        } finally {
+          btn.disabled = false;
+          btn.textContent = '登录';
         }
+      });
 
-        showMsg('register-msg', '注册成功，正在进入...', 'success');
-        setTimeout(enterApp, 800);
-
-      } catch (err) {
-        showMsg('register-msg', '网络错误，请重试', 'error');
-      } finally {
-        btn.disabled = false;
-        btn.textContent = '注册';
-      }
-    };
-
-    // =============================================
-    // 登录
-    // =============================================
-    document.getElementById('login-btn').onclick = async () => {
-      clearMsg('login-msg');
-      if (!sbReady()) return;
-      const email    = document.getElementById('login-email').value.trim();
-      const password = document.getElementById('login-password').value;
-      const btn      = document.getElementById('login-btn');
-
-      if (!email || !password) {
-        return showMsg('login-msg', '请填写邮箱和密码', 'error');
-      }
-
-      btn.disabled = true;
-      btn.textContent = '登录中...';
-
-      try {
-        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) {
-          return showMsg('login-msg', '邮箱或密码错误', 'error');
-        }
-        enterApp();
-      } catch (err) {
-        showMsg('login-msg', '网络错误，请重试', 'error');
-      } finally {
-        btn.disabled = false;
-        btn.textContent = '登录';
-      }
-    };
-
-    // =============================================
-    // 页面加载：如果已经登录直接进
-    // =============================================
-    (async () => {
-      if (!supabase) return;
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) enterApp();
-    })();
+      // --- 页面加载：已登录直接进 ---
+      (async () => {
+        const sb = getSB();
+        if (!sb) return;
+        try {
+          const { data: { session } } = await sb.auth.getSession();
+          if (session) enterApp();
+        } catch(e) {}
+      })();
+    });
   </script>
 </body>
 </html>
