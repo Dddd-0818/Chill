@@ -6,207 +6,282 @@
   <title>Chill Mono OS</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=DM+Sans:wght@400;500&family=Space+Mono&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,600&family=DM+Sans:wght@400;500&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
 
   <style>
     :root {
-      --bg: #f5f3ef;
-      --card: #ffffff;
-      --text: #1a1a1a;
-      --muted: #8a8a8a;
-      --accent: #1a1a1a;
-      --border: #e0ddd8;
-      --error-bg: #fdf0ef;
-      --error: #c1574e;
-      --error-border: #f0d0cd;
-      --success-bg: #eef5f0;
-      --success: #5a8a6a;
-      --success-border: #c8dec8;
+      --bg: #0a0a0a;
+      --text: #F4F3EE;
+      --text-muted: rgba(244, 243, 238, 0.5);
+      --border: rgba(244, 243, 238, 0.3);
+      --error: #a32a2a;
+      --success: #2C5A3B;
     }
 
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
     body {
-      font-family: 'DM Sans', sans-serif;
-      background: var(--bg);
+      font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background-color: var(--bg);
       color: var(--text);
       min-height: 100vh;
       display: flex;
       align-items: center;
       justify-content: center;
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    /* 复古印刷噪点质感背景 */
+    body::before {
+      content: "";
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.15'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: -1;
     }
 
     .wrap {
       width: 100%;
-      max-width: 360px;
-      padding: 24px 20px;
+      max-width: 440px;
+      padding: 40px 24px;
+      z-index: 1;
     }
 
-    .card {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 40px 32px 36px;
+    /* 头部排版 */
+    .header {
+      margin-bottom: 48px;
     }
 
-    .logo {
+    .title {
       font-family: 'Playfair Display', serif;
-      font-size: 22px;
-      font-weight: 600;
-      letter-spacing: 0.01em;
-      margin-bottom: 4px;
+      font-size: 3.5rem;
+      line-height: 0.95;
+      font-weight: 400;
+      letter-spacing: -0.02em;
+      margin-bottom: 16px;
+    }
+
+    .title .italic {
+      font-style: italic;
+      padding-left: 10%;
+      display: block;
     }
 
     .subtitle {
-      font-size: 13px;
-      color: var(--muted);
-      margin-bottom: 32px;
-      font-family: 'Space Mono', monospace;
-      letter-spacing: -0.02em;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+      color: rgba(244, 243, 238, 0.8);
+      padding-left: 2px;
+      max-width: 90%;
     }
 
+    .subtitle strong {
+      color: var(--text);
+      font-weight: 500;
+      font-family: 'Playfair Display', serif;
+      font-style: italic;
+      font-size: 16px;
+    }
+
+    /* 表单区域 */
     .form-group {
-      margin-bottom: 14px;
+      margin-bottom: 32px;
+      position: relative;
     }
 
     .form-group label {
-      display: block;
-      font-size: 12px;
+      display: flex;
+      align-items: baseline;
+      font-size: 13px;
       font-weight: 500;
-      letter-spacing: 0.06em;
+      margin-bottom: 8px;
+      color: var(--text);
+      letter-spacing: 0.05em;
+    }
+
+    /* 英文装饰标签 */
+    .form-group label .en-deco {
+      font-family: 'Space Mono', monospace;
+      font-size: 10px;
       text-transform: uppercase;
-      margin-bottom: 6px;
-      color: var(--muted);
+      letter-spacing: 0.2em;
+      color: var(--text-muted);
+      margin-left: 8px;
+      font-weight: 400;
     }
 
     .form-group input {
       width: 100%;
-      padding: 10px 12px;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      font-size: 14px;
-      font-family: 'DM Sans', sans-serif;
-      background: var(--bg);
+      padding: 12px 0;
+      border: none;
+      border-bottom: 1px solid var(--border);
+      background: transparent;
       color: var(--text);
-      transition: border-color 0.15s;
+      font-size: 16px;
+      border-radius: 0;
+      transition: all 0.3s;
+      font-family: 'Space Mono', monospace; /* 输入内容用等宽字体更有极客感 */
     }
 
     .form-group input:focus {
       outline: none;
-      border-color: var(--accent);
+      border-bottom-color: var(--text);
     }
 
-    .form-group input::placeholder { color: #c8c5c0; }
+    .form-group input::placeholder {
+      color: rgba(244, 243, 238, 0.2);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 14px;
+    }
 
+    /* 按钮 */
     .btn {
       width: 100%;
-      padding: 11px;
-      border: none;
-      border-radius: 6px;
+      padding: 16px;
+      border: 1px solid var(--text);
+      background: var(--text);
+      color: var(--bg);
       font-size: 14px;
       font-weight: 500;
-      font-family: 'DM Sans', sans-serif;
+      letter-spacing: 0.2em;
       cursor: pointer;
-      transition: opacity 0.15s;
-      margin-top: 10px;
-      background: var(--accent);
-      color: #fff;
-      letter-spacing: 0.02em;
+      transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+      margin-top: 16px;
     }
 
-    .btn:hover { opacity: 0.85; }
-    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn:hover:not(:disabled) {
+      background: transparent;
+      color: var(--text);
+    }
 
+    .btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      background: transparent;
+      color: var(--text);
+    }
+
+    /* 底部切换链接 */
     .switch {
       text-align: center;
-      margin-top: 20px;
+      margin-top: 40px;
       font-size: 13px;
-      color: var(--muted);
+      color: var(--text-muted);
+      letter-spacing: 0.05em;
     }
 
     .switch a {
-      color: var(--accent);
+      color: var(--text);
       text-decoration: none;
-      font-weight: 500;
+      border-bottom: 1px solid transparent;
+      transition: all 0.3s;
+      padding-bottom: 2px;
       cursor: pointer;
     }
 
-    .switch a:hover { text-decoration: underline; }
+    .switch a:hover {
+      border-bottom-color: var(--text);
+    }
 
+    .switch .divider {
+      margin: 0 12px;
+      color: rgba(244, 243, 238, 0.2);
+    }
+
+    /* 消息提示 */
     .msg {
+      font-family: 'DM Sans', sans-serif;
       font-size: 13px;
-      padding: 10px 12px;
-      border-radius: 6px;
-      margin-bottom: 16px;
+      padding: 12px;
+      margin-bottom: 24px;
       display: none;
-      line-height: 1.5;
+      letter-spacing: 0.05em;
+      text-align: center;
     }
 
     .msg.error {
       display: block;
-      background: var(--error-bg);
       color: var(--error);
-      border: 1px solid var(--error-border);
+      border: 1px solid var(--error);
+      background: rgba(163, 42, 42, 0.1);
     }
 
     .msg.success {
       display: block;
-      background: var(--success-bg);
-      color: var(--success);
-      border: 1px solid var(--success-border);
+      color: var(--text);
+      border: 1px solid var(--text);
+      background: rgba(244, 243, 238, 0.05);
     }
 
+    /* 页面切换逻辑类 */
     .hidden { display: none !important; }
+    
+    /* 页面进入动画 */
+    #page-login, #page-register {
+      animation: fadeIn 0.6s ease;
+    }
+    
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
   </style>
 </head>
 <body>
 
-  <!-- 登录 -->
+  <!-- ================= 登录页面 ================= -->
   <div id="page-login" class="wrap">
-    <div class="card">
-      <div class="logo">Chill Mono OS</div>
-      <div class="subtitle">welcome back</div>
+    <header class="header">
+      <h1 class="title">The<br><span class="italic">Gate</span></h1>
+      <p class="subtitle">欢迎回到 <strong>Chill Mono OS</strong>。</p>
+    </header>
 
+    <div>
       <div id="login-msg" class="msg"></div>
 
       <div class="form-group">
-        <label>邮箱</label>
+        <label>邮箱 <span class="en-deco">/ EMAIL</span></label>
         <input type="email" id="login-email" placeholder="you@example.com">
       </div>
       <div class="form-group">
-        <label>密码</label>
-        <input type="password" id="login-password" placeholder="输入密码">
+        <label>密码 <span class="en-deco">/ PASSWORD</span></label>
+        <input type="password" id="login-password" placeholder="请输入密码">
       </div>
 
       <button class="btn" id="login-btn">登录</button>
 
       <div class="switch">
         没有账号？<a id="to-register">注册</a>
-        &nbsp;·&nbsp;
+        <span class="divider">|</span>
         <a href="claim.html">领取邀请码</a>
       </div>
     </div>
   </div>
 
-  <!-- 注册 -->
+  <!-- ================= 注册页面 ================= -->
   <div id="page-register" class="wrap hidden">
-    <div class="card">
-      <div class="logo">Chill Mono OS</div>
-      <div class="subtitle">需要邀请码才能注册</div>
+    <header class="header">
+      <h1 class="title">New<br><span class="italic">Soul</span></h1>
+      <p class="subtitle">加入 <strong>Chill Mono OS</strong>，需要邀请码。</p>
+    </header>
 
+    <div>
       <div id="register-msg" class="msg"></div>
 
       <div class="form-group">
-        <label>邀请码</label>
+        <label>邀请码 <span class="en-deco">/ INVITE CODE</span></label>
         <input type="text" id="register-code" placeholder="INVITE-XXX">
       </div>
       <div class="form-group">
-        <label>邮箱</label>
+        <label>邮箱 <span class="en-deco">/ EMAIL</span></label>
         <input type="email" id="register-email" placeholder="you@example.com">
       </div>
       <div class="form-group">
-        <label>密码</label>
-        <input type="password" id="register-password" placeholder="至少6位">
+        <label>密码 <span class="en-deco">/ PASSWORD</span></label>
+        <input type="password" id="register-password" placeholder="至少 6 位">
       </div>
 
       <button class="btn" id="register-btn">注册</button>
