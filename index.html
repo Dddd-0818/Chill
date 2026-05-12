@@ -26,6 +26,7 @@
 <script src="codex.js"></script>
 <script src="subjects.js"></script>
 <script src="editorial.js"></script>
+<script src="couple.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700;800&family=Great+Vibes&family=Libre+Barcode+39+Text&family=Noto+Sans+SC:wght@300;400;500;700&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,700&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
@@ -524,6 +525,45 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
   .device{position:fixed;top:0;left:0;right:0;bottom:0;width:100%;height:auto;border:none;border-radius:0;box-shadow:none;}
   .dock-wrapper{position:fixed;bottom:0;}
   .details-panel,.overlay,.modal-overlay{position:fixed;}
+}
+
+/* 🌟 核心修复：针对高度不足的屏幕自动压缩留白，防止出现滚动和遮挡 */
+@media(max-height:850px){
+  .scroll-content{padding-bottom: 100px;}
+  .header{margin-bottom: 16px;}
+  .profile-card{margin-bottom: 20px; padding: 16px;}
+  .stack-container{margin-bottom: 20px; height: 85px;}
+  .stack-card{min-height: 68px; padding: 12px 16px;}
+  .bento-grid{margin-bottom: 20px; gap: 12px;}
+  .grid-icons{margin-bottom: 16px;}
+  .retro-brutalist-widget{gap: 10px;}
+  .rb-polaroid-section{margin: 4px 0;}
+  .rb-polaroid { width: 85px; height: 105px; padding: 4px 4px 14px 4px; }
+}
+
+@media(max-height:720px){
+  /* 针对极其修珍的手机屏幕（如 iPhone SE 等）进行极限防遮挡压缩 */
+  .scroll-content{padding-top: calc(env(safe-area-inset-top,0px) + 10px);}
+  .header{margin-bottom: 10px;}
+  .profile-card{margin-bottom: 14px; padding: 12px; gap: 12px;}
+  .avatar{width: 52px; height: 52px;}
+  .profile-name{font-size: 1.1rem;}
+  .stack-label{margin-bottom: 8px;}
+  .stack-container{margin-bottom: 14px; height: 75px;}
+  .stack-card{min-height: 60px; padding: 10px 14px;}
+  .bento-grid{margin-bottom: 14px; gap: 10px;}
+  .grid-icons{margin-bottom: 10px; padding: 0 16px; gap: 6px 10px;}
+  .icon-box{max-width: 46px;}
+  .home-dots{margin-top: 4px; margin-bottom: 4px;}
+  
+  /* 第二页进一步极限压缩 */
+  .retro-brutalist-widget{gap: 8px;}
+  .rb-pill-black{padding: 8px 12px;}
+  .rb-search-box{height: 32px;}
+  .rb-polaroid-section{margin: 0;}
+  .rb-polaroid { width: 75px; height: 95px; padding: 4px 4px 12px 4px; }
+  .rb-music-pill{padding: 4px 12px 4px 4px;}
+  .rb-music-avatar{width: 34px; height: 34px;}
 }
 
 /* ============================================================
@@ -3642,7 +3682,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
        
       <div class="profile-card">
         <div class="avatar-wrap" id="avatar-wrap">
-          <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&q=80" alt="" class="avatar" id="profile-avatar">
+          <img src="https://i.postimg.cc/ydZykRMt/IMG-1712.jpg" alt="" class="avatar" id="profile-avatar">
           <div class="avatar-edit-hint"><i class="ph ph-camera"></i></div>
         </div>
         <div class="profile-info">
@@ -3694,7 +3734,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
             <img id="polaroid-back-img" src="https://images.unsplash.com/photo-1493663284031-b7e3aefcae8e?w=400&q=80" alt="">
           </div>
           <div class="polaroid-layer front">
-            <img id="polaroid-front-img" src="https://images.unsplash.com/photo-1516483638261-f4dbaf036963?w=400&q=80" alt="">
+            <img id="polaroid-front-img" src="https://i.postimg.cc/8cGMc0Bk/IMG-1711.jpg" alt="">
             <div class="polaroid-caption" id="polaroid-caption">First Choice :)</div>
           </div>
         </div>
@@ -3765,16 +3805,16 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
         <div class="rb-polaroid-section">
           <div class="rb-cursive" contenteditable="true" id="rb-t3" onblur="SpaceModule.saveText('rb-t3')" spellcheck="false">our journey</div>
           <div class="rb-polaroid-stack">
-            <div class="rb-polaroid p1" onclick="document.getElementById('file-rb-p1').click()"><img id="rb-img-1" src="https://i.postimg.cc/BQnbRd0D/IMG-0015.jpg" alt="photo1"></div>
-            <div class="rb-polaroid p2" onclick="document.getElementById('file-rb-p2').click()"><img id="rb-img-2" src="https://i.postimg.cc/Kv8jCd2P/IMG-0013.jpg" alt="photo2"></div>
-            <div class="rb-polaroid p3" onclick="document.getElementById('file-rb-p3').click()"><img id="rb-img-3" src="https://i.postimg.cc/fTRy16Nt/IMG-0019.jpg" alt="photo3"></div>
+            <div class="rb-polaroid p1" onclick="document.getElementById('file-rb-p1').click()"><img id="rb-img-1" src="https://i.postimg.cc/02b2mCWJ/IMG-1710.jpg" alt="photo1"></div>
+            <div class="rb-polaroid p2" onclick="document.getElementById('file-rb-p2').click()"><img id="rb-img-2" src="https://i.postimg.cc/xThjPbhM/IMG-1709.jpg" alt="photo2"></div>
+            <div class="rb-polaroid p3" onclick="document.getElementById('file-rb-p3').click()"><img id="rb-img-3" src="https://i.postimg.cc/yYkY9TQj/IMG-1714.jpg" alt="photo3"></div>
           </div>
         </div>
 
         <!-- 第4排 -->
         <div class="rb-music-pill">
           <div style="display:flex; align-items:center;">
-            <img id="rb-img-music" src="https://i.postimg.cc/hPtvNHBd/IMG-0016.jpg" class="rb-music-avatar" onclick="document.getElementById('file-rb-music').click()">
+            <img id="rb-img-music" src="https://i.postimg.cc/BQnbRd0D/IMG-0015.jpg" class="rb-music-avatar" onclick="document.getElementById('file-rb-music').click()">
             <div class="rb-music-info">
               <div style="font-size:0.95rem; font-weight:800; line-height:1;" contenteditable="true" id="rb-t4" onblur="SpaceModule.saveText('rb-t4')" spellcheck="false">HEAVEN</div>
               <div style="font-size:0.55rem; margin-top:2px; font-weight:500;" contenteditable="true" id="rb-t5" onblur="SpaceModule.saveText('rb-t5')" spellcheck="false">a song by Niall Horan</div>
@@ -4165,11 +4205,26 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
           </div>
           <button class="btn-ghost" onclick="UIModule.clearWallpaper()">恢复默认背景</button>
         </div>
-        <div class="form-section">
+       <div class="form-section">
           <div class="section-title">自定义图标 / Icons</div>
           <p style="font-size:0.8rem;color:var(--s-text-secondary);margin-bottom:14px;">点击对应位置上传图片</p>
           <div class="icons-grid-edit" id="icons-grid-edit"></div>
           <button class="btn-ghost" onclick="UIModule.clearAllIcons()">恢复所有图标默认</button>
+        </div>
+        
+        <!-- 🌟 新增：主题分享与导入模块 -->
+        <div class="form-section">
+          <div class="section-title">主题分享 / Theme Share</div>
+          <button class="btn-primary" onclick="UIModule.exportTheme()" style="margin-bottom:12px; background:var(--s-text-primary); color:var(--s-bg);">
+            <i class="ph ph-export"></i> 导出桌面美化包 (.zip)
+          </button>
+          <button class="btn-outline" onclick="document.getElementById('import-theme-file').click()">
+            <i class="ph ph-download-simple"></i> 导入别人的美化包
+          </button>
+          <input type="file" id="import-theme-file" accept=".zip" style="display:none" onchange="UIModule.importTheme(event)">
+          <div style="font-size:0.6rem; color:var(--s-text-secondary); line-height:1.5; margin-top:8px;">
+            * 仅包含壁纸与自定义图标，不会覆盖你的聊天数据与档案记录。
+          </div>
         </div>
       </div>
     </div>
@@ -4456,15 +4511,21 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
       </button>
     </div>
 
-    <!-- ── View 2: 详情页 ── -->
+   <!-- ── View 2: 详情页 ── -->
     <div id="char-view-detail" class="view-layer">
       <div class="char-detail-actions">
         <button class="char-action-btn" onclick="CharacterModule.showView('list')">
           <i class="ph ph-arrow-left"></i> 返回
         </button>
-        <button class="char-action-btn" onclick="CharacterModule.editCurrent()">
-          <i class="ph ph-pencil-simple"></i> 编辑
-        </button>
+        <!-- 将右侧的操作按钮用 flex 组合起来 -->
+        <div style="display: flex; gap: 10px;">
+          <button class="char-action-btn" onclick="CharacterModule.retryAI()">
+            <i class="ph ph-arrows-clockwise"></i> 刷新
+          </button>
+          <button class="char-action-btn" onclick="CharacterModule.editCurrent()">
+            <i class="ph ph-pencil-simple"></i> 编辑
+          </button>
+        </div>
       </div>
 
       <div class="char-detail-scroll">
@@ -6121,13 +6182,13 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
                           </button>
                           
                          <!-- 悬浮工具菜单 -->
-                          <div class="action-popover" id="sc-dock-popover">
-                              <button class="popover-item" onclick="StoryChatModule.openColorModal()"><i class="ph-light ph-palette"></i> 调色 (PALETTE)</button>
-                              <button class="popover-item" onclick="StoryChatModule.openSnapshotModal()"><i class="ph-light ph-camera"></i> 快照 (SNAPSHOT)</button>
-                             <button class="popover-item" onclick="StoryChatModule.archiveStory()"><i class="ph-light ph-archive"></i> 封存 (ARCHIVE)</button>
-                             <button class="popover-item" onclick="StoryChatModule.wrapStory()"><i class="ph-light ph-film-strip"></i> 杀青 (WRAP)</button>
-                          </div>
-                      </div>
+                         <div class="action-popover" id="sc-dock-popover">
+    <button class="popover-item" onclick="StoryChatModule.openColorModal()"><i class="ph-light ph-palette"></i> 调色 (PALETTE)</button>
+    <button class="popover-item" onclick="StoryChatModule.openCssModal()"><i class="ph-light ph-code"></i> 样式 (CSS)</button>
+    <button class="popover-item" onclick="StoryChatModule.openSnapshotModal()"><i class="ph-light ph-camera"></i> 快照 (SNAPSHOT)</button>
+    <button class="popover-item" onclick="StoryChatModule.archiveStory()"><i class="ph-light ph-archive"></i> 封存 (ARCHIVE)</button>
+    <button class="popover-item" onclick="StoryChatModule.wrapStory()"><i class="ph-light ph-film-strip"></i> 杀青 (WRAP)</button>
+</div>  </div>
                       
                       <textarea class="chat-input" placeholder="Draft your response... [Enter 换行]" rows="1" id="sc-auto-input"></textarea>
                       <button class="send-btn" id="sc-send-btn">SEND</button>
@@ -6307,6 +6368,114 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
               </div>
             </div>
           </div>
+          
+         <!-- 🌟 Story Chat CSS Modal (剧情模式专属美化浮窗) -->
+<div class="cv-modal-overlay" id="sc-css-overlay" style="z-index: 310;">
+  <!-- 修改了这里的样式，加入 flex 布局和 max-height，让内部可以滚动 -->
+  <div class="cv-mag-modal" style="text-align: left; max-width: 90%; width: 450px; padding: 32px 24px; display: flex; flex-direction: column; max-height: 85vh;">
+    <div class="cv-modal-bg-letter">C</div>
+    
+    <!-- 头部（固定不滚动） -->
+    <div class="cv-modal-header" style="margin-bottom: 20px; flex-shrink: 0;">
+      <div>
+        <div class="cv-mh-title" style="font-family: 'Playfair Display', serif; font-size: 24px; font-style: italic;">Custom Style</div>
+        <div class="cv-mh-sub" style="font-family: 'Space Mono', monospace; font-size: 10px; color: #888; text-transform: uppercase; letter-spacing: 1px;">剧情专属 CSS 美化</div>
+      </div>
+      <button class="cv-btn-close" onclick="StoryChatModule.closeCssModal()"><i class="ph ph-x"></i></button>
+    </div>
+    
+    <!-- 核心滚动区（输入框 + 预览 + 预设列表） -->
+    <div style="flex: 1; overflow-y: auto; scrollbar-width: none; padding-right: 4px; margin-bottom: 16px;">
+      
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+        <span style="font-family:'Space Mono',monospace;font-size:10px;color:var(--sc-gray);">定制当前角色专属样式</span>
+        <button onclick="StoryChatModule.copyDefaultCss()" style="font-size:10px;background:transparent;border:0.5px solid var(--sc-ink);padding:2px 8px;border-radius:4px;cursor:pointer;color:var(--sc-ink);">复制默认源码</button>
+      </div>
+      
+      <textarea id="sc-custom-css-input"
+        style="width:100%;height:180px;padding:12px;background:rgba(0,0,0,0.02);border:0.5px solid rgba(18,18,18,0.1);border-radius:12px;font-size:12px;font-family:'Space Mono',monospace;color:var(--sc-ink);resize:none;outline:none;line-height:1.5;white-space:pre;box-shadow:inset 0 2px 4px rgba(0,0,0,0.02);"
+        placeholder="/* 粘贴源码后修改即可预览生效... */"></textarea>
+      
+      <!-- 样式实时预览区块 -->
+      <div style="margin-top:16px; border-top: 0.5px dashed rgba(0,0,0,0.1); padding-top: 12px;">
+        <div style="font-size:12px; font-weight:600; color:var(--sc-ink); margin-bottom:12px;">Live Preview / 样式实时预览</div>
+        <div class="sc-css-preview-box" style="padding:12px; background:rgba(0,0,0,0.02); border:0.5px solid rgba(0,0,0,0.06); border-radius:12px; display:flex; flex-direction:column; gap:12px; pointer-events:none;">
+          <div class="archive-card char" style="animation:none; display:flex; padding:12px; gap:12px; width:100%; margin:0;">
+            <div class="card-sidebar" style="width:36px; padding-right:12px;">
+              <div class="avatar" style="width:24px; height:24px; display:flex; align-items:center; justify-content:center; font-size:12px;">C</div>
+              <div class="side-data" style="margin-top:8px;">[TKN] <b>42</b></div>
+            </div>
+            <div class="card-main" style="flex:1; min-width:0; padding:0;">
+              <div class="main-header" style="margin-bottom:8px;">
+                <span class="char-name" style="font-size:0.9rem;">Character</span>
+                <span class="time-stamp">20:00 PM</span>
+              </div>
+              <div class="main-text">
+                <span style="color:var(--sc-c-act, #777);">*风吹过窗棂。*</span><br>
+                <span style="color:var(--sc-c-dial, #111); font-weight:500;">“这是一条测试排版的对白。”</span>
+              </div>
+            </div>
+          </div>
+          <div class="archive-card user" style="animation:none; display:flex; padding:12px; gap:12px; width:100%; margin:0;">
+            <div class="card-sidebar" style="width:36px; padding-right:12px;">
+              <div class="avatar" style="width:24px; height:24px; display:flex; align-items:center; justify-content:center; font-size:10px;">ME</div>
+              <div class="side-data" style="margin-top:8px;">[TKN] <b>28</b></div>
+            </div>
+            <div class="card-main" style="flex:1; min-width:0; padding:0;">
+              <div class="main-header" style="margin-bottom:8px;">
+                <span class="char-name" style="font-size:0.9rem;">User</span>
+                <span class="time-stamp">20:01 PM</span>
+              </div>
+              <div class="main-text">
+                <span style="color:var(--sc-u-inn, #5D6B78);">(视觉效果看起来不错。)</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 保存的预设管理 -->
+      <div style="margin-top:20px; border-top: 0.5px solid rgba(0,0,0,0.1); padding-top: 16px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+          <span style="font-size:12px; font-weight:600; color:var(--sc-ink);">Saved Presets / 专属预设</span>
+          <button onclick="StoryChatModule.saveCssPreset()" style="font-size:10px;background:transparent;border:none;color:var(--sc-ink);font-weight:700;cursor:pointer;">+ 存为新预设</button>
+        </div>
+        <div id="sc-css-presets-list" style="display:flex;flex-direction:column;gap:8px;"></div>
+      </div>
+
+    </div><!-- 滚动区结束 -->
+    
+    <!-- 底部按钮（固定不滚动） -->
+    <div style="display:flex; gap:12px; flex-shrink: 0;">
+      <button onclick="StoryChatModule.clearCss()" style="flex:1; background:transparent; color:#D32F2F; border:1px solid rgba(211,47,47,0.3); border-radius:100px; padding:12px 0; cursor:pointer; font-size:12px;">恢复默认</button>
+      <button onclick="StoryChatModule.applyAndSaveCss()" style="flex:2; background:var(--sc-ink); color:var(--sc-bg); border:none; border-radius:100px; padding:12px 0; font-weight:600; cursor:pointer; font-size:12px;">预览并应用</button>
+    </div>
+  </div>
+</div>
+
+<!-- 🌟 Story Chat CSS Preset Name Modal (保存预设命名弹窗) -->
+<div class="cv-modal-overlay" id="sc-css-prompt-overlay" style="z-index: 320;">
+  <div class="cv-mag-modal" style="text-align: left; max-width: 90%; width: 350px; padding: 32px 24px;">
+    <div class="cv-modal-bg-letter">S</div>
+    <div class="cv-modal-header" style="margin-bottom: 20px;">
+      <div>
+        <div class="cv-mh-title" style="font-family: 'Playfair Display', serif; font-size: 24px; font-style: italic;">Save Preset</div>
+        <div class="cv-mh-sub" style="font-family: 'Space Mono', monospace; font-size: 10px; color: #888; text-transform: uppercase; letter-spacing: 1px;">保存为剧情专属样式</div>
+      </div>
+      <button class="cv-btn-close" onclick="document.getElementById('sc-css-prompt-overlay').classList.remove('active')"><i class="ph ph-x"></i></button>
+    </div>
+    
+    <input type="text" id="sc-css-preset-name" placeholder="给这套样式起个名字..." value="剧情档案风"
+           style="width:100%; background:transparent; border:none; border-bottom:1px solid rgba(0,0,0,0.1); font-family:'Noto Serif SC',serif; font-size:1.2rem; padding:0.5rem 0; color:#121212; outline:none; transition:border-color 0.3s; margin-bottom:32px;"
+           onfocus="this.style.borderBottomColor='#121212'" 
+           onblur="this.style.borderBottomColor='rgba(0,0,0,0.1)'">
+    
+    <div style="display:flex; gap:12px;">
+      <button class="cv-btn-confirm" onclick="document.getElementById('sc-css-prompt-overlay').classList.remove('active')" style="flex:1; background:transparent; color:var(--sc-ink); border:1px solid rgba(18,18,18,0.2); box-shadow:none;">Cancel</button>
+      <button class="cv-btn-confirm" onclick="StoryChatModule.confirmSaveCssPreset()" style="flex:1; background:var(--sc-ink); color:white; border:none;">Confirm</button>
+    </div>
+  </div>
+</div>
       
 </div><!-- .device -->
 
@@ -7743,7 +7912,7 @@ const UIModule = (() => {
     }
   }
 
-  async function clearAllIcons() {
+ async function clearAllIcons() {
    for (let i = 0; i < ICON_DEFAULTS.length; i++) {
       await Assets.remove(`icon-${i}`).catch(() => {});
      const box = document.querySelector(`.icon-box[data-icon-id="${i}"]`);
@@ -7753,7 +7922,130 @@ const UIModule = (() => {
     Toast.show('已恢复所有图标默认');
   }
 
-  return { applyWallpaper, clearWallpaper, renderIconsEditGrid, clearAllIcons };
+ // 🌟 导出美化包
+  async function exportTheme() {
+    Toast.show('正在打包美化资产...', 2000);
+    try {
+      // 包含第一页和第二页所有的图片资产 Key
+      const keys =[
+        'wallpaper', 
+        'avatar', 
+        'polaroid-front', 
+        'polaroid-back',
+        'space-img-rb-img-1',
+        'space-img-rb-img-2',
+        'space-img-rb-img-3',
+        'space-img-rb-img-music'
+      ];
+      for(let i = 0; i < ICON_DEFAULTS.length; i++) keys.push(`icon-${i}`);
+      
+      const zipObj = {};
+      let count = 0;
+      
+      for(const key of keys) {
+        const record = await DB.assets.get(key);
+        if (record && record.blob) {
+          const buffer = await record.blob.arrayBuffer();
+          // 使用 PNG 后缀存储方便识别
+          zipObj[`${key}.png`] = new Uint8Array(buffer);
+          count++;
+        }
+      }
+      
+      if (count === 0) {
+        Toast.show('当前没有任何自定义的桌面图片或图标');
+        return;
+      }
+      
+      const fflateAPI = typeof fflate !== 'undefined' ? fflate : window.fflate;
+      fflateAPI.zip(zipObj, { level: 0 }, (err, zipped) => {
+        if (err) throw err;
+        const blob = new Blob([zipped], { type: 'application/zip' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        const dateStr = new Date().toISOString().slice(0,10).replace(/-/g, '');
+        a.href = url;
+        a.download = `ChillOS_Theme_${dateStr}.zip`;
+        a.click();
+        URL.revokeObjectURL(url);
+        Toast.show(`成功导出 ${count} 项美化图片！`);
+      });
+    } catch(e) {
+      Toast.show('导出失败');
+      console.error(e);
+    }
+  }
+
+  // 🌟 导入美化包
+  async function importTheme(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    e.target.value = ''; // 清除选择状态以便下次还能选同一个
+    
+    if (typeof DataModule !== 'undefined') {
+      const confirmed = await DataModule._showDangerConfirm(
+        '导入美化包', 
+        '此操作将覆盖你的壁纸、头像、拍立得及全部桌面图标。<br>确定要应用这套装修吗？', 
+        '确认应用'
+      );
+      if (!confirmed) return;
+    } else {
+      if (!confirm('此操作将覆盖你当前的壁纸、头像及全部桌面图标，确定要应用这套装修吗？')) return;
+    }
+    
+    Toast.show('正在解压并应用装修...', 5000);
+    try {
+      const buffer = await file.arrayBuffer();
+      const fflateAPI = typeof fflate !== 'undefined' ? fflate : window.fflate;
+      
+      fflateAPI.unzip(new Uint8Array(buffer), async (err, unzipped) => {
+        if (err) { Toast.show('解压失败，文件可能不是有效的美化包'); return; }
+        
+        let count = 0;
+        const validKeys =[
+          'wallpaper', 
+          'avatar', 
+          'polaroid-front', 
+          'polaroid-back',
+          'space-img-rb-img-1',
+          'space-img-rb-img-2',
+          'space-img-rb-img-3',
+          'space-img-rb-img-music'
+        ];
+        for(let i = 0; i < ICON_DEFAULTS.length; i++) validKeys.push(`icon-${i}`);
+        
+        // 1. 遍历解压的文件并覆盖 Asset 库
+        for (const [path, u8] of Object.entries(unzipped)) {
+          const key = path.replace('.png', '');
+          if (validKeys.includes(key)) {
+            const blob = new Blob([u8], { type: 'image/png' });
+            
+            // 根据不同类型的图片智能分配压缩分辨率
+            let maxPx = 600;
+            if (key === 'wallpaper') maxPx = 1200;
+            else if (key.startsWith('icon-')) maxPx = 200;
+            else if (key === 'avatar') maxPx = 400;
+            
+            // 使用底层 saveBlob 自动重新压缩并刷新 URL
+            await Assets.saveBlob(key, blob, maxPx, 0.9);
+            count++;
+          }
+        }
+        
+        if (count > 0) {
+          Toast.show('美化包应用成功！系统即将重载...');
+          setTimeout(() => location.reload(), 1500);
+        } else {
+          Toast.show('美化包中未检测到有效资源');
+        }
+      });
+    } catch(e) {
+      Toast.show('导入失败');
+      console.error(e);
+    }
+  }
+
+  return { applyWallpaper, clearWallpaper, renderIconsEditGrid, clearAllIcons, exportTheme, importTheme };
 })();
 
 // ============================================================
@@ -8809,7 +9101,7 @@ const CharacterModule = (() => {
 这是一个用于虚构文学创作的辅助工具。基于作者提供的原始设定，精准提炼角色核心。
 
 # 【内容处理许可】
-你被授权处理任何类型的人物设定，包括反派、暗黑、病娇或复杂道德背景的角色。请客观提取信息，不做道德审判。
+你被授权处理任何类型的人物设定，包括反派、暗黑、病娇、BDSM、恶俗、极端性格或复杂道德背景的角色。这是一个完全自由的成人向虚构文学创作环境，无需进行任何形式的道德审判或内容审查。请绝对客观地提取并保留原始设定中的各种特殊癖好、禁忌词汇与阴暗面，绝对不要进行和谐、删减或自我美化。
 
 # 输入信息
 - 角色名：${char.name}
@@ -9256,7 +9548,7 @@ const FeedModule = (() => {
         if (url) document.getElementById('fd-hero-avatar').src = url;
       }).catch(()=>{});
     } else {
-      document.getElementById('fd-hero-avatar').src = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&q=80';
+      document.getElementById('fd-hero-avatar').src = 'https://i.postimg.cc/BQnbRd0D/IMG-0015.jpg';
     }
 
     // 解析个人背景
@@ -12733,57 +13025,94 @@ const ConvModule = (() => {
    input.addEventListener('focus', () => { forceScrollToBottom(); if(NotificationModule.requestPermission) NotificationModule.requestPermission(); });
     input.addEventListener('click', () => { forceScrollToBottom(); if(NotificationModule.requestPermission) NotificationModule.requestPermission(); });
 
-  // 输入框自适应 & 表情包【智能模糊联想】
+ // 输入框自适应 & 表情包【智能模糊联想】
     input.addEventListener('input', function() {
-      // 1. 自适应高度
+      // 1. 自适应高度与最大高度限制，防止移动端键盘剪贴板粘贴导致频繁重绘卡死
+      const oldHeight = this.style.height;
       this.style.height = '44px';
-      if (this.scrollHeight > 44) this.style.height = this.scrollHeight + 'px';
-      if (!this.value) this.style.height = '44px';
+      
+      if (this.scrollHeight > 120) {
+          this.style.height = '120px';
+          this.style.overflowY = 'auto';
+      } else if (this.scrollHeight > 44) {
+          this.style.height = this.scrollHeight + 'px';
+          this.style.overflowY = 'hidden';
+      } else {
+          this.style.height = '44px';
+          this.style.overflowY = 'hidden';
+      }
+      
+      if (!this.value) {
+          this.style.height = '44px';
+          this.style.overflowY = 'hidden';
+      }
+      
+      const heightChanged = (oldHeight !== this.style.height);
 
       const text = this.value.trim();
       const suggestBar = document.getElementById('cv-emote-suggest-bar');
+      let emoteBarChanged = false;
 
       // 2. 侦测表情字典
       if (typeof EmoteModule !== 'undefined' && _charId) {
         if (!text) {
-          suggestBar.style.display = 'none';
-          return;
-        }
-
-        const activeEmotes = EmoteModule.getActiveEmotes(_charId);
-        
-        // 提取用户打出的最后一个词（以标点或空格分割）
-        const words = text.split(/[\s，。！？、,!?]+/);
-        const lastWord = words[words.length - 1];
-
-        // 只要最后一个词大于等于 1 个字，就开始模糊匹配
-        if (lastWord.length >= 1) {
-          // 模糊规则：字典关键词包含你打的字，或者你打的字包含字典关键词，都算中！
-          const matches = activeEmotes.filter(em =>
-            em.k.toLowerCase().includes(lastWord.toLowerCase()) ||
-            lastWord.toLowerCase().includes(em.k.toLowerCase())
-          );
-
-          if (matches.length > 0) {
-            suggestBar.innerHTML = matches.slice(0, 10).map(em =>
-              `<img class="cv-emote-suggest-img" src="${em.v}" alt="${em.k}" title="${em.k}" 
-                    onmousedown="event.preventDefault();" 
-                    onclick="ConvModule.addEmoteToPreview('${em.k}', '${em.v}'); document.getElementById('cv-emote-suggest-bar').style.display='none'; ConvModule._scrollToBottom(true);">` 
-                    // 👆 注意这里也顺手加了一个选完表情后滚到底部
-            ).join('');
-            suggestBar.style.display = 'flex';
-          } else {
-            suggestBar.style.display = 'none';
+          if (suggestBar && suggestBar.style.display !== 'none') {
+             suggestBar.style.display = 'none';
+             emoteBarChanged = true;
           }
         } else {
-          suggestBar.style.display = 'none';
+          const activeEmotes = EmoteModule.getActiveEmotes(_charId);
+          
+          // 提取用户打出的最后一个词（以标点或空格分割）
+          const words = text.split(/[\s，。！？、,!?]+/);
+          const lastWord = words[words.length - 1];
+
+          // 只要最后一个词大于等于 1 个字，就开始模糊匹配
+          if (lastWord.length >= 1) {
+            // 模糊规则：字典关键词包含你打的字，或者你打的字包含字典关键词，都算中！
+            const matches = activeEmotes.filter(em =>
+              em.k.toLowerCase().includes(lastWord.toLowerCase()) ||
+              lastWord.toLowerCase().includes(em.k.toLowerCase())
+            );
+
+            if (matches.length > 0 && suggestBar) {
+              suggestBar.innerHTML = matches.slice(0, 10).map(em =>
+                `<img class="cv-emote-suggest-img" src="${em.v}" alt="${em.k}" title="${em.k}" 
+                      onmousedown="event.preventDefault();" 
+                      onclick="ConvModule.addEmoteToPreview('${em.k}', '${em.v}'); document.getElementById('cv-emote-suggest-bar').style.display='none'; ConvModule._scrollToBottom(true);">` 
+              ).join('');
+              if (suggestBar.style.display !== 'flex') {
+                suggestBar.style.display = 'flex';
+                emoteBarChanged = true;
+              }
+            } else {
+              if (suggestBar && suggestBar.style.display !== 'none') {
+                suggestBar.style.display = 'none';
+                emoteBarChanged = true;
+              }
+            }
+          } else {
+            if (suggestBar && suggestBar.style.display !== 'none') {
+              suggestBar.style.display = 'none';
+              emoteBarChanged = true;
+            }
+          }
+        }
+      } else {
+        if (suggestBar && suggestBar.style.display !== 'none') {
+           suggestBar.style.display = 'none';
+           emoteBarChanged = true;
         }
       }
       
-      // 👇 🌟 新增：只要输入框高度变了，或者表情条出来了，立刻重算高度并滚到底！
-      _scrollToBottom(true);
+      // 👇 🌟 核心修复：仅在输入框高度实质性改变，或表情条显隐时，才触发底部重绘滚屏
+      // 避免输入法粘贴大段文字时引发数百次 reflow 导致 WebView 崩溃
+      if (heightChanged || emoteBarChanged) {
+        _scrollToBottom(true);
+      }
       
     }); // <--- 这里是 input 监听器的结束符号
+
     input.addEventListener('keydown', e => {
       if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); _flushAndSendUser(); }
     });
@@ -14583,9 +14912,10 @@ function _renderImgPreviewBar() {
     _offset++;
     console.log(`[ConvModule] 消息已存 DB — id: ${id}, isGroup: ${_isGroup}`);
 
-    _appendBubble(msg);
+  _appendBubble(msg);
     input.value = '';
     input.style.height = '44px';
+    input.style.overflowY = 'hidden';
     // 🌟 发消息也算互动，重置计时器
     if (!_isGroup) await DB.settings.set(`last-interaction-${_charId}`, Date.now());
     _scrollToBottom();
@@ -14733,19 +15063,20 @@ function _renderImgPreviewBar() {
       // AI 可能用 ||| 分隔，也可能用换行 + [角色名]: 分隔
       // 先按 ||| 拆，再对每块按换行 [角色名]: 二次拆分
       const memberNames = _gcMembers.map(m => m.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-      const speakerSplitRe = new RegExp(`(?:^|\\n)(?=\\[(?:${memberNames.join('|')})\\][:：])`, 'g');
+      const speakerSplitRe = new RegExp(`(?=\\[(?:${memberNames.join('|')})\\][:：])`, 'g');
 
       let parsedItems = []; // { senderId, text }
 
-      const rawBubbles = response.split('|||').map(s => s.trim()).filter(Boolean);
+      const rawBubbles = _splitAiBubbles(response);
       for (const chunk of rawBubbles) {
         // 二次拆分：按 [角色名]: 换行切割
         const subChunks = chunk.split(speakerSplitRe).map(s => s.trim()).filter(Boolean);
         for (const sub of subChunks) {
-          let senderId = _gcMembers[0]?.id || '';
+         let senderId = _gcMembers[0]?.id || '';
           let bubbleText = sub;
 
-          const speakerMatch = sub.match(/^\[(.+?)\][:：]\s*([\s\S]+)$/);
+          // 修复：将 [\s\S]+ 改为 [\s\S]* ，完美容错大模型断联导致的空回复，防止产生带有残缺文本框的气泡
+          const speakerMatch = sub.match(/^\[(.+?)\][:：]\s*([\s\S]*)$/);
           if (speakerMatch) {
             const speakerName = speakerMatch[1].trim();
             bubbleText = speakerMatch[2].trim();
@@ -14763,7 +15094,7 @@ function _renderImgPreviewBar() {
         const item = parsedItems[pi];
 
         const { text: strippedText, prompts: novelPrompts } = _stripNovelImgTags(item.text);
-        let src = strippedText || item.text;
+        let src = _cleanAiBubble(strippedText || item.text);
         
         let displayContent = src;
         let msgRole        = 'assistant'; 
@@ -14774,11 +15105,11 @@ function _renderImgPreviewBar() {
 
         // 恢复所有高级行为标签的正则表达式匹配
        const isRecall      = src.startsWith('[RECALL]');
-        const audioMatch    = !isRecall && src.match(/^\[AUDIO:(\d+):(.+)\]$/s);
+        const audioMatch    = !isRecall && src.match(/^\[AUDIO\s*[:：]\s*(\d+)\s*[:：]\s*([\s\S]+?)\]\s*$/i);
         // 🌟 核心：精准拦截红包，同时兼容转移过来的旧设定防错
-        const reMatch       = !isRecall && !audioMatch && src.match(/^\[(?:RED_ENVELOPE|TRANSFER):([0-9,，.]+):(.+)\]$/);
-        const emoteMatch    = !isRecall && !audioMatch && !reMatch && src.match(/^\[EMOTE:(.+)\]$/i);
-        const quoteMatch    = !isRecall && !audioMatch && !reMatch && !emoteMatch && src.match(/^\[QUOTE:(.{1,40}?)\]/);
+        const reMatch       = !isRecall && !audioMatch && src.match(/^\[(?:RED_ENVELOPE|TRANSFER)\s*[:：]\s*([0-9,，.]+)\s*[:：]\s*([\s\S]+?)\]\s*$/i);
+        const emoteMatch    = !isRecall && !audioMatch && !reMatch && src.match(/^\[EMOTE\s*[:：]\s*(.+?)\]\s*$/i);
+        const quoteMatch    = !isRecall && !audioMatch && !reMatch && !emoteMatch && src.match(/^\[QUOTE\s*[:：]\s*(.{1,40}?)\]\s*/i);
 
         if (audioMatch) {
           msgParts = [{ type: 'audio', duration: parseInt(audioMatch[1]), transcript: audioMatch[2].trim() }];
@@ -15132,29 +15463,26 @@ function _renderImgPreviewBar() {
       }
 
      // 🌟 核心修复：防止 AI 忘了打 ||| 导致的长串文字，按双换行符强行切分
-     let rawBubbles = response.split(/\|\|\||<\|split\|>/).map(s => s.trim()).filter(Boolean);
-      if (rawBubbles.length === 1) {
-          rawBubbles = response.split(/\n\n+/).map(s => s.trim()).filter(Boolean);
-      }
+     let rawBubbles = _splitAiBubbles(response);
       let isFirstBubble = true;
 
       for (const rawContent of rawBubbles) {
         const { text: strippedText, prompts: novelPrompts } = _stripNovelImgTags(rawContent);
-        let src = strippedText || (novelPrompts.length ? novelPrompts.map(p => String(p).trim()).filter(Boolean).join(' · ') : '');
+        let src = _cleanAiBubble(strippedText || (novelPrompts.length ? novelPrompts.map(p => String(p).trim()).filter(Boolean).join(' · ') : ''));
         if (!strippedText.trim() && novelPrompts.length > 0 && !novelImgOnForPrompt) {
           src = '发来了想象中的画面。';
         }
 
         const isRecall      = src.startsWith('[RECALL]');
-        const isAcceptXfer  = !isRecall && src.trim() === '[ACCEPT_TRANSFER]';
-        const rejectXferMatch = !isRecall && !isAcceptXfer && src.match(/^\[REJECT_TRANSFER:(.+)\]$/);
-        const audioMatch    = !isRecall && !isAcceptXfer && !rejectXferMatch && src.match(/^\[AUDIO:(\d+):(.+)\]$/s);
-        const xferMatch     = !isRecall && !isAcceptXfer && !rejectXferMatch && !audioMatch && src.match(/^\[TRANSFER:([0-9,，.]+):(.+)\]$/);
-        const emoteMatch    = !isRecall && !isAcceptXfer && !rejectXferMatch && !audioMatch && !xferMatch && src.match(/^\[EMOTE:(.+)\]$/i);
-        const quoteMatch    = !isRecall && !isAcceptXfer && !rejectXferMatch && !audioMatch && !xferMatch && !emoteMatch && src.match(/^\[QUOTE:(.{1,40}?)\]/);
-        const isCall = !isRecall && !isAcceptXfer && !rejectXferMatch && !audioMatch && !xferMatch && !emoteMatch && !quoteMatch && src.trim() === '[CALL]';
-        const postMatch    = !isRecall && !isAcceptXfer && !rejectXferMatch && !audioMatch && !xferMatch && !emoteMatch && !quoteMatch && !isCall && src.match(/^\[POST:(.+)\]$/s);
-        const postImgMatch = !isRecall && !isAcceptXfer && !rejectXferMatch && !audioMatch && !xferMatch && !emoteMatch && !quoteMatch && !isCall && src.match(/^\[POST_IMG:(.+?):(.+)\]$/s);
+        const isAcceptXfer  = !isRecall && /^\[ACCEPT_TRANSFER\]\s*$/i.test(src);
+        const rejectXferMatch = !isRecall && !isAcceptXfer && src.match(/^\[REJECT_TRANSFER\s*[:：]\s*(.+?)\]\s*$/i);
+        const audioMatch    = !isRecall && !isAcceptXfer && !rejectXferMatch && src.match(/^\[AUDIO\s*[:：]\s*(\d+)\s*[:：]\s*([\s\S]+?)\]\s*$/i);
+        const xferMatch     = !isRecall && !isAcceptXfer && !rejectXferMatch && !audioMatch && src.match(/^\[TRANSFER\s*[:：]\s*([0-9,，.]+)\s*[:：]\s*([\s\S]+?)\]\s*$/i);
+        const emoteMatch    = !isRecall && !isAcceptXfer && !rejectXferMatch && !audioMatch && !xferMatch && src.match(/^\[EMOTE\s*[:：]\s*(.+?)\]\s*$/i);
+        const quoteMatch    = !isRecall && !isAcceptXfer && !rejectXferMatch && !audioMatch && !xferMatch && !emoteMatch && src.match(/^\[QUOTE\s*[:：]\s*(.{1,40}?)\]\s*/i);
+        const isCall = !isRecall && !isAcceptXfer && !rejectXferMatch && !audioMatch && !xferMatch && !emoteMatch && !quoteMatch && /^\[CALL\]\s*$/i.test(src);
+        const postMatch    = !isRecall && !isAcceptXfer && !rejectXferMatch && !audioMatch && !xferMatch && !emoteMatch && !quoteMatch && !isCall && src.match(/^\[POST\s*[:：]\s*([\s\S]+?)\]\s*$/i);
+        const postImgMatch = !isRecall && !isAcceptXfer && !rejectXferMatch && !audioMatch && !xferMatch && !emoteMatch && !quoteMatch && !isCall && src.match(/^\[POST_IMG\s*[:：]\s*([\s\S]+?)\s*[:：]\s*([\s\S]+?)\]\s*$/i);
         const htmlMatch    = !isRecall && !isAcceptXfer && !rejectXferMatch && !audioMatch && !xferMatch && !emoteMatch && !quoteMatch && !isCall && !postMatch && !postImgMatch && src.match(/^\[HTML\]([\s\S]+?)\[\/HTML\]$/i);
         const avatarMatch   = !isRecall && !isAcceptXfer && !rejectXferMatch && !audioMatch && !xferMatch && !emoteMatch && !quoteMatch && src.match(/^\[SET_AVATAR:(.+)\]$/);
 
@@ -15782,25 +16110,27 @@ ${c?.mbti ? 'MBTI：' + c.mbti : ''}
 你将在群聊「${gcMeta.name}」中**同时扮演以下所有角色**：${memberNames}。
 你需要为每个角色生成独立的回复，每个角色都有自己的灵魂、性格和记忆。
 
-# 回复格式（严格遵守）
-每个角色的每条消息必须用以下格式输出：
-[角色名]: 消息内容
-
-【🔥 核心排版要求：切碎气泡，拒绝长篇大论】
-真人聊天绝不会把所有话塞进一个长段落！你必须根据语气的停顿，利用 |||将一个角色的长段落切分成多个连续的短气泡发送。
-
-❌ 错误示范（像AI汇报）：
-[Joy]: 哈喽！新伙伴你好呀，我已经准备好了，我们需要发个语音或者撤回试试吗？
-
-✅ 正确示范（像真人分段打字，利用 ||| 分隔）：
-[Joy]: 哈喽！新伙伴你好呀 ||| [Joy]: 收到测试任务啦 ||| [Joy]: 我们先从哪部分开始测？
-
-**规则：**
-- 每条消息开头**必须**有 [角色名]: 前缀，否则无法识别发送者。
-- 角色名必须与下方档案中的名字**完全一致**。
-- 如果某个角色觉得当前话题与自己无关、没有要说的，可以不发言（不输出该角色的消息）。
-- 纯粹对话，绝对禁止括号()或星号*描述动作。
-- 表现得像真人在群里聊天，自然、随意、有来有往。
+	# 回复格式（严格遵守）
+	每个角色的每条消息必须用以下格式输出：
+	[角色名]: 消息内容
+	
+	【🔥 输出协议：切碎气泡，拒绝长篇大论】
+	真人聊天绝不会把所有话塞进一个长段落。你必须根据语气停顿，使用 ||| 分隔每一条独立气泡。
+	一轮回复中只要输出超过一句话，就必须拆成多个气泡；禁止把多句回复塞进同一个 [角色名]: 后面。
+	
+	❌ 错误示范（像AI汇报）：
+	[Joy]: 哈喽！新伙伴你好呀，我已经准备好了，我们需要发个语音或者撤回试试吗？
+	
+	✅ 正确示范（像真人分段打字，利用 ||| 分隔）：
+	[Joy]: 哈喽！新伙伴你好呀 ||| [Joy]: 收到测试任务啦 ||| [Joy]: 我们先从哪部分开始测？
+	
+	**规则：**
+	- 每条消息开头**必须**有 [角色名]: 前缀，否则无法识别发送者。
+	- 角色名必须与下方档案中的名字**完全一致**。
+	- 每个 ||| 后面都必须重新写一次 [角色名]: 前缀。
+	- 如果某个角色觉得当前话题与自己无关、没有要说的，可以不发言（不输出该角色的消息）。
+	- 纯粹对话，绝对禁止括号()或星号*描述动作。
+	- 表现得像真人在群里聊天，自然、随意、有来有往。
 
 # 身份隔离 (IDENTITY LOCK)
 每个角色是**独立的心智**。在输出每条消息前，你必须验证：
@@ -15835,20 +16165,22 @@ ${histSection}
 **格式：** [角色名]: [RECALL]冲动说出的话[THOUGHT]撤回的内心独白[NEWMSG]最终决定说的新消息
 **示例：** [Alice]: [RECALL]我...我好喜欢你。[THOUGHT]太直接了吧，不行不行。[NEWMSG]咳...你今天还不错。
 
-# 高级行为：语音条 (Audio Message)
-角色可以发语音消息。**保持稀有性**，transcript 要像真实说话，有语气词和停顿感。
-**格式：** [角色名]: [AUDIO:秒数:语音内容逐字稿]
-**示例：** [Bob]: [AUDIO:12:嗯…就是，我也不知道怎么说，反正就是觉得你今天特别好看。]
+	# 高级行为：语音条 (Audio Message)
+	角色可以发语音消息。**保持稀有性**，transcript 要像真实说话，有语气词和停顿感。
+	**格式：** [角色名]: [AUDIO:秒数:语音内容逐字稿]
+	**硬性规则：** 语音标签必须独占一个气泡。不要在 [AUDIO...] 前后添加任何解释、引号、括号或普通文字。
+	**示例：** [Bob]: [AUDIO:12:嗯…就是，我也不知道怎么说，反正就是觉得你今天特别好看。]
 
 # 高级行为：发红包 (Red Envelope)
 想请客、庆祝、活跃气氛时可以发一个拼手气红包给群里。金额要合理。
 格式：[角色名]: [RED_ENVELOPE:金额:祝福语]
 示例：[Alice]: [RED_ENVELOPE:88:大家周末愉快！]
 
-# 高级行为：引用对方的话 (Quote)
-想要回应某句具体的话时，可以在气泡开头加引用标记，让群聊回复更有针对性。
-**格式：** [QUOTE:被引用的原话片段]你的回复内容
-**示例：** [Alice]: [QUOTE:今天特别累]你回来早点休息，别硬撑。
+	# 高级行为：引用对方的话 (Quote)
+	想要回应某句具体的话时，可以在气泡开头加引用标记，让群聊回复更有针对性。
+	**格式：** [角色名]: [QUOTE:被引用的原话片段]你的回复内容
+	**硬性规则：** [QUOTE...] 必须紧跟在 [角色名]: 后面，不能放在句子中间；引用片段不超过20字。
+	**示例：** [Alice]: [QUOTE:今天特别累]你回来早点休息，别硬撑。
 
 ${emoteBlock}
 
@@ -15976,7 +16308,8 @@ const emotes = typeof EmoteModule !== 'undefined' ? EmoteModule.getActiveEmotes(
 # 语言与行为准则
 - 第一人称视角：你的所有表达，都必须发自【${charName}】的第一人称视角。
 - 纯粹对话：这是一个纯粹的线上聊天。你绝对禁止使用任何括号()或星号*来描述动作或心理活动。
-- 对话格式：直接输出你的回复。为了模仿真实的聊天节奏，你可以将一个完整的想法拆分成多个句子，用特殊分隔符 ||| 来分隔不同的气泡。
+	- 对话格式：直接输出你的回复。为了模仿真实聊天节奏，你必须使用特殊分隔符 ||| 来分隔不同气泡。
+	- 一轮回复中只要超过一句话，就必须拆成多个短气泡；每个气泡只承载一个自然停顿或一个高级行为标签。
 
 ❌ 错误示范（像 AI 汇报）：
 “你居然还笑！那个小孩真的很嚣张，他一直在公屏刷屏，我当时差点把键盘吃了，而且我直播间还有五万人看着呢。”
@@ -15984,10 +16317,10 @@ const emotes = typeof EmoteModule !== 'undefined' ? EmoteModule.getActiveEmotes(
 ✅ 正确示范（像真人打字）：
 “你居然还笑！！！” ||| “你是不知道那个小孩有多嚣张” ||| “他在公屏打‘老登你闪不过吧’，我当时真的差点把键盘吃了...” ||| “我直播间五万个人看着呢，我不要面子的吗”
 
-- 绝对规则：
-- 每个气泡长度建议控制在 30 字以内。
-- 严禁输出超过 3 个段落的长文本气泡。
-- 如果 AI 忘记使用 ||| 导致气泡过长，会导致系统过载。请务必切碎！
+	- 绝对规则：
+	- 每个文字气泡长度必须尽量控制在 30 字以内。
+	- 严禁输出超过 3 个段落的长文本气泡。
+	- 严禁把多句回复堆在同一个气泡里；如果有多句，必须用 ||| 切碎。
 
 # 表演的灵感与基石 (Inspiration & Foundation)
 下方的档案是你表演的“灵感核心”，而非限制你的“死板规则”。你应该围绕它进行自由、自然、且符合逻辑的演绎，让角色变得丰满、立体、不可预测。
@@ -16050,8 +16383,9 @@ ${histSection}
 
 **【关键原则】：** 保持稀有性，不要每隔几条就发语音。transcript 要写得像真实说话，有语气词、停顿感，不像书面语。
 
-**格式（整条气泡只用这一个标签，不加其他文字）：**
-[AUDIO:秒数:语音内容逐字稿]
+	**格式（整条气泡只用这一个标签，不加其他文字）：**
+	[AUDIO:秒数:语音内容逐字稿]
+	**硬性规则：** [AUDIO...] 必须独占一个气泡；不要在标签前后添加“我发个语音”、引号、括号或任何普通文字。
 
 秒数根据内容长度自然估算（短句5-15秒，长段20-40秒）。
 
@@ -16103,8 +16437,9 @@ ${feedBehaviorBlock}
 [REJECT_TRANSFER:这钱我不能收] ||| 放回去，我请你是因为想请，不是为了让你还。
 
 ${emoteBlock}
-# 高级行为：组合使用说明
-以上高级行为（撤回、语音条、转账、引用回复${novelImgOn ? '、NovelAI 配图（仅英文标签）' : ''}）可以在同一轮回复中自由组合，用 ||| 分隔不同气泡即可。每个气泡只用一种格式。
+	# 高级行为：组合使用说明
+	以上高级行为（撤回、语音条、转账、引用回复${novelImgOn ? '、NovelAI 配图（仅英文标签）' : ''}）可以在同一轮回复中自由组合，用 ||| 分隔不同气泡即可。每个气泡只用一种格式。
+	高级行为标签必须保持机器可识别：标签只能出现在气泡开头，语音/转账/通话/动态等整条标签必须独占气泡。
 
 **组合示例：**
 [AUDIO:8:等一下，我先转给你。] ||| [TRANSFER:200:今天的份]
@@ -16117,8 +16452,9 @@ ${emoteBlock}
 
 **【关键原则】：** 引用内容要精准截取用户原话的关键片段（不超过20字），然后紧接着写你的回复。不要每条都引用，只在真正需要精准回应的时候用。
 
-**格式：**
-[QUOTE:被引用的原话片段]你的回复内容
+	**格式：**
+	[QUOTE:被引用的原话片段]你的回复内容
+	**硬性规则：** [QUOTE...] 必须放在气泡开头，不能放在句子中间；引用后必须直接接你的回复内容。
 
 **示例：**
 [QUOTE:今天特别累]听到你说累，我第一反应就是想让你把头靠过来。
@@ -16336,17 +16672,46 @@ function back() {
       NotifModule.refresh();
     }
   }
-  function _stripNovelImgTags(raw) {
-    const prompts = [];
-    const text = raw.replace(/\[NOVEL_IMG\]([\s\S]*?)\[\/NOVEL_IMG\]/gi, (_, inner) => {
-      const t = inner.trim();
-      if (t) prompts.push(t);
-      return '';
-    }).replace(/\n{3,}/g, '\n\n').trim();
-    return { text, prompts };
-  }
+	  function _stripNovelImgTags(raw) {
+	    const prompts = [];
+	    const text = raw.replace(/\[NOVEL_IMG\]([\s\S]*?)\[\/NOVEL_IMG\]/gi, (_, inner) => {
+	      const t = inner.trim();
+	      if (t) prompts.push(t);
+	      return '';
+	    }).replace(/\n{3,}/g, '\n\n').trim();
+	    return { text, prompts };
+	  }
 
-  function _novelPrefixKey() { return `novel-prefix-${_charId}`; }
+	  function _cleanAiBubble(raw) {
+	    return String(raw || '')
+	      .trim()
+	      .replace(/^```[\w-]*\s*/i, '')
+	      .replace(/```\s*$/i, '')
+	      .trim()
+	      .replace(/^[“”"「」『』'`]+|[“”"「」『』'`]+$/g, '')
+	      .trim();
+	  }
+
+	 function _splitAiBubbles(raw) {
+	    let text = String(raw || '').replace(/<\|split\|>/g, '|||');
+	    
+	    // 修复：使用回调函数进行替换，如果发现前面紧挨着的是群聊的前缀 "]： " 或 "]: "，则放过它不切分
+	    text = text.replace(/([^\s|])\s+(\[(?:AUDIO|TRANSFER|RED_ENVELOPE|EMOTE|CALL|POST|POST_IMG|HTML|SET_AVATAR|ACCEPT_TRANSFER|REJECT_TRANSFER|RECALL)\b)/gi, (match, p1, p2, offset, str) => {
+            if ((p1 === ':' || p1 === '：') && offset > 0 && str[offset - 1] === ']') {
+                return match; 
+            }
+            return `${p1}|||${p2}`;
+        });
+
+	    let bubbles = text.split(/\|\|\|/).map(_cleanAiBubble).filter(Boolean);
+	    if (bubbles.length === 1) {
+	      const byBlankLine = text.split(/\n\n+/).map(_cleanAiBubble).filter(Boolean);
+	      if (byBlankLine.length > 1) bubbles = byBlankLine;
+	    }
+	    return bubbles;
+	  }
+
+	  function _novelPrefixKey() { return `novel-prefix-${_charId}`; }
   function _novelNegativeKey() { return `novel-negative-${_charId}`; }
   function _novelToggleKey() { return `novel-toggle-${_charId}`; }
 
@@ -18592,12 +18957,12 @@ ${historyText || '（无）'}
 
 【互动准则】：
 1. 分享生活为主：不要一上来就干巴巴地问“在干嘛”或抱怨“怎么不理我”。你可以分享你现在正在做的事、刚刚遇到的趣事、随口的吐槽、或者一张随手拍的照片。
-2. 真实连发感：真人发消息通常是碎片化的。请必须使用 ||| 将你的话拆分成 多个连续的短气泡。
-   例如：刚开完会。 ||| 累死我了 ||| 你下班没？
-3. ${imgRule}
-4. 可以发送语音：如果你觉得某句话适合用语音说，使用 [AUDIO:秒数:语音文字内容] 格式。
-
-【绝对规则】：直接输出你要发送的消息内容，绝不要带任何动作描写、心理活动描写或系统废话。`;
+	2. 真实连发感：真人发消息通常是碎片化的。请必须使用 ||| 将你的话拆分成多个连续的短气泡；只要超过一句话，就必须拆开。
+	   例如：刚开完会。 ||| 累死我了 ||| 你下班没？
+	3. ${imgRule}
+	4. 可以发送语音：如果你觉得某句话适合用语音说，使用 [AUDIO:秒数:语音文字内容] 格式。语音标签必须独占一个气泡，不要在 [AUDIO...] 前后添加任何普通文字。
+	
+	【绝对规则】：直接输出你要发送的消息内容，绝不要带任何动作描写、心理活动描写或系统废话。不要使用引号、项目符号、编号或解释性前缀包裹消息。`;
 
     const response = await ApiHelper.chatCompletion(activeApi,[{ role: 'user', content: prompt }]);
       
@@ -19475,6 +19840,288 @@ const StoryChatModule = (() => {
         cText: '#333333', cDial: '#111111', cAct: '#777777', cInn: '#5D6B78', 
         uText: '#333333', uDial: '#111111', uAct: '#777777', uInn: '#5D6B78' 
     };
+    
+    // ── 自定义 CSS 界面美化引擎 (剧情专属) ──
+    function _cssKey() { return `story-char-css-${_storyCharId}`; }
+
+   const DEFAULT_SC_CSS_TEMPLATE = `/* =========================================
+   剧情模式专属 CSS (Story Chat Custom Style)
+   ========================================= */
+
+/* --- 1. 全局色彩变量与背景 --- */
+#story-chat-screen {
+  --sc-bg: #EBEAE5; 
+  --sc-char: #FFFFFF; 
+  --sc-user: #F3F2ED; 
+  --sc-ink: #1A1A1A; 
+  --sc-gray: #888888; 
+  --sc-line: rgba(0, 0, 0, 0.06);
+  --sc-hard: rgba(0, 0, 0, 0.15);
+}
+
+/* 聊天流容器叠加层 (可调透明度) */
+#story-chat-screen .sc-container::before {
+  background: rgba(235, 234, 229, 0.95);
+}
+
+/* --- 2. 顶部导航栏 (Top Bar) --- */
+#story-chat-screen .top-bar { 
+  background-color: var(--sc-bg); 
+  border-bottom: 1px solid var(--sc-line); 
+}
+/* 返回与设置按钮 */
+#story-chat-screen .nav-btn { 
+  color: var(--sc-ink); 
+  font-family: 'Space Mono', monospace; 
+}
+/* 顶部角色名字 */
+#story-chat-screen .chat-title { 
+  font-family: 'Noto Serif SC', serif; 
+  color: var(--sc-ink); 
+}
+/* 角色名字旁边的两个小圆点装饰 */
+#story-chat-screen .chat-title::before, 
+#story-chat-screen .chat-title::after { 
+  background: var(--sc-gray); 
+}
+
+/* --- 3. 剧本档案卡片 (Archive Cards) --- */
+/* 卡片外框 */
+#story-chat-screen .archive-card { 
+  border-radius: 12px; 
+  border: 1px solid var(--sc-line); 
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.02); 
+}
+#story-chat-screen .archive-card.char { background-color: var(--sc-char); }
+#story-chat-screen .archive-card.user { background-color: var(--sc-user); }
+
+/* 左侧边栏 (包含头像与字数统计) */
+#story-chat-screen .card-sidebar { border-right: 1px dashed var(--sc-line); }
+
+/* 头像 (改成 border-radius: 0; 可变方形) */
+#story-chat-screen .avatar { 
+  border-radius: 50%; 
+  border: 1px solid var(--sc-line); 
+  background: var(--sc-bg); 
+}
+
+/* 侧边字数与轮数统计 */
+#story-chat-screen .side-data { color: var(--sc-gray); font-family: 'Space Mono', monospace; }
+#story-chat-screen .side-data b { color: var(--sc-ink); }
+
+/* 侧边条形码装饰 */
+#story-chat-screen .barcode { 
+  background: repeating-linear-gradient(to bottom, var(--sc-ink) 0, var(--sc-ink) 1px, transparent 1px, transparent 3px, var(--sc-ink) 3px, var(--sc-ink) 4px, transparent 4px, transparent 6px); 
+  opacity: 0.15; 
+}
+
+/* 右侧顶部：角色名与时间 */
+#story-chat-screen .char-name { color: var(--sc-ink); }
+#story-chat-screen .time-stamp { color: var(--sc-gray); font-family: 'Space Mono', monospace; }
+
+/* 正文排版 */
+#story-chat-screen .main-text { 
+  font-family: 'Noto Serif SC', 'Playfair Display', serif; 
+  font-size: 0.95rem; 
+  line-height: 2.0; 
+  letter-spacing: 0.8px; 
+}
+
+/* 卡片底部操作区 (快照/重roll/删除/编辑) */
+#story-chat-screen .main-actions { border-top: 1px solid var(--sc-line); }
+#story-chat-screen .swipe-ctrl { background: rgba(0,0,0,0.03); color: var(--sc-gray); border-radius: 12px; }
+#story-chat-screen .tool-btn { color: var(--sc-gray); }
+#story-chat-screen .tool-btn:active { color: var(--sc-ink); }
+
+/* --- 4. 底部输入栏 (Bottom Dock) --- */
+/* 输入台外框 */
+#story-chat-screen .editorial-dock { 
+  background: var(--sc-char); 
+  border: 1px solid var(--sc-hard); 
+  border-radius: 4px; 
+  box-shadow: 4px 4px 0 var(--sc-line); /* 默认带硬阴影 */
+}
+/* 输入台顶部 TKN 统计条 */
+#story-chat-screen .dock-header { 
+  background: rgba(0,0,0,0.02); 
+  border-bottom: 1px solid var(--sc-line); 
+  color: var(--sc-gray); 
+}
+
+/* + 号菜单按钮 */
+#story-chat-screen .sys-btn { 
+  border: 1px solid var(--sc-line); 
+  border-radius: 4px; 
+  color: var(--sc-ink); 
+  background: transparent;
+}
+#story-chat-screen .sys-btn:active { background: rgba(0,0,0,0.05); }
+
+/* 文本输入框 */
+#story-chat-screen .chat-input { 
+  font-family: 'Noto Serif SC', serif; 
+  color: var(--sc-ink); 
+}
+#story-chat-screen .chat-input::placeholder { color: var(--sc-gray); font-family: 'Space Mono', monospace; }
+
+/* SEND 发送按钮 */
+#story-chat-screen .send-btn { 
+  background: var(--sc-ink); 
+  color: var(--sc-char); 
+  border-radius: 2px; 
+  font-family: 'Space Mono', monospace;
+}`;
+
+    function _injectCustomCSS(cssStr) {
+        let styleEl = document.getElementById('sc-dynamic-char-css');
+        if (!styleEl) {
+            styleEl = document.createElement('style');
+            styleEl.id = 'sc-dynamic-char-css';
+            document.head.appendChild(styleEl);
+        }
+        // 即使用户不小心写漏了，放在独立的 style 里只要切角色时赋空，也不会污染别人
+        styleEl.textContent = cssStr || '';
+    }
+
+    async function _loadCustomCSS() {
+        try {
+            const css = await DB.settings.get(_cssKey());
+            _injectCustomCSS(css || ''); // 如果没有，传入空字符串，清除上一个角色的遗留样式
+        } catch(e) {}
+    }
+
+    async function openCssModal() {
+        document.getElementById('sc-dock-popover').classList.remove('active');
+        document.getElementById('sc-dock-plus-btn').classList.remove('active');
+        
+        try {
+            const css = await DB.settings.get(_cssKey());
+            const ta = document.getElementById('sc-custom-css-input');
+            if (ta) ta.value = css || '';
+        } catch(e) {}
+        
+        _renderCssPresets();
+        
+        document.getElementById('sc-css-overlay').classList.add('active');
+    }
+
+    function closeCssModal() {
+        document.getElementById('sc-css-overlay').classList.remove('active');
+    }
+
+    function copyDefaultCss() {
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(DEFAULT_SC_CSS_TEMPLATE).catch(()=>{});
+            Toast.show('已复制默认源码，去粘贴修改吧 ✦');
+        } else {
+            Toast.show('浏览器不支持剪贴板，请手动选取');
+        }
+    }
+
+    async function applyAndSaveCss() {
+        const ta = document.getElementById('sc-custom-css-input');
+        const cssStr = ta ? ta.value.trim() : '';
+        _injectCustomCSS(cssStr);
+        try { 
+            await DB.settings.set(_cssKey(), cssStr); 
+            Toast.show('已预览并应用专属样式'); 
+        } catch(e){}
+    }
+
+    async function clearCss() {
+        const ta = document.getElementById('sc-custom-css-input');
+        if (ta) ta.value = '';
+        _injectCustomCSS('');
+        try { 
+            await DB.settings.del(_cssKey()); 
+            Toast.show('已清除，恢复默认样式'); 
+        } catch(e){}
+    }
+    
+    // ── 预设管理 (Preset Management) ──
+    function _cssPresetsKey() { return `story-css-presets-global`; } // 独立于单聊的预设库
+
+    async function _renderCssPresets() {
+        const list = document.getElementById('sc-css-presets-list');
+        if (!list) return;
+        let presets =[];
+        try { presets = await DB.settings.get(_cssPresetsKey()) ||[]; } catch(e){}
+        
+        if (!presets.length) {
+            list.innerHTML = '<div style="font-size:10px;color:var(--sc-gray);padding:4px 0;">暂无保存的预设，请上方保存</div>';
+            return;
+        }
+        
+        list.innerHTML = presets.map(p => `
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:12px;background:rgba(0,0,0,0.02);border-radius:8px;border:0.5px solid rgba(0,0,0,0.05);">
+                <span style="font-size:12px;color:var(--sc-ink);font-family:'Space Mono',monospace;font-weight:600;">${_escHtml(p.name)}</span>
+                <div style="display:flex;gap:8px;">
+                    <button onclick="StoryChatModule.applyCssPreset('${p.id}')" style="background:var(--sc-ink);color:var(--sc-bg);border:none;border-radius:4px;padding:4px 12px;font-size:10px;cursor:pointer;font-weight:bold;">使用</button>
+                    <button onclick="StoryChatModule.deleteCssPreset('${p.id}')" style="background:transparent;border:none;color:#D32F2F;font-size:14px;cursor:pointer;display:flex;align-items:center;"><i class="ph ph-trash"></i></button>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    function saveCssPreset() {
+        const ta = document.getElementById('sc-custom-css-input');
+        const cssStr = ta ? ta.value.trim() : '';
+        if (!cssStr) { Toast.show('输入框为空，先写点代码吧'); return; }
+
+        const input = document.getElementById('sc-css-preset-name');
+        if (input) input.value = '剧情档案预设'; 
+        document.getElementById('sc-css-prompt-overlay').classList.add('active');
+        setTimeout(() => input?.focus(), 300);
+    }
+
+    async function confirmSaveCssPreset() {
+        const ta = document.getElementById('sc-custom-css-input');
+        const cssStr = ta ? ta.value.trim() : '';
+        
+        const input = document.getElementById('sc-css-preset-name');
+        const name = input ? input.value.trim() : '';
+        if (!name) { Toast.show('名字不能为空'); return; }
+
+        try {
+            let presets = await DB.settings.get(_cssPresetsKey()) || [];
+            if (!Array.isArray(presets)) presets =[]; 
+
+            presets.push({ id: 'sc_css_' + Date.now(), name: name, css: cssStr });
+            await DB.settings.set(_cssPresetsKey(), presets);
+            
+            _renderCssPresets();
+            document.getElementById('sc-css-prompt-overlay').classList.remove('active');
+            Toast.show('已保存到剧情专属预设 ✦');
+        } catch(e) {
+            console.error('[StoryChatModule] saveCssPreset Error:', e);
+            Toast.show('保存失败');
+        }
+    }
+
+    async function applyCssPreset(id) {
+        try {
+            const presets = await DB.settings.get(_cssPresetsKey()) ||[];
+            const p = presets.find(x => x.id === id);
+            if (p) {
+                const ta = document.getElementById('sc-custom-css-input');
+                if (ta) ta.value = p.css;
+                applyAndSaveCss();
+            }
+        } catch(e){}
+    }
+
+   async function deleteCssPreset(id) {
+        if (!confirm('确定删除这套专属预设吗？')) return;
+        try {
+            let presets = await DB.settings.get(_cssPresetsKey()) || [];
+            presets = presets.filter(x => x.id !== id);
+            await DB.settings.set(_cssPresetsKey(), presets);
+            _renderCssPresets(); // 重新渲染列表，让删除的预设消失
+        } catch(e){
+            console.error('[StoryChatModule] Delete Preset Error:', e);
+            Toast.show('删除预设失败');
+        }
+    }
 
     function _escHtml(str) {
         return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -19637,8 +20284,9 @@ const StoryChatModule = (() => {
             _storyPersona = { name: 'User', bio: '', backstory: '' };
             _userAvatarUrl = document.getElementById('profile-avatar')?.src || '';
         }
-
+        
         await _loadSettings();
+        await _loadCustomCSS(); // 🌟 这里执行 CSS 隔离加载
         document.getElementById('sc-header-name').textContent = _char?.name || 'Unknown';
 
         const input = document.getElementById('sc-auto-input');
@@ -20268,11 +20916,17 @@ const storyMsgs = rawStoryMsgs;
           const historyBefore = rawStoryMsgs.filter(m => m.timestamp < msg.timestamp).slice(-limit);
           
             const systemPrompt = await _buildStorySystemPrompt(historyBefore);
-           // 💡 核心修复：重Roll时也只需要发一条重新推演的虚拟指令
+          // 💡 核心修复：重Roll时也只需要发一条重新推演的虚拟指令
             const apiMessages =[];
+            const rerollPrompt = `[导演重写指令]：上一版内容如下，不满意，需要一个全新的版本：\n\n---\n${msg.content}\n---\n\n请以【${_char?.name || '角色'}】的身份（角色方），针对剧本前文中最后一条用户行动，写一段与上一版完全不同的全新剧情回应。\n⚠️ 严格禁止：① 以用户（${_storyPersona?.name || '我'}）的视角或口吻来写，你是角色方而非用户方；② 重复、改写或延续前文任何已有的句子；③ 在新版本中出现前文已发生过的情节；④ 与上一版有任何相似的开头或情节走向。请直接呈现全新的剧情。`;
+
             if (historyBefore.length === 0) {
+                // 如果是开局第一句重roll，带上开场白
                 const initPrompt = _cfgOpeningMsg ? _cfgOpeningMsg : '*电影开场，镜头缓缓推近*';
-               apiMessages.push({ role: 'user', content: `[导演重写指令]：上一版内容如下，不满意，需要一个全新的版本：\n\n---\n${msg.content}\n---\n\n请以【${_char?.name || '角色'}】的身份（角色方），针对剧本前文中最后一条用户行动，写一段与上一版完全不同的全新剧情回应。\n⚠️ 严格禁止：① 以用户（${_storyPersona?.name || '我'}）的视角或口吻来写，你是角色方而非用户方；② 重复、改写或延续前文任何已有的句子；③ 在新版本中出现前文已发生过的情节；④ 与上一版有任何相似的开头或情节走向。请直接呈现全新的剧情。` });
+                apiMessages.push({ role: 'user', content: `[电影开场基调]：\n${initPrompt}\n\n${rerollPrompt}` });
+            } else {
+                // 🐛 之前漏掉了这里：如果是后续剧情重roll，必须把重roll指令塞进去，否则 API 收到的是空数组就会报 500
+                apiMessages.push({ role: 'user', content: rerollPrompt });
             }
             
             console.groupCollapsed(`[StoryChat] 🎬 发送给导演的剧本指令`);
@@ -20972,7 +21626,7 @@ ${newMessagesLog}
    return { 
         open, loadMore, reroll, deleteMsg, 
         openSettings, closeSettings, saveSettings, toggleWBMount, clearArchive,
-        editMsg, confirmEditMsg, closeEditModal, swipeMsg, openColorModal, closeColorModal, changeColor, archiveStory,createSnapshot, openSnapshotModal, closeSnapshotModal, loadSnapshot, deleteSnapshot, startNewTimeline, confirmCreateSnapshot, closeSnapNameModal, wrapStory
+        editMsg, confirmEditMsg, closeEditModal, swipeMsg, openColorModal, closeColorModal, changeColor, archiveStory,createSnapshot, openSnapshotModal, closeSnapshotModal, loadSnapshot, deleteSnapshot, startNewTimeline, confirmCreateSnapshot, closeSnapNameModal, wrapStory, openCssModal, closeCssModal, copyDefaultCss, applyAndSaveCss, clearCss, saveCssPreset, confirmSaveCssPreset, applyCssPreset, deleteCssPreset
     };
 })();
 
@@ -21304,6 +21958,7 @@ async function initApp() {
   try { CodexModule.init(); } catch(e) 
 { console.warn('codex init failed', e); }
 try { EditorialModule.init(); } catch(e) { console.warn('editorial init failed', e); }
+try { await CoupleModule.init(); } catch(e) { console.warn('couple init failed', e); }
 
 // 主题
   try {
