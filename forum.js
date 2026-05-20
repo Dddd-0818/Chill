@@ -164,17 +164,21 @@ const ForumModule = (() => {
                 display: flex; flex-direction: column;
             }
             #forum-screen .event-title {
-                font-family: var(--fm-font-serif); font-size: 3.2rem; line-height: 0.9;
+                /* 标题字号从 3.2rem 缩小到 2.6rem，稍微增加行高防止英文黏连 */
+                font-family: var(--fm-font-serif); font-size: 2.6rem; line-height: 0.95;
                 font-style: italic; text-shadow: 2px 2px 10px rgba(0,0,0,0.8); mix-blend-mode: exclusion;
-                /* 允许长单词自动断行 */
                 word-wrap: break-word; overflow-wrap: break-word; word-break: break-all;
             }
-            #forum-screen .event-desc {
+            forum-screen .event-desc {
                 background: rgba(0,0,0,0.5); backdrop-filter: blur(5px);
-                padding: 14px; border: 1px solid var(--fm-line); border-radius: 8px;
-                font-size: 0.95rem; font-weight: 300; max-width: 95%; margin-top: 16px;
-                line-height: 1.6; color: #f0f0f0;
+                padding: 12px 14px; border: 1px solid var(--fm-line); border-radius: 8px;
+                /* 正文字号从 0.95rem 缩小到 0.8rem，缩减行高和间距 */
+                font-size: 0.8rem; font-weight: 300; max-width: 95%; margin-top: 12px;
+                line-height: 1.5; color: #f0f0f0;
+                /* 👇 核心修复：增加最大高度限制，超出的文字可以在半透明黑框内独立上下滑动，绝对不会再遮挡底部按钮 */
+                max-height: 150px; overflow-y: auto; scrollbar-width: none; overscroll-behavior: contain;
             }
+            #forum-screen .event-desc::-webkit-scrollbar { display: none; }
             #forum-screen .inner-interaction { 
                 /* 🌟 核心：利用 margin-top: auto 永远贴在最底端，且不被挤压 */
                 display: flex; gap: 16px; margin-top: auto; padding-top: 30px; position: relative; z-index: 10; 
@@ -384,7 +388,15 @@ const ForumModule = (() => {
             #forum-screen .fm-fake-img-desc {
                 opacity: 0; padding: 20px; font-size: 0.85rem; color: #d0d0d0; font-style: italic; line-height: 1.6;
                 text-align: center; transform: translateY(10px); transition: all 0.4s ease; z-index: 1;
+                /* 👇 新增：让框内的长文字也能上下滑动 */
+                width: 100%; 
+                max-height: 100%; 
+                box-sizing: border-box;
+                overflow-y: auto; 
+                overscroll-behavior: contain;
+                scrollbar-width: none;
             }
+            #forum-screen .fm-fake-img-desc::-webkit-scrollbar { display: none; }
             #forum-screen .fm-fake-img-wrap.revealed .fm-fake-img-cover { opacity: 0; pointer-events: none; }
             #forum-screen .fm-fake-img-wrap.revealed .fm-fake-img-desc { opacity: 1; transform: translateY(0); }
             /* World Panel Switch */
@@ -1125,7 +1137,7 @@ ${charProfiles || '无'}
 
         try {
             console.log(`[Forum AI] 🧠 开始为玩家跟帖 ${postId} 评估群像反应...`);
-            const response = await ApiHelper.chatCompletion(activeApi,[{ role: 'system', content: prompt }]);
+            const response = await ApiHelper.chatCompletion(activeApi,[{ role: 'user', content: prompt }]);
             
             const cleaned = response.replace(/```json|```/g, '').trim();
             const start = cleaned.indexOf('{');
@@ -1188,8 +1200,43 @@ ${charProfiles || '无'}
         const chars = await DB.characters.getAll().catch(()=>[]);
         const charProfiles = chars.map(c => `[ID:${c.id}] 姓名:${c.name} | 人设:${c.persona}`).join('\n');
 
+        let globalProfileName = 'User';
+        try {
+            const savedProfile = await DB.settings.get('forum-profile');
+            if (savedProfile && savedProfile.name) globalProfileName = savedProfile.name;
+        } catch(e) {}
+
         const isAnon = post.type === 'treehole';
-        const authorText = isAnon ? "一位匿名者(CLASSIFIED)" : `实名用户(${post.author})`;
+        // 🌟 核心修复 1：精准判定是否为玩家发帖。必须完全匹配玩家网名，排除掉路人NPC的网名
+        const isUserAnonPost = isAnon && post.author === globalProfileName;
+        
+        let authorText = '';
+        let anonContextRule = '';
+
+        if (isAnon) {
+            authorText = "一位匿名者 (CLASSIFIED)";
+            
+            if (isUserAnonPost) {
+                // 🌟 情境A：用户自己发的匿名贴 -> 强行蒙住角色的眼睛，严禁掉马甲
+                anonContextRule = `
+【⚠️ 极密上帝视角（仅供你推演，角色绝对不知情）】：这个匿名树洞其实是玩家（${globalProfileName}）发的。
+【认知隔离铁律】：虽然你在后台知道是 ${globalProfileName} 发的，但在推演角色的反应时，所有角色在论坛上看到的都是“匿名者”。因此：
+1. 角色们【绝对不知道】这是 ${globalProfileName} 发的！
+2. 角色在评论时，必须像对待陌生网友一样，绝对不能在评论中叫出 ${globalProfileName} 的名字，也不能表现出认识发帖人！如果在私聊中提到过相关内容，角色可以有隐秘的既视感，但绝不能直接掉马。`;
+            } else {
+                // 🌟 情境B & C：角色或路人发的匿名贴 -> 防自己评自己，防默认当成用户
+                anonContextRule = `
+【⚠️ 匿名认知铁律 - 核心防越界指令】：这是一个完全匿名的树洞，真实发帖人身份已加密。
+【绝对禁忌】：这个帖子【绝对不是】玩家（${globalProfileName}）发的！这是网络上的其他路人或你们这群人中的某一个发泄情绪的树洞。
+1. 所有角色在跟帖时，【绝对禁止】把它当成 ${globalProfileName} 的帖子，【禁止】展现出任何关心玩家、认识发帖人的语气。
+2. 防自我精分规则：如果某个角色觉得这条树洞的内容和【他自己】的经历、遭遇或情绪极其吻合（也就是他自己刚刚发的），请让他保持沉默，直接输出 "[IGNORE]"，绝对不要自己像个精神分裂一样去评论自己！
+3. 其他角色评论时，只能就事论事，表现出吃瓜、共情或吐槽的路人态度。`;
+            }
+        } else {
+            authorText = post.type === 'event' ? "SYSTEM_NEWS (系统大事件通报)" : `实名用户(${post.author})`;
+            anonContextRule = `【实名动态】：这是实名发布的内容，所有人均知晓发帖人是谁。如果是熟人，请正常互动。`;
+        }
+
         const contentText = post.type === 'event' ? `【标题】${post.title}\n【正文】${post.desc}` : `【内容】${post.content}`;
 
         const prompt = `[系统任务：真实社交平台群像回帖模拟]
@@ -1198,11 +1245,13 @@ ${charProfiles || '无'}
 帖子内容：\n${contentText}
 ${imgDesc ? `【附带图片画面描述】：${imgDesc}` : ''}
 
+${anonContextRule}
+
 【已知熟人档案】：
 ${charProfiles || '无'}
 
 【你的推演任务】：
-1. 熟人反应：基于性格判断是否跟帖。如果不感兴趣，请输出 "[IGNORE]"。如果是匿名树洞，熟人仅凭内容判断；如果是实名事件，熟人知道是用户发的。
+1. 熟人反应：基于上述【认知隔离铁律】，代入性格判断是否跟帖。如果不感兴趣、或者是自己发的匿名贴，请直接输出 "[IGNORE]"。
 2. 路人涌入：生成 8-10 条路人（NPC）跟帖。
 3. 路人名字要求：【必须像真实的网友ID】！例如：momo、已注销、熬夜冠军、西瓜碎碎冰、User_9527、J、无语子、睡不醒的猫 等等。混合中文、英文、数字，绝对不要全是一本正经的代号。
 4. 路人文风要求：【极度逼真的活人感】！
@@ -1221,7 +1270,7 @@ ${charProfiles || '无'}
 
         try {
             console.log(`[Forum AI] 🧠 开始为帖子 ${postId} 评估群像反应...`);
-            const response = await ApiHelper.chatCompletion(activeApi,[{ role: 'system', content: prompt }]);
+            const response = await ApiHelper.chatCompletion(activeApi,[{ role: 'user', content: prompt }]);
             
             const cleaned = response.replace(/```json|```/g, '').trim();
             const start = cleaned.indexOf('{');
@@ -1318,7 +1367,7 @@ ${charProfiles || '无'}
 }`;
 
         try {
-            const response = await ApiHelper.chatCompletion(activeApi, [{ role: 'system', content: prompt }]);
+            const response = await ApiHelper.chatCompletion(activeApi, [{ role: 'user', content: prompt }]);
             const cleaned = response.replace(/```json|```/g, '').trim();
             const start = cleaned.indexOf('{');
             const end = cleaned.lastIndexOf('}');
@@ -1427,7 +1476,7 @@ ${worldViewStr ? `【当前世界观设定】：\n${worldViewStr}\n` : ''}
 
 【任务要求】：
 请生成 4 到 6 条全新的路人帖子，包含以下两种类型（请混合输出）：
-1. "event" (世界事件)：突发大事件，必须符合【当前世界观设定】，如果没有世界观就编造一些事件，不限类型。⚠️标题排版铁律：纯中文不超过5个字且每2-3个字必须加 \\n 换行，纯英文不超过3个单词且每个单词必须加 \\n 换行！
+1. "event" (世界事件)：突发大事件，必须符合【当前世界观设定】，如果没有世界观就编造一些事件，需要比较生活化有网感。⚠️标题排版铁律：纯中文不超过5个字且每2-3个字必须加 \\n 换行，纯英文不超过3个单词且每个单词必须加 \\n 换行！
 2. "treehole" (匿名树洞)：匿名网友（如 momo, 已注销, 匿名用户, 熬夜冠军等）发的加密动态。文风要像真实的活人冲浪，随性、发泄情绪、吐槽、分享八卦或怪谈、有网络流行语。
 
 【返回格式】必须是包含多个对象的 JSON 数组，绝不输出其他废话：[
@@ -1435,11 +1484,11 @@ ${worldViewStr ? `【当前世界观设定】：\n${worldViewStr}\n` : ''}
     "type": "event", // 或 "treehole"
     "author": "如果是event可写 'SYSTEM' 或 'NEWS'，如果是treehole写路人网名",
     "title": "event专用标题(带\\n，treehole可留空)",
-    "content": "treehole的正文，或event的客观描述"
+    "content": "treehole的正文，或event的客观描述不超过30个字"
   }
 ]`;
 
-            const response = await ApiHelper.chatCompletion(activeApi,[{ role: 'system', content: prompt }]);
+            const response = await ApiHelper.chatCompletion(activeApi,[{ role: 'user', content: prompt }]);
             const cleaned = response.replace(/```json|```/g, '').trim();
             const start = cleaned.indexOf('[');
             const end = cleaned.lastIndexOf(']');
@@ -1500,9 +1549,10 @@ ${worldViewStr ? `【当前世界观设定】：\n${worldViewStr}\n` : ''}
                 await DB.forum.put(post);
                 added++;
                 
-                // 触发群像智能跟帖
+                // 🌟 核心修复：加上 await 变成排队串行，并加上 1.5 秒延迟，防止并发请求风暴击穿网络
                 if (typeof evaluateNewPost === 'function') {
-                    evaluateNewPost(post.id);
+                    await evaluateNewPost(post.id);
+                    await new Promise(r => setTimeout(r, 1500)); // 让大模型喘口气
                 }
             }
 

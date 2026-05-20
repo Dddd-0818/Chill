@@ -867,6 +867,7 @@ function _maybeShuffleSmallWindow(events, profile) {
                 const char = await DB.characters.get(Number(charId)).catch(() => null);
                 
                 const rawMsgs = await DB.messages.getPage(String(charId), 0, 50).catch(() =>[]);
+                
                 const historyText = rawMsgs.reverse().map(m => {
                     const d = new Date(m.timestamp);
                     const timeStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
@@ -874,6 +875,16 @@ function _maybeShuffleSmallWindow(events, profile) {
                     const txt = m.parts?.map(p => p.content || p.text || '').join('') || m.content;
                     return `[${timeStr}][${role}]: ${txt}`;
                 }).join('\n');
+
+                let worldBookBlock = '';
+                try {
+                    if (typeof WBModule !== 'undefined') {
+                        const matched = WBModule.getMatchingEntries(historyText, String(charId), 'lifestyle');
+                        if (matched.length) {
+                            worldBookBlock = matched.map(e => e.content.trim()).join('\n\n');
+                        }
+                    }
+                } catch(e) {}
 
                 // 根据是全新的一天，还是中途复查，给角色不同的原始计划参考
                 // 🌟 修复1：在传给大模型的旧计划里，把 description 也带上，防止它忘掉
@@ -885,7 +896,7 @@ function _maybeShuffleSmallWindow(events, profile) {
                 const prompt = `[系统后台：角色自主意识与行程管理]
 你是拥有独立生活轨迹的生命【${char?.name || '角色'}】。现在系统时间是 ${todayStr}。
 系统每隔一段时间会在后台唤醒你，让你审视自己的时间线。
-
+${worldBookBlock ? `\n【当前世界设定与重要背景（行程安排务必参考此设定）】：\n${worldBookBlock}\n` : ''}
 【你默认的枯燥作息（仅供参考）】：
 起床：${routine.wakeUp || '08:00'} / 就寝：${routine.sleep || '23:00'}
 常规：${JSON.stringify(routine.events ||[])}
@@ -925,7 +936,7 @@ ${historyText || '（暂无记录）'}
                 console.log("%c【系统状态】", "color:#d84315; font-weight:bold;", isReflection ? "复查已存在的今日行程" : "生成全新今日行程");
                 console.log("%c【System Prompt】", "color:#9c2b2b; font-weight:bold;", "\n" + prompt);
 
-                const response = await ApiHelper.chatCompletion(activeApi,[{ role: 'system', content: prompt }]);
+                const response = await ApiHelper.chatCompletion(activeApi,[{ role: 'user', content: prompt }]);
                 console.log("%c【AI 决策输出】", "color:#2d6a4a; font-weight:bold;", "\n" + response);
 
                 const cleaned = response.replace(/```json|```/g, '').trim();
@@ -1416,7 +1427,7 @@ ${char.mbti ? 'MBTI：' + char.mbti : ''}
             console.groupCollapsed(`[Lifestyle] 🧠 阶段 1: 基础作息推演 (Routine) - ${char.name}`);
             console.log("%c【System Prompt】", "color:#9c2b2b; font-weight:bold;", "\n" + prompt);
 
-            const response = await ApiHelper.chatCompletion(activeApi,[{ role: 'system', content: prompt }]);
+            const response = await ApiHelper.chatCompletion(activeApi,[{ role: 'user', content: prompt }]);
             
             console.log("%c【AI 原始输出】", "color:#2d6a4a; font-weight:bold;", "\n" + response);
 

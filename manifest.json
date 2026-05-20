@@ -1,8 +1,8 @@
 {
   "name": "Chill Mono OS",
   "short_name": "Chill OS",
-  "start_url": "/Chill/",
-  "scope": "/Chill/",
+  "start_url": "/index/",
+  "scope": "/index/",
   "display": "standalone",
   "background_color": "#fafafa",
   "theme_color": "#fafafa",

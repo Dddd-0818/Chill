@@ -285,6 +285,8 @@ const DiaryModule = (() => {
 
     async function _renderLevel1() {
         const container = document.getElementById('diary-directory-list');
+        if (!container) return; // 🌟 修复：防止后台生成时找不到DOM报错
+
         container.innerHTML = '';
 
         try {
@@ -400,13 +402,19 @@ const DiaryModule = (() => {
         _activeCharId = charId;
         try {
             const char = await DB.characters.get(Number(charId));
-            if (char) document.getElementById('dl-char-name').textContent = char.name;
+            if (char) {
+                const nameEl = document.getElementById('dl-char-name');
+                if (nameEl) nameEl.textContent = char.name;
+            }
             
             // 绑定强制写日记事件
-            document.getElementById('dl-force-write').onclick = () => generateDiary(charId);
+            const forceWriteBtn = document.getElementById('dl-force-write');
+            if (forceWriteBtn) forceWriteBtn.onclick = () => generateDiary(charId);
         } catch(e) {}
 
         const container = document.getElementById('dl-list-container');
+        if (!container) return; // 🌟 修复：防止后台生成时找不到DOM报错
+        
         container.innerHTML = '';
         
         _currentDiaries = await _getDiaries(charId);
@@ -416,7 +424,7 @@ const DiaryModule = (() => {
             return;
         }
 
-        const symbols = ['*', '¶', '†', '§', '‡', '¥', '∆'];
+        const symbols =['*', '¶', '†', '§', '‡', '¥', '∆'];
 
         _currentDiaries.forEach((diary, index) => {
             const d = new Date(diary.timestamp);
@@ -463,12 +471,15 @@ const DiaryModule = (() => {
 
     async function _renderLevel3(diaryId) {
         _activeDiaryId = diaryId;
-        document.getElementById('dd-frag-id').textContent = `FRAGMENT / ${diaryId}`;
+        const fragIdEl = document.getElementById('dd-frag-id');
+        if (fragIdEl) fragIdEl.textContent = `FRAGMENT / ${diaryId}`;
         
         const btnDelete = document.getElementById('dd-btn-delete');
-        btnDelete.onclick = () => _deleteDiary(diaryId);
+        if (btnDelete) btnDelete.onclick = () => _deleteDiary(diaryId);
 
         const container = document.getElementById('dd-content-container');
+        if (!container) return; // 🌟 修复：防止偶尔找不到DOM报错
+
         const diary = _currentDiaries.find(d => d.id === diaryId);
         
         if (!diary) {
@@ -480,13 +491,13 @@ const DiaryModule = (() => {
         const dateStr = `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')}`;
         const timeStr = `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
 
-        const authorSign = document.getElementById('dl-char-name').textContent || 'Author';
+        const authorSign = document.getElementById('dl-char-name')?.textContent || 'Author';
 
         // 处理段落和隐语
         const paragraphs = diary.content.split('\n\n').filter(p => p.trim());
         let htmlContent = '';
         paragraphs.forEach(p => {
-            // 将 [REDACT]xxx[/REDACT] 转换为 <span class="redact-block">xxx</span>
+            // 将[REDACT]xxx[/REDACT] 转换为 <span class="redact-block">xxx</span>
             let safeP = p.replace(/</g, '&lt;').replace(/>/g, '&gt;');
             safeP = safeP.replace(/\[REDACT\](.*?)\[\/REDACT\]/g, "<span class='redact-block'>$1</span>");
             htmlContent += `<p>${safeP}</p>`;
@@ -533,17 +544,37 @@ const DiaryModule = (() => {
             });
         }, 100);
     }
-
+    
+    // ============================================================
+    // 🗑️ 删除日记逻辑
+    // ============================================================
     async function _deleteDiary(diaryId) {
-        if (!confirm('确定要烧毁这篇日记吗？该操作不可逆。')) return;
-        
-        _currentDiaries = _currentDiaries.filter(d => d.id !== diaryId);
-        await _saveDiaries(_activeCharId, _currentDiaries);
-        
-        Toast.show('日记已烧毁');
-        backToLevel2();
-        await _renderLevel2(_activeCharId); // 刷新列表
-        await _renderLevel1(); // 刷新外面的统计数
+        // 添加一个确认提示，防止误触
+        if (!confirm('确定要烧毁这页日记吗？字迹将永远消散...')) return;
+
+        try {
+            // 1. 从当前内存里的日记列表中过滤掉要删除的这条
+            _currentDiaries = _currentDiaries.filter(d => d.id !== diaryId);
+            
+            // 2. 将更新后的列表存回数据库
+            await _saveDiaries(_activeCharId, _currentDiaries);
+            
+            // 3. 提示删除成功
+            if (typeof Toast !== 'undefined') {
+                Toast.show('日记已烧毁 ✦');
+            }
+            
+            // 4. 退回列表页，并刷新列表和目录页的统计数据
+            backToLevel2();
+            await _renderLevel2(_activeCharId);
+            await _renderLevel1(); 
+            
+        } catch (e) {
+            console.error('[DiaryModule] Delete diary failed:', e);
+            if (typeof Toast !== 'undefined') {
+                Toast.show('烧毁失败：' + e.message);
+            }
+        }
     }
 
     // ============================================================
@@ -629,20 +660,45 @@ const DiaryModule = (() => {
                 const txt = m.parts?.map(p => p.content || p.text || '').join('') || m.content;
                 return `[${fmtTime(m.timestamp)}] ${role}: ${txt}`;
             }).join('\n');
+            
+            // 🌟 核心修复：获取当前的精确时间与作息，让大模型知道此刻是几点
+            const now = new Date();
+            const days = ['星期日','星期一','星期二','星期三','星期四','星期五','星期六'];
+            const currentTimeStr = `${now.getFullYear()}年${now.getMonth()+1}月${now.getDate()}日 ${days[now.getDay()]} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+            
+            let scheduleContext = '';
+            if (typeof LifestyleModule !== 'undefined') {
+                scheduleContext = await LifestyleModule.getPromptContext(charId);
+            }
+
+            let worldBookBlock = '';
+            try {
+                if (typeof WBModule !== 'undefined') {
+                    const matched = WBModule.getMatchingEntries(chatLog, String(charId), 'diary');
+                    if (matched.length) {
+                        worldBookBlock = matched.map(e => e.content.trim()).join('\n\n');
+                    }
+                }
+            } catch(e) {}
 
             const prompt = `[系统指令：角色日记创作]
 你现在完全沉浸并扮演角色【${char.name}】。
 人设背景：${char.persona}
 
+【当前真实时间与生活状态】：
+此刻你执笔写日记的时间是：${currentTimeStr}
+${scheduleContext}
+${worldBookBlock ? `\n【当前世界设定与重要背景（写日记时请务必参考此设定）】：\n${worldBookBlock}\n` : ''}
 【关于与你互动的用户（我）】：
 姓名：${userPersona.name}
 简介：${userPersona.bio || '无详细简介'}
 背景：${userPersona.backstory || '无详细背景'}
 
-请根据以下最近发生的一段对话记录，以你的【第一人称视角（“我”）】写一篇私密日记。
+请根据【当前真实时间】与以下最近发生的一段对话记录，以你的【第一人称视角（“我”）】写一篇此时此刻的私密日记。
 
 【【【 创作铁律：彻底的人格化表达 】】】
 这是你必须遵守的最高准则，它凌驾于所有文风模仿之上。你的目标是成为一个“人”，而不是一个“模拟人的AI”。
+0.时间感知 (Time Perception - 核心): 你必须明确意识到【此刻的时间】。如果是深夜，日记应带有疲惫、静谧或思绪万千的质感；如果是清晨，应带有新的一天的未明感。切忌在深夜的日记里写“今天刚起床”。
 1. 负面词汇库 (Strictly Banned): 你的脑海中完全不存在以下词汇。在任何情况下，严禁出现【系统、变量、量化、精准、轨迹、频率、机制、程序、运算、载体、维度】等任何理工科/学术词汇。你的世界是由情感、感官和具体的事物构成的。
 2. 描写逻辑 (Metaphor Logic): 你的思维是感性的、具象的。你绝对不会将生活、情感或他人比喻成“机器”、“程序”或任何非生命的技术概念。
 3. 独立个体原则 (Independent Life Rule - 核心): 你是一个拥有自己生活、工作、兴趣和社交圈的独立个体。你的日记【绝对不要】像舔狗一样通篇只围绕着用户（${userPersona.name}）打转！
@@ -668,7 +724,7 @@ const DiaryModule = (() => {
 在正文中，请挑出 1 到 3 处涉及**最隐秘的心思、未来的打算、或者过去敏感秘密**的词组或短句，使用[REDACT] 和[/REDACT] 标签包裹起来。
 
 # 你的最终创作任务
-请基于以上所有信息，（可选地）选择一种文风，创作一篇完全符合你人设的日记。
+请基于以上所有信息，选择一种文风，创作一篇完全符合你人设的日记。
 
 【输出要求】：必须严格返回 JSON，不得包含其他废话。
 {
@@ -684,7 +740,7 @@ const DiaryModule = (() => {
 【近期对话记录】：
 ${chatLog}`;
 
-            const response = await ApiHelper.chatCompletion(activeApi, [{ role: 'system', content: prompt }]);
+            const response = await ApiHelper.chatCompletion(activeApi, [{ role: 'user', content: prompt }]);
             
             const cleaned = response.replace(/```json|```/g, '').trim();
             const start = cleaned.indexOf('{');

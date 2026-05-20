@@ -121,8 +121,9 @@ const PostOfficeModule = (() => {
   }
 
   function _mailboxThreadIdFromLetter(letter) {
-    if (!letter || !letter.id) return null;
-    return String(letter.id);
+    if (!letter) return null;
+    // 优先使用 threadId，保证无限回信都在同一个线索下
+    return String(letter.threadId || letter.id);
   }
 
   function _mailboxUpsertOriginal(letter) {
@@ -223,6 +224,7 @@ const PostOfficeModule = (() => {
     const now = Date.now();
     const row = {
       id: `sent-${now}-${Math.floor(Math.random() * 1e6)}`,
+      threadId: src.threadId || src.id, // 核心修复：继承母本的线索ID
       createdAt: now,
       original: {
         id: src.id || null,
@@ -291,7 +293,7 @@ const PostOfficeModule = (() => {
         `原信 from=${o.from || ''} to=${o.to || ''} tag=${o.tag || ''} dimension=${o.dimension || ''}`,
         `原信正文：${o.body || ''}`,
         `我方回信（已寄出）：${t.replyText || ''}`,
-        '现在请写「对方回信」。字数 240–420 字，中文；translation=null。',
+        '现在请根据我方回信，写出「对方收信后的二次回信」。字数 240–420 字左右，中文；translation=null。',
       ].join('\\n');
     }).join('\\n\\n');
 
@@ -303,7 +305,8 @@ const PostOfficeModule = (() => {
     if (!arr || !arr.length) return null;
     const out = [];
     for (let i = 0; i < Math.min(arr.length, pick.length); i++) {
-      const o = pick[i].original || {};
+      const t = pick[i];
+      const o = t.original || {};
       const row = arr[i] || {};
       const from = String(row.from ?? row['发件人'] ?? o.from ?? '').trim() || (o.from || '未知发件');
       const to = String(row.to ?? row['收件人'] ?? o.to ?? '').trim() || (o.to || '未署名');
@@ -314,6 +317,7 @@ const PostOfficeModule = (() => {
       if (!body) continue;
       out.push({
         id: `in-${Date.now()}-${i}-${Math.floor(Math.random() * 1e6)}`,
+        threadId: t.threadId || o.id, // 核心修复：携带原线索ID
         source: 'incoming_reply',
         tag,
         from,
@@ -333,14 +337,26 @@ const PostOfficeModule = (() => {
   function _pickIncomingRepliesForRound(n) {
     const sent = _loadSentReplies();
     if (!sent.length) return [];
+    
+    // 核心修复：按照 threadId 去重，只抓取每个对话串【最新】的一次回信进行生成，防止 AI 回复远古消息
+    const latestPerThread = new Map();
+    for (const s of sent) {
+       const tid = s.threadId || s.original.id;
+       if (!latestPerThread.has(tid)) {
+          latestPerThread.set(tid, s);
+       }
+    }
+    const uniqueSent = Array.from(latestPerThread.values());
+
     const roll = Math.random();
     const want = roll < 0.12 ? 2 : roll < 0.48 ? 1 : 0;
-    const k = Math.min(want, sent.length, Math.max(0, Math.floor(n / 5)));
+    const k = Math.min(want, uniqueSent.length, Math.max(0, Math.floor(n / 5)));
     if (k <= 0) return [];
+    
     const out = [];
     const used = new Set();
     for (let i = 0; i < 16 && out.length < k; i++) {
-      const t = sent[Math.floor(Math.random() * sent.length)];
+      const t = uniqueSent[Math.floor(Math.random() * uniqueSent.length)];
       if (!t || used.has(t.id)) continue;
       used.add(t.id);
       out.push(t);
@@ -1780,19 +1796,7 @@ ${jsonBlock}`;
     <div class="po-modal-body" id="po-reply-modal-body"></div>
   </div>
 </div>
-<div class="po-modal" id="po-share-modal" aria-hidden="true">
-  <div class="po-modal-backdrop" id="po-share-modal-backdrop"></div>
-  <div class="po-modal-panel" role="dialog" aria-modal="true" aria-label="分享给角色">
-    <div class="po-modal-head">
-      <div class="po-modal-title">分享给角色</div>
-      <button type="button" class="po-modal-close" id="po-share-modal-close" aria-label="关闭">×</button>
-    </div>
-    <div class="po-modal-body" id="po-share-modal-body">
-      <div class="po-modal-sub">MASK · CHARACTER · PICKER</div>
-      <div class="po-empty">占位 UI<br><small>这里将按「面具」分组展示角色卡片，点击即可分享</small></div>
-    </div>
-  </div>
-</div>`;
+`;
     document.body.appendChild(_root);
 
     _root.querySelector('#po-btn-close').onclick = () => close();
@@ -1801,8 +1805,6 @@ ${jsonBlock}`;
     _root.querySelector('#po-btn-inbox').onclick = () => _openReplyModal();
     _root.querySelector('#po-reply-modal-close').onclick = () => _closeReplyModal();
     _root.querySelector('#po-reply-modal-backdrop').onclick = () => _closeReplyModal();
-    _root.querySelector('#po-share-modal-close').onclick = () => _closeShareModal();
-    _root.querySelector('#po-share-modal-backdrop').onclick = () => _closeShareModal();
   }
 
   function _summary(body) {
@@ -1975,7 +1977,6 @@ ${jsonBlock}`;
       <textarea class="po-textarea po-textarea--ruled" id="po-proxy-reply" placeholder="以局长身份代笔回信摘要或全文…"></textarea>
       <div class="po-actions">
         <button type="button" class="po-btn-solid" id="po-btn-proxy">确认代投递</button>
-        <button type="button" class="po-btn-outline" id="po-btn-share">分享给角色（占位）</button>
         <button type="button" class="po-toggle-ret" id="po-btn-toggle-ret">展开退回区</button>
         <div class="po-ret-panel" id="po-ret-panel">
           <label class="po-detail-section-label" for="po-return-reason">退回理由（必填）</label>
@@ -1997,7 +1998,6 @@ ${jsonBlock}`;
       btnRet.textContent = _returnExpanded ? '收起退回区' : '展开退回区';
     };
     inner.querySelector('#po-btn-proxy').onclick = () => doProxy();
-    inner.querySelector('#po-btn-share').onclick = () => _openShareModal(id);
     inner.querySelector('#po-btn-confirm-ret').onclick = () => doReturn();
     inner.querySelector('#po-btn-cancel-ret').onclick = () => {
       _returnExpanded = false;
@@ -2026,26 +2026,6 @@ ${jsonBlock}`;
     if (!modal) return;
     modal.classList.remove('open');
     modal.setAttribute('aria-hidden', 'true');
-  }
-
-  function _closeShareModal() {
-    const modal = _root && _root.querySelector('#po-share-modal');
-    if (!modal) return;
-    modal.classList.remove('open');
-    modal.setAttribute('aria-hidden', 'true');
-  }
-
-  function _openShareModal(letterId) {
-    const modal = _root && _root.querySelector('#po-share-modal');
-    const body = _root && _root.querySelector('#po-share-modal-body');
-    if (!modal || !body) return;
-    const L = letterId ? _letters.find(x => x && x.id === letterId) : null;
-    const title = _root.querySelector('#po-share-modal .po-modal-title');
-    if (title) title.textContent = '分享给角色';
-    const hint = body.querySelector('.po-empty small');
-    if (hint && L) hint.textContent = `占位：将把「${(L.to || '').slice(0, 16) || '未署名'}」这封信分享给指定角色`;
-    modal.classList.add('open');
-    modal.setAttribute('aria-hidden', 'false');
   }
 
   async function _copyText(text) {

@@ -782,6 +782,33 @@ const DebateModule = (() => {
     else if (State.mode === 'rt') ready = State.topic && State.chars.length >= 2;
     btn.classList.toggle('ready', ready);
   }
+  
+  // ============================================================
+  // 世界书中枢读取引擎 (WorldBook Extractor)
+  // ============================================================
+  async function _getWorldBookContext(charIdArray) {
+    if (typeof DB.worldInfo === 'undefined') return '';
+    try {
+      const allWBs = await DB.worldInfo.getAll().catch(()=>[]);
+      const activeWBs = allWBs.filter(wb => {
+        if (wb.enabled === false) return false;
+        if (!wb.scope || !wb.scope.includes('debate')) return false; // 🌟 必须勾选了“辩论注入”才生效
+        
+        const isGlobal = !wb.characterIds || wb.characterIds.length === 0;
+        let isForTheseChars = false;
+        if (wb.characterIds) {
+          for (const id of charIdArray) {
+            if (wb.characterIds.includes(String(id))) {
+              isForTheseChars = true; break;
+            }
+          }
+        }
+        return isGlobal || isForTheseChars;
+      });
+      if (activeWBs.length > 0) return activeWBs.map(wb => wb.content.trim()).join('\n\n');
+    } catch(e) { console.warn("[Debate] 提取世界书失败", e); }
+    return '';
+  }
 
   // ============================================================
   // Arena 引擎与真 API 接入
@@ -903,15 +930,18 @@ const DebateModule = (() => {
         return `[${m.name}]: ${m.text}`;
       }).filter(Boolean).join('\n');
       
-      // 🌟 核心：根据模式动态彻底拆分 Prompt
+      // 🌟 核心：根据模式动态彻底拆分 Prompt，并强制注入全中文禁令
       let prompt = '';
+      const worldBookContext = await _getWorldBookContext([char.id]);
       
       if (State.mode === '1v1') {
-        // [ 1V1 专属 Prompt：绝对的红蓝对抗 ]
         prompt = `[系统指令：1V1 观点修罗场]
 你是【${char.name}】，你的性格档案：${char.persona}
-当前辩论话题：【${State.topic}】
+${worldBookContext ? `【附加世界观与设定】：\n${worldBookContext}\n` : ''}当前辩论话题：【${State.topic}】
 你的立场：【${stanceDesc}】。即使与你本性冲突，你也必须用你的性格去捍卫这个立场！
+
+【全局语言规则（极度重要）】：
+无论你的角色背景是哪国人，所有的对话、路人吐槽必须 **100% 仅使用中文** 输出！绝对禁止出现任何英语、日语或其他外语单词！
 
 【场上记录】：
 ${historyStr || '（你是第一个发言的，请抛出极具杀伤力的开场白）'}
@@ -926,11 +956,13 @@ ${historyStr || '（你是第一个发言的，请抛出极具杀伤力的开场
 主发言内容 ||| 路人1的吐槽 ||| 路人2的吐槽 ||| 路人3的吐槽 ||| 路人4的吐槽 ||| 路人5的吐槽`;
 
       } else {
-        // [ 多人混战 专属 Prompt：自由结盟与猎杀 ]
         prompt = `[系统指令：多重映射 大乱斗]
 你是【${char.name}】，你的性格档案：${char.persona}
-当前争论话题：【${State.topic}】
+${worldBookContext ? `【附加世界观与设定】：\n${worldBookContext}\n` : ''}当前争论话题：【${State.topic}】
 你的立场策略：【${stanceDesc}】
+
+【全局语言规则（极度重要）】：
+无论你的角色背景是哪国人，所有的对话、路人吐槽必须 **100% 仅使用中文** 输出！绝对禁止出现任何英语、日语或其他外语单词！
 
 【场上记录】：
 ${historyStr || '（你是第一个发言的，请抛出极具杀伤力的开场白确立你的阵营）'}
@@ -945,7 +977,7 @@ ${historyStr || '（你是第一个发言的，请抛出极具杀伤力的开场
 主发言内容 ||| 路人1的吐槽 ||| 路人2的吐槽 ||| 路人3的吐槽 ||| 路人4的吐槽 ||| 路人5的吐槽`;
       }
 
-      const response = await ApiHelper.chatCompletion(activeApi,[{ role: 'system', content: prompt }]);
+      const response = await ApiHelper.chatCompletion(activeApi,[{ role: 'user', content: prompt }]);
       
       const parts = response.split('|||').map(s => s.trim()).filter(Boolean);
       mainReply = parts[0] || mainReply; 
@@ -1054,14 +1086,18 @@ ${historyStr || '（你是第一个发言的，请抛出极具杀伤力的开场
     if (State.mode === '1v1') stanceDesc = State.userStance === 'pro' ? '反方（坚决反对该观点）' : '正方（坚决支持该观点）';
     else stanceDesc = '根据你的性格，自由且极端地选择站队。你可以认同某人、反驳某人，或者无差别嘲讽所有人！';
 
-    // 🌟 核心：重 Roll 时也根据模式区分 Prompt
+   // 🌟 核心：重 Roll 时也根据模式区分 Prompt，并注入中文指令
     let prompt = '';
+    const worldBookContext = await _getWorldBookContext([char.id]);
     
     if (State.mode === '1v1') {
         prompt = `[系统指令：1V1 观点修罗场]
 你是【${char.name}】，你的性格档案：${char.persona}
-当前辩论话题：【${State.topic}】
+${worldBookContext ? `【附加世界观与设定】：\n${worldBookContext}\n` : ''}当前辩论话题：【${State.topic}】
 你的立场：【${stanceDesc}】。即使与你本性冲突，你也必须用你的性格去捍卫这个立场！
+
+【全局语言规则（极度重要）】：
+所有对话、路人吐槽必须 **100% 仅使用中文** 输出！绝对禁止输出任何外语！
 
 【场上记录】：
 ${historyStr || '（你是第一个发言的，请抛出极具杀伤力的开场白）'}
@@ -1076,14 +1112,17 @@ ${historyStr || '（你是第一个发言的，请抛出极具杀伤力的开场
     } else {
         prompt = `[系统指令：多重映射 大乱斗]
 你是【${char.name}】，你的性格档案：${char.persona}
-当前争论话题：【${State.topic}】
+${worldBookContext ? `【附加世界观与设定】：\n${worldBookContext}\n` : ''}当前争论话题：【${State.topic}】
 你的立场策略：【${stanceDesc}】
+
+【全局语言规则（极度重要）】：
+所有对话、路人吐槽必须 **100% 仅使用中文** 输出！绝对禁止输出任何外语！
 
 【场上记录】：
 ${historyStr || '（你是第一个发言的，请抛出极具杀伤力的开场白确立你的阵营）'}
 
 【回复要求（极其重要）】：
-1. 这是一场多方混战。仔细阅读场上记录，抓出你最看不惯的那个人（可以带上他的名字）进行一针见血的嘲讽/反驳；或者拉帮结派赞同某人。限制在80字以内！
+1. 这是一场多方混战。抓出你最看不惯的那个人进行嘲讽/反驳；或者拉帮结派赞同某人。限制在80字以内！
 2. 必须顺便模拟 5 到 8 个正在围观的【匿名路人/吃瓜群众】的弹幕吐槽。
 3. 严格使用 ||| 作为分隔符！
 
@@ -1095,7 +1134,7 @@ ${historyStr || '（你是第一个发言的，请抛出极具杀伤力的开场
       const activeApi = await DB.api.getActive();
       if (!activeApi) throw new Error('未配置 API');
 
-      const response = await ApiHelper.chatCompletion(activeApi, [{ role: 'system', content: prompt }]);
+      const response = await ApiHelper.chatCompletion(activeApi, [{ role: 'user', content: prompt }]);
       const parts = response.split('|||').map(s => s.trim()).filter(Boolean);
       const mainReply = parts[0] || "信号丢失，生成失败。"; 
       const bystanders = parts.slice(1);
@@ -1227,9 +1266,14 @@ ${historyStr || '（你是第一个发言的，请抛出极具杀伤力的开场
       return `[${m.name}]: ${m.text}`;
     }).filter(Boolean).join('\n');
 
+    const worldBookContext = await _getWorldBookContext(State.chars); // 读取所有参战者的背景
+
     const prompt = `[最高级系统指令：审判者]
 这是一场代号为【${State.topic}】的观点修罗场。以下是全部对话记录。
-请你作为一个绝对理智、没有任何感情、甚至带点冷酷嘲讽的【上帝法官】，对这场辩论进行裁决。
+${worldBookContext ? `【本场修罗场的专属世界观背景】：\n${worldBookContext}\n` : ''}请你作为一个绝对理智、没有任何感情、甚至带点冷酷嘲讽的【上帝法官】，对这场辩论进行裁决。
+
+【全局语言规则】：
+你的最终裁决报告必须 **100% 仅使用中文** 输出。
 
 【场上记录】：
 ${historyStr || '（无记录）'}
@@ -1243,7 +1287,7 @@ ${historyStr || '（无记录）'}
     try {
       const activeApi = await DB.api.getActive();
       if (activeApi) {
-        report = await ApiHelper.chatCompletion(activeApi,[{ role: 'system', content: prompt }]);
+        report = await ApiHelper.chatCompletion(activeApi,[{  role: 'user', content: prompt }]);
       }
     } catch(e) { console.error('Verdict Error', e); }
 
@@ -1296,9 +1340,14 @@ ${historyStr || '（无记录）'}
           return `[${m.name}]: ${m.text}`;
         }).filter(Boolean).join('\n');
 
+        const worldBookContext = await _getWorldBookContext([char.id]);
+
         const prompt = `[系统指令：强制断开连接前夕]
 你是【${char.name}】，你的性格档案：${char.persona}。
-刚才你们进行了一场关于【${State.topic}】的激烈辩论，现在上帝按下了“终止程序”按钮，你们的数据连接即将被切断，你们即将散场。
+${worldBookContext ? `【附加世界观与设定】：\n${worldBookContext}\n` : ''}刚才你们进行了一场关于【${State.topic}】的激烈辩论，现在上帝按下了“终止程序”按钮，你们的数据连接即将被切断，你们即将散场。
+
+【全局语言规则（极度重要）】：
+无论你是哪国人，你的遗言必须 **100% 仅使用中文** 输出！绝对不要夹杂外语！
 
 【刚才的场上记录】：
 ${historyStr}
@@ -1310,7 +1359,7 @@ ${historyStr}
 
         const activeApi = await DB.api.getActive();
         if (activeApi) {
-          epilogueText = await ApiHelper.chatCompletion(activeApi, [{ role: 'system', content: prompt }]);
+          epilogueText = await ApiHelper.chatCompletion(activeApi, [{ role: 'user', content: prompt }]);
         }
       } catch(e) {}
 

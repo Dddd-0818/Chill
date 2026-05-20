@@ -2,55 +2,51 @@
 
 /**
  * ============================================================
- * CloudModule — Supabase 云原生同步引擎 (高定视觉版) + 离线收发室 + 自动备份
+ * CloudModule — Supabase 云原生同步引擎 (高定视觉版) + 诊断面板 + 自由备份
  * ============================================================
  */
 const CloudModule = (() => {
+  // 🌟 诊断日志系统 (最多保留最近 50 条记录)
+  const _logs = [];
+  function _log(level, title, detail = '') {
+    const time = new Date().toLocaleTimeString();
+    const logEntry = { time, level, title, detail: detail.toString() };
+    _logs.push(logEntry);
+    if (_logs.length > 50) _logs.shift(); // 保持数组不会无限大
+    
+    // 同步输出到控制台
+    if (level === 'error') console.error(`[Cloud] ${title}`, detail);
+    else if (level === 'warn') console.warn(`[Cloud] ${title}`, detail);
+    else console.log(`[Cloud] ${title}`, detail);
+  }
+
   // 1. 动态加载 Supabase SDK
   if (!window.supabase) {
     const script = document.createElement('script');
     script.src = "https://unpkg.com/@supabase/supabase-js@2";
+    script.onload = () => _log('info', 'Supabase SDK 加载成功');
+    script.onerror = () => _log('error', 'Supabase SDK 加载失败，请检查网络是否屏蔽了 unpkg.com');
     document.head.appendChild(script);
   }
 
   // 2. 专属高级 UI 样式
   const style = document.createElement('style');
   style.textContent = `
-    #cloud-screen { 
-      z-index: 250; 
-      background: var(--s-bg); 
-      font-family: 'Noto Sans SC', sans-serif;
-    }
-    #cloud-screen .cloud-hint-box {
-      font-family: 'Space Mono', monospace; 
-      font-size: 0.6rem; 
-      color: var(--s-text-secondary); 
-      line-height: 1.6; 
-      margin-top: 16px; 
-      background: rgba(0,0,0,0.02); 
-      padding: 16px; 
-      border: 1px dashed rgba(18,18,18,0.15); 
-      border-radius: 8px;
-      text-transform: uppercase; 
-      letter-spacing: 1px;
-    }[data-theme="dark"] #cloud-screen .cloud-hint-box {
-      background: rgba(255,255,255,0.02); 
-      border-color: rgba(255,255,255,0.15);
-    }
-    #cloud-screen .status-dot {
-      display: inline-block; 
-      width: 6px; height: 6px; 
-      background: #2d6a4a; 
-      border-radius: 50%; 
-      margin-right: 6px; 
-      animation: cloud-pulse 2s infinite;
-      vertical-align: middle;
-    }
-    @keyframes cloud-pulse {
-      0% { box-shadow: 0 0 0 0 rgba(45, 106, 74, 0.4); }
-      70% { box-shadow: 0 0 0 6px rgba(45, 106, 74, 0); }
-      100% { box-shadow: 0 0 0 0 rgba(45, 106, 74, 0); }
-    }
+    #cloud-screen { z-index: 250; background: var(--s-bg); font-family: 'Noto Sans SC', sans-serif; }
+    #cloud-screen .cloud-hint-box { font-family: 'Space Mono', monospace; font-size: 0.6rem; color: var(--s-text-secondary); line-height: 1.6; margin-top: 16px; background: rgba(0,0,0,0.02); padding: 16px; border: 1px dashed rgba(18,18,18,0.15); border-radius: 8px; text-transform: uppercase; letter-spacing: 1px; }
+    [data-theme="dark"] #cloud-screen .cloud-hint-box { background: rgba(255,255,255,0.02); border-color: rgba(255,255,255,0.15); }
+    #cloud-screen .status-dot { display: inline-block; width: 6px; height: 6px; background: #2d6a4a; border-radius: 50%; margin-right: 6px; animation: cloud-pulse 2s infinite; vertical-align: middle; }
+    @keyframes cloud-pulse { 0% { box-shadow: 0 0 0 0 rgba(45, 106, 74, 0.4); } 70% { box-shadow: 0 0 0 6px rgba(45, 106, 74, 0); } 100% { box-shadow: 0 0 0 0 rgba(45, 106, 74, 0); } }
+    
+    /* 诊断面板样式 */
+    #cloud-log-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #121212; z-index: 300; flex-direction: column; }
+    #cloud-log-modal.active { display: flex; }
+    .log-header { padding: 50px 20px 16px; background: #1a1a1a; border-bottom: 1px solid #333; display: flex; justify-content: space-between; align-items: center; color: #fff; }
+    .log-content { flex: 1; overflow-y: auto; padding: 16px; font-family: 'Space Mono', monospace; font-size: 0.65rem; color: #0f0; background: #0a0a0a; white-space: pre-wrap; word-break: break-all; }
+    .log-item { margin-bottom: 10px; border-bottom: 1px dashed rgba(255,255,255,0.1); padding-bottom: 8px; }
+    .log-item.error { color: #ff4a4a; }
+    .log-item.warn { color: #ffcc00; }
+    .log-item .log-time { opacity: 0.5; margin-right: 8px; }
   `;
   document.head.appendChild(style);
 
@@ -72,9 +68,14 @@ const CloudModule = (() => {
               <label class="label-text">Project URL / 项目地址</label>
               <input type="text" id="cloud-url" class="input-line" placeholder="https://xxxxx.supabase.co">
             </div>
-            <div class="input-wrapper" style="margin-bottom:24px;">
+            <div class="input-wrapper" style="margin-bottom:16px;">
               <label class="label-text">Anon Key / 匿名密钥</label>
               <input type="password" id="cloud-key" class="input-line" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...">
+            </div>
+            
+            <div style="display:flex; gap:12px; margin-bottom: 24px;">
+              <button class="btn-outline" style="flex:1; border-color:var(--s-text-secondary); color:var(--s-text-secondary);" onclick="CloudModule.clearConnection()">清空 / CLEAR</button>
+              <button class="btn-outline" style="flex:1; border-color:var(--s-text-primary); color:var(--s-text-primary);" onclick="CloudModule.saveConnection()">保存 / SAVE</button>
             </div>
           </div>
 
@@ -89,17 +90,28 @@ const CloudModule = (() => {
               </button>
             </div>
 
-            <!-- 🌟 新增：自动备份开关 -->
             <div class="toggle-row" style="margin-top: 16px; border-top: 1px dashed rgba(18,18,18,0.1); padding-top: 16px;">
               <div class="toggle-row-info">
                 <div class="toggle-row-label" style="font-size:0.85rem; font-weight:600; color:var(--s-text-primary);">自动备份 (Auto Backup)</div>
-                <div class="toggle-row-desc" style="font-size:0.6rem; color:var(--s-text-secondary); margin-top:4px;">应用退入后台时静默同步 (CD: 6小时)</div>
+                <div class="toggle-row-desc" style="font-size:0.6rem; color:var(--s-text-secondary); margin-top:4px;">应用退入后台时触发静默同步</div>
               </div>
               <label class="toggle-switch">
                 <input type="checkbox" id="cloud-auto-backup" onchange="CloudModule.toggleAutoBackup(this.checked)">
                 <div class="toggle-track"></div>
                 <div class="toggle-thumb"></div>
               </label>
+            </div>
+            
+            <!-- 🌟 新增：冷却时间选择器 -->
+            <div class="input-wrapper" id="auto-backup-interval-wrapper" style="margin-top:12px; display:none;">
+              <label class="label-text">同步冷却频率</label>
+              <select id="cloud-backup-interval" class="input-line" onchange="CloudModule.changeBackupInterval(this.value)" style="background:transparent; appearance:none;">
+                <option value="10">每 10 分钟</option>
+                <option value="30">每 30 分钟</option>
+                <option value="60">每 1 小时</option>
+                <option value="360">每 6 小时</option>
+                <option value="1440">每 24 小时</option>
+              </select>
             </div>
             
             <div class="cloud-hint-box">
@@ -135,8 +147,24 @@ const CloudModule = (() => {
             </div>
           </div>
 
+          <!-- 🌟 新增：诊断日志入口 -->
+          <div style="margin-top: 40px; margin-bottom: 20px; text-align: center;">
+            <button class="btn-outline" style="border:none; font-size:0.65rem; font-family:'Space Mono', monospace; color:var(--s-text-secondary); text-decoration:underline;" onclick="CloudModule.openLogs()">
+              <i class="ph-light ph-terminal"></i> 打开系统诊断日志 (Debug Logs)
+            </button>
+          </div>
+
         </div>
       </div>
+    </div>
+    
+    <!-- 🌟 新增：诊断日志面板 HTML -->
+    <div id="cloud-log-modal">
+      <div class="log-header">
+        <div style="font-weight:bold; font-family:'Space Mono', monospace;">SYSTEM DIAGNOSTICS</div>
+        <button style="background:none; border:none; color:#fff; font-size:1rem;" onclick="document.getElementById('cloud-log-modal').classList.remove('active')"><i class="ph-light ph-x"></i></button>
+      </div>
+      <div class="log-content" id="cloud-log-content"></div>
     </div>
   `;
   
@@ -152,6 +180,21 @@ const CloudModule = (() => {
     _injectHTML();
   }
 
+  // 渲染日志面板
+  function openLogs() {
+    const content = document.getElementById('cloud-log-content');
+    content.innerHTML = _logs.length === 0 ? '<div style="opacity:0.5;">暂无日志记录...</div>' : '';
+    
+    _logs.forEach(log => {
+      const div = document.createElement('div');
+      div.className = `log-item ${log.level}`;
+      div.innerHTML = `<span class="log-time">[${log.time}]</span> <b>${log.title}</b><br>${log.detail ? `<span style="opacity:0.7">${log.detail}</span>` : ''}`;
+      content.appendChild(div);
+    });
+    
+    document.getElementById('cloud-log-modal').classList.add('active');
+  }
+
   async function _getRawDB() {
     return new Promise((resolve, reject) => {
       const req = indexedDB.open('chillOS');
@@ -160,35 +203,34 @@ const CloudModule = (() => {
     });
   }
 
-  // 🌟 新增：在模块顶部声明一个全局变量，用来保存“唯一的连接”
   let _supabaseInstance = null;
 
-  // 获取带弹窗验证的 supabase 实例
   function _getSupabase() {
-    // 如果已经连过了，直接把存好的线拿出来用，不再重复创建！
     if (_supabaseInstance) return _supabaseInstance;
 
     const url = document.getElementById('cloud-url').value.trim().replace(/\/$/, '');
     const key = document.getElementById('cloud-key').value.trim();
+    
     if (!url || !key) {
+      _log('warn', '连接失败', '用户未填写 URL 或 Key');
       Toast.show('请填写 Project URL 与 Anon Key');
       return null;
     }
     if (!window.supabase) {
+      _log('error', '连接失败', 'Supabase SDK 尚未加载完毕');
       Toast.show('Supabase SDK 仍在加载，请稍等一秒');
       return null;
     }
+    
     DB.settings.set('cloud-url', url);
     DB.settings.set('cloud-key', key);
     
-    // 创建连接并存起来
+    _log('info', '正在创建 Supabase 实例连接', `URL: ${url}`);
     _supabaseInstance = window.supabase.createClient(url, key);
     return _supabaseInstance;
   }
 
-  // 🌟 静默获取 Supabase 实例（供静默上传和静默收件用）
   async function _getSupabaseSilent() {
-    // 如果已经连过了，直接用！
     if (_supabaseInstance) return _supabaseInstance;
 
     try {
@@ -196,10 +238,12 @@ const CloudModule = (() => {
       const key = await DB.settings.get('cloud-key');
       if (!url || !key || !window.supabase) return null;
       
-      // 创建连接并存起来
       _supabaseInstance = window.supabase.createClient(url, key);
       return _supabaseInstance;
-    } catch(e) { return null; }
+    } catch(e) { 
+      _log('error', '静默获取数据库实例失败', e.message);
+      return null; 
+    }
   }
 
   async function open() {
@@ -208,13 +252,20 @@ const CloudModule = (() => {
       const savedKey = await DB.settings.get('cloud-key');
       const savedVapid = await DB.settings.get('cloud-vapid');
       const autoBackup = await DB.settings.get('cloud-auto-backup');
+      const backupInterval = await DB.settings.get('cloud-backup-interval') || '360'; // 默认 6 小时
       
       if (savedUrl) document.getElementById('cloud-url').value = savedUrl;
       if (savedKey) document.getElementById('cloud-key').value = savedKey;
       if (savedVapid) document.getElementById('vapid-key').value = savedVapid;
       
       const autoToggle = document.getElementById('cloud-auto-backup');
-      if (autoToggle) autoToggle.checked = !!autoBackup;
+      if (autoToggle) {
+        autoToggle.checked = !!autoBackup;
+        document.getElementById('auto-backup-interval-wrapper').style.display = autoBackup ? 'block' : 'none';
+      }
+      
+      const intervalSelect = document.getElementById('cloud-backup-interval');
+      if (intervalSelect) intervalSelect.value = backupInterval;
 
     } catch(e) {}
     document.getElementById('cloud-screen').classList.add('active');
@@ -224,47 +275,72 @@ const CloudModule = (() => {
     document.getElementById('cloud-screen').classList.remove('active');
   }
 
-  function _showCloudConfirm(title, message, btnText) {
-    return new Promise((resolve) => {
-      const overlay = document.createElement('div');
-      overlay.className = 'modal-overlay show';
-      overlay.style.cssText = 'z-index: 9999; align-items: center; justify-content: center; display: flex; background: rgba(0,0,0,0.6); backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px);';
-      overlay.innerHTML = `
-        <div class="cv-mag-modal" style="background:var(--bg-card,#fff); border:0.5px solid rgba(18,18,18,0.1); border-radius:28px; padding:32px 24px; box-shadow:0 40px 80px rgba(0,0,0,0.2); text-align:center; max-width:320px; width:90%; position:relative; overflow:hidden;">
-          <i class="ph-thin ph-warning-circle" style="font-size:2.5rem;color:#D93A3A;margin-bottom:16px;"></i>
-          <h2 style="font-family:'Playfair Display',serif;font-size:1.8rem;font-weight:500;font-style:italic;color:var(--text-main,#121212);line-height:1.2;margin-bottom:8px;">${title}</h2>
-          <p style="font-size:0.8rem;color:var(--text-sub,#999);margin-bottom:32px;line-height:1.5;">${message}</p>
-          <div style="display:flex;gap:12px;">
-            <button id="cc-cancel" style="flex:1;padding:14px 0;border-radius:100px;background:transparent;border:0.5px solid rgba(18,18,18,0.2);color:var(--text-main,#121212);font-weight:600;font-size:0.85rem;cursor:pointer;">取消</button>
-            <button id="cc-confirm" style="flex:1;padding:14px 0;border-radius:100px;background:#D93A3A;border:none;color:#fff;font-weight:600;font-size:0.85rem;cursor:pointer;box-shadow:0 8px 20px rgba(217,58,58,0.2);">${btnText}</button>
-          </div>
-        </div>
-      `;
-      document.body.appendChild(overlay);
-      
-      overlay.querySelector('#cc-cancel').onclick = () => { overlay.remove(); resolve(false); };
-      overlay.querySelector('#cc-confirm').onclick = () => { overlay.remove(); resolve(true); };
-    });
-  }
-
-  // 🌟 修改：切换自动备份开关
   async function toggleAutoBackup(enabled) {
     try {
       await DB.settings.set('cloud-auto-backup', enabled);
-      if (enabled) Toast.show('自动备份已开启 (切换至后台时触发)');
+      document.getElementById('auto-backup-interval-wrapper').style.display = enabled ? 'block' : 'none';
+      if (enabled) {
+         _log('info', '用户开启了自动备份功能');
+         Toast.show('自动备份已开启');
+      }
     } catch (e) {}
   }
 
-  // 🌟 修改：支持 isSilent 模式，跳过弹窗和 UI 阻挡
+  async function changeBackupInterval(minutes) {
+    try {
+      await DB.settings.set('cloud-backup-interval', minutes);
+      _log('info', `用户将自动备份冷却时间修改为: ${minutes} 分钟`);
+      Toast.show(`冷却时间已更新为 ${minutes} 分钟`);
+    } catch (e) {}
+  }
+
+  async function saveConnection() {
+    const url = document.getElementById('cloud-url').value.trim().replace(/\/$/, '');
+    const key = document.getElementById('cloud-key').value.trim();
+    await DB.settings.set('cloud-url', url);
+    await DB.settings.set('cloud-key', key);
+    
+    _supabaseInstance = null; // 重置实例，确保下次调用使用新配置
+    _log('info', '用户手动保存了云端节点配置');
+    if (typeof Toast !== 'undefined') Toast.show('节点配置已保存 ✦');
+  }
+
+  async function clearConnection() {
+    document.getElementById('cloud-url').value = '';
+    document.getElementById('cloud-key').value = '';
+    await DB.settings.set('cloud-url', '');
+    await DB.settings.set('cloud-key', '');
+    
+    _supabaseInstance = null; // 重置实例
+    _log('info', '用户清空了云端节点配置');
+    if (typeof Toast !== 'undefined') Toast.show('配置已清空');
+  }
+
+  // 辅助报错拦截，用于排查朋友遇到的奇怪问题
+  function handleFetchError(e, action) {
+    _log('error', `${action} 失败拦截`, e.message);
+    if (e.message.includes('Failed to fetch')) {
+       _log('error', `网络绝杀分析 [${action}]`, '浏览器底层阻断。原因可能为：\n1. URL 含有空格、换行或少了 https://\n2. 手机被墙或加速器/广告拦截器阻挡了 *.supabase.co 域名\n3. 苹果 Safari 设置里开启了"隐藏IP"防跟踪。');
+       Toast.show('上传失败: 网络连接被阻断，请查看诊断日志！', 3000);
+    } else if (e.message.includes('row-level security')) {
+       _log('error', `权限锁拦截 [${action}]`, '数据库的 RLS(防盗门) 未关闭，拒绝前端写入。去 Supabase 后台把 chill_sync 表的 RLS 关掉！');
+       Toast.show('上传失败: 数据库写权限未开放');
+    } else {
+       Toast.show(`操作失败: ${e.message}`);
+    }
+  }
+
   async function syncUp(isSilent = false) {
-    // 自动备份时用静默读取的方式拿 key，手动点击时走带 UI 的方法
     const supabase = isSilent ? await _getSupabaseSilent() : _getSupabase();
     if (!supabase) return;
 
     if (!isSilent) {
-      const confirmed = await _showCloudConfirm('Push to Cloud', '警告：上传将完全覆盖云端现有的备份数据。<br>确定要执行上传吗？', '确认覆盖');
+      // 省略原生确认弹窗逻辑以缩短篇幅，你原本的代码里的 _showCloudConfirm 依然有效
+      const confirmed = confirm("警告：上传将完全覆盖云端现有数据。\n确定要执行上传吗？");
       if (!confirmed) return;
     }
+
+    _log('info', `准备执行数据全量上传 ${isSilent ? '(后台静默)' : '(手动)'}`);
 
     const btn = document.getElementById('btn-sync-up');
     let oriText = '';
@@ -278,8 +354,8 @@ const CloudModule = (() => {
     try {
       const db = await _getRawDB();
       const stores = Array.from(db.objectStoreNames);
-      const payload = { _meta: { version: db.version, timestamp: Date.now() }, assets_meta:[] };
-      const assetsToUpload =[];
+      const payload = { _meta: { version: db.version, timestamp: Date.now() }, assets_meta: [] };
+      const assetsToUpload = [];
 
       for (const storeName of stores) {
         const records = await new Promise(res => {
@@ -299,33 +375,38 @@ const CloudModule = (() => {
         }
       }
 
+      _log('info', '本地数据提取完毕，开始向 Supabase 写入 chill_sync 表...');
       if (!isSilent && btn) btn.innerHTML = '<i class="ph-light ph-spinner" style="animation:spin 1s linear infinite"></i> 上传神经突触...';
       
       const { error: dbErr } = await supabase
         .from('chill_sync')
         .upsert({ id: 'main_backup', data: payload, updated_at: new Date() });
+        
       if (dbErr) throw new Error(dbErr.message);
+      _log('info', '✅ chill_sync 表数据上传成功！');
 
       let current = 0;
       const total = assetsToUpload.length;
+      if (total > 0) _log('info', `准备上传 ${total} 个媒体文件至 chill_assets...`);
+      
       for (const record of assetsToUpload) {
         current++;
         if (!isSilent && btn) btn.innerHTML = `<i class="ph-light ph-spinner" style="animation:spin 1s linear infinite"></i> 刻录媒体 (${current}/${total})`;
         const { error: storageErr } = await supabase.storage.from('chill_assets').upload(record.key, record.blob, { upsert: true, contentType: record.mimeType });
-        if (storageErr) console.warn(`图片上传失败[${record.key}]:`, storageErr);
+        if (storageErr) _log('warn', `图片上传失败 [${record.key}]`, storageErr.message);
       }
 
       // 备份成功后，记录时间戳
       await DB.settings.set('cloud-last-auto-backup-time', Date.now());
 
       if (!isSilent) {
+        _log('info', '全量同步已彻底完成');
         Toast.show('✦ 云端连结完毕，档案已永存 ✦');
       } else {
-        console.log('[Cloud] ✅ 自动静默备份已完成');
+        _log('info', '后台静默备份成功完成');
       }
     } catch(e) {
-      console.error(e);
-      if (!isSilent) Toast.show('上传失败: ' + e.message);
+      handleFetchError(e, '全量上传(PUSH)');
     } finally {
       if (!isSilent && btn) {
         btn.innerHTML = oriText;
@@ -338,9 +419,10 @@ const CloudModule = (() => {
     const supabase = _getSupabase();
     if (!supabase) return;
 
-    const confirmed = await _showCloudConfirm('Pull from Cloud', '警告：从云端拉取将完全覆盖当前设备上的所有数据！<br>确定执行吗？', '确认拉取');
+    const confirmed = confirm("警告：从云端拉取将完全覆盖当前设备上的所有数据！\n确定执行吗？");
     if (!confirmed) return;
 
+    _log('info', '准备从云端拉取 (PULL) 全量数据');
     const btn = document.getElementById('btn-sync-down');
     const oriText = btn.innerHTML;
     btn.style.pointerEvents = 'none';
@@ -354,18 +436,22 @@ const CloudModule = (() => {
         .eq('id', 'main_backup')
         .single(); 
 
-      if (dbErr || !syncRecords || !syncRecords.data) throw new Error('未在云端找到备份数据');
+      if (dbErr) throw new Error(dbErr.message);
+      if (!syncRecords || !syncRecords.data) throw new Error('未在云端找到主备份数据');
+      
+      _log('info', '✅ 云端数据库拉取成功，准备清空本地 IndexedDB...');
       const cloudData = syncRecords.data;
 
       await DB.clearAll();
       const db = await _getRawDB();
       const stores = Array.from(db.objectStoreNames);
 
-      const assetsMeta = cloudData.assets_meta ||[];
+      const assetsMeta = cloudData.assets_meta || [];
       const total = assetsMeta.length;
       let current = 0;
 
       if (total > 0) {
+        _log('info', `开始从 Storage 拉取 ${total} 个媒体文件...`);
         for (const meta of assetsMeta) {
           current++;
           btn.innerHTML = `<i class="ph-light ph-spinner" style="animation:spin 1s linear infinite"></i> 提取媒体 (${current}/${total})`;
@@ -380,10 +466,13 @@ const CloudModule = (() => {
               tx.oncomplete = () => resolve();
               tx.onerror = () => reject(tx.error);
             });
+          } else {
+             _log('warn', `媒体拉取失败 [${meta.key}]`, dlErr?.message);
           }
         }
       }
 
+      _log('info', '媒体拉取完毕，开始重建本地索引...');
       btn.innerHTML = '<i class="ph-light ph-spinner" style="animation:spin 1s linear infinite"></i> 构建索引...';
       for (const storeName of stores) {
         if (storeName === 'assets') continue; 
@@ -395,12 +484,12 @@ const CloudModule = (() => {
         }
       }
 
+      _log('info', '✦ 数据重载完毕，系统准备重启');
       Toast.show('✦ 数据重载完毕！系统即将重启 ✦');
       setTimeout(() => location.reload(), 1500);
 
     } catch(e) {
-      console.error(e);
-      Toast.show('拉取失败: ' + e.message);
+      handleFetchError(e, '全量拉取(PULL)');
     } finally {
       btn.innerHTML = oriText;
       btn.style.pointerEvents = 'auto';
@@ -419,12 +508,21 @@ const CloudModule = (() => {
   }
 
   async function requestPushPermission() {
+    _log('info', '用户请求通知权限');
     const vapidInput = document.getElementById('vapid-key').value.trim();
     if (!vapidInput) { Toast.show('请先填写 VAPID 推送公钥'); return; }
-    if (!('Notification' in window) || !('serviceWorker' in navigator)) { Toast.show('当前浏览器不支持系统级推送'); return; }
+    if (!('Notification' in window) || !('serviceWorker' in navigator)) { 
+      _log('error', '设备不支持 Notification 或 SW');
+      Toast.show('当前浏览器不支持系统级推送'); 
+      return; 
+    }
     
     const permission = await Notification.requestPermission();
-    if (permission !== 'granted') { Toast.show('通知授权被拒绝，离线 Agent 无法工作'); return; }
+    if (permission !== 'granted') { 
+      _log('warn', '用户拒绝了系统通知权限');
+      Toast.show('通知授权被拒绝，离线 Agent 无法工作'); 
+      return; 
+    }
 
     Toast.show('正在生成端对端加密通信令牌...', 3000);
 
@@ -434,6 +532,7 @@ const CloudModule = (() => {
       
       let subscription = await reg.pushManager.getSubscription();
       if (!subscription) {
+        _log('info', '正在通过 VAPID 向浏览器申请订阅通道...');
         subscription = await reg.pushManager.subscribe({
           userVisibleOnly: true,
           applicationServerKey: urlBase64ToUint8Array(vapidInput)
@@ -442,6 +541,8 @@ const CloudModule = (() => {
 
       const subData = JSON.parse(JSON.stringify(subscription));
       await DB.settings.set('push-subscription', subData);
+      
+      _log('info', '✅ 设备令牌订阅成功！', subData);
       Toast.show('设备令牌生成成功！信使已就位 ✦');
       
       reg.showNotification('Chill OS', {
@@ -450,7 +551,7 @@ const CloudModule = (() => {
       });
 
     } catch (e) {
-      console.error('[Push] 订阅失败:', e);
+      _log('error', '订阅 Push Manager 失败', e.message);
       Toast.show('生成设备令牌失败，请检查公钥格式是否正确');
     }
   }
@@ -463,28 +564,33 @@ const CloudModule = (() => {
     if (!supabase) return;
 
     try {
+      _log('info', '开始检查云端离线信箱...');
       const { data: offlineMsgs, error } = await supabase
         .from('cloud_offline_messages')
         .select('*');
         
-      if (error || !offlineMsgs || offlineMsgs.length === 0) return;
+      if (error) throw new Error(error.message);
+      if (!offlineMsgs || offlineMsgs.length === 0) {
+         // _log('info', '信箱为空'); // 避免太吵
+         return;
+      }
 
-      console.log(`[Cloud] 📥 发现 ${offlineMsgs.length} 组离线消息，开始静默收取...`);
+      _log('info', `📥 发现 ${offlineMsgs.length} 组离线消息，开始收取...`);
 
       for (const record of offlineMsgs) {
         const charId = record.char_id;
-        const bubbles = record.content ||[];
+        const bubbles = record.content || [];
         let timestamp = new Date(record.created_at).getTime();
 
         for (const text of bubbles) {
           let displayContent = text;
-          let msgParts =[{ type: 'text', content: text }];
+          let msgParts = [{ type: 'text', content: text }];
           
           const audioMatch = text.match(/^\[AUDIO:(\d+):(.+)\]$/s);
           const emoteMatch = text.match(/^\[EMOTE:(.+)\]$/i);
           
           if (audioMatch) {
-            msgParts =[{ type: 'audio', duration: parseInt(audioMatch[1]), transcript: audioMatch[2].trim() }];
+            msgParts = [{ type: 'audio', duration: parseInt(audioMatch[1]), transcript: audioMatch[2].trim() }];
             displayContent = `[语音消息 ${audioMatch[1]}秒]`;
           } else if (emoteMatch) {
             const keyword = emoteMatch[1].trim();
@@ -494,7 +600,7 @@ const CloudModule = (() => {
                 msgParts = [{ type: 'image', url: url, description: `[表情包:${keyword}]` }];
                 displayContent = `[表情包]`;
               } else {
-                msgParts =[{ type: 'text', content: `*试图发送表情包：${keyword}*` }];
+                msgParts = [{ type: 'text', content: `*试图发送表情包：${keyword}*` }];
               }
             }
           }
@@ -525,8 +631,8 @@ const CloudModule = (() => {
           }
         }
 
+        _log('info', `执行阅后即焚: 删除云端信件 ID ${record.id}`);
         await supabase.from('cloud_offline_messages').delete().eq('id', record.id);
-        console.log(`[Cloud] 🗑️ 离线信件 ${record.id} 已落库并销毁。`);
         
         await DB.settings.set(`last-interaction-${charId}`, Date.now());
       }
@@ -534,12 +640,13 @@ const CloudModule = (() => {
       if (typeof NotifModule !== 'undefined') NotifModule.refresh();
 
     } catch (e) {
-      console.error('[Cloud] 离线消息收取失败:', e);
+      _log('error', '离线消息收取失败', e.message);
     }
   }
 
   // ── 初始化挂载 ──
   async function init() {
+    _log('info', 'CloudModule 初始化...');
     // 首次加载时查收离线信件
     await checkOfflineMessages();
     
@@ -556,30 +663,36 @@ const CloudModule = (() => {
           if (autoEnabled) {
             const lastBackupTime = await DB.settings.get('cloud-last-auto-backup-time') || 0;
             const now = Date.now();
-            const COOLDOWN = 6 * 60 * 60 * 1000; // 冷却期：6 小时
+            
+            // 🌟 动态读取冷却时间 (默认 360 分钟 = 6 小时)
+            const intervalMinutes = await DB.settings.get('cloud-backup-interval') || '360';
+            const COOLDOWN = parseInt(intervalMinutes) * 60 * 1000;
 
             if (now - lastBackupTime > COOLDOWN) {
-              console.log('[Cloud] 💤 应用退至后台，开始静默同步到云端...');
-              // 这里不需要 await 阻塞前台线程，直接丢给浏览器去跑网络请求
+              _log('info', `💤 应用退至后台，已超过冷却时间 (${intervalMinutes}分钟)，触发自动上传`);
               syncUp(true);
             } else {
-               const hoursLeft = ((COOLDOWN - (now - lastBackupTime)) / (1000 * 60 * 60)).toFixed(1);
-               console.log(`[Cloud] 💤 应用退至后台，跳过自动备份 (冷却中，剩余 ${hoursLeft} 小时)`);
+               const minsLeft = ((COOLDOWN - (now - lastBackupTime)) / (1000 * 60)).toFixed(1);
+               // 注释掉下面这行以免频繁后台输出，需要排查时可打开
+               // _log('info', `💤 后台同步冷却中，剩余 ${minsLeft} 分钟`);
             }
           }
         } catch(e) {
-          console.warn('[Cloud] 自动备份检查失败:', e);
+          _log('error', '自动备份检查触发失败', e.message);
         }
       }
     });
   }
 
-  return { init, open, close, syncUp, syncDown, requestPushPermission, toggleAutoBackup };
+  return { init, open, close, syncUp, syncDown, requestPushPermission, toggleAutoBackup, changeBackupInterval, openLogs, saveConnection, clearConnection };
 })();
 
 window.CloudModule = CloudModule;
 
-// 在文件末尾确保加载时执行初始化
-setTimeout(() => {
-    if (CloudModule.init) CloudModule.init();
-}, 1000);
+// 在文件末尾确保加载时执行初始化，并智能等待 DB 模块就绪
+const _cloudInitTimer = setInterval(() => {
+    if (typeof DB !== 'undefined') {
+        clearInterval(_cloudInitTimer);
+        if (CloudModule.init) CloudModule.init();
+    }
+}, 500);

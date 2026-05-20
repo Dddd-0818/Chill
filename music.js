@@ -2159,6 +2159,86 @@ if (fwLabelNum) {
     }
     _renderFloatingWidget();
   }
+  
+  // ==========================================
+  // 新增：供外部(CoupleModule)调用的互通接口
+  // ==========================================
+  
+  // 🌟 1. 静默初始化：不仅拉取数据，还要把底层播放器偷偷挂载好
+  async function silentInit() {
+    // 如果还没初始化过 DOM，就静默注入 HTML 和绑定事件 (不弹出版面)
+    if (!_initialized) {
+      _injectCSS();
+      _injectHTML();
+      _bindEvents();
+      _initialized = true;
+    }
+    
+    _loadConfig();
+    await _ensureDB();
+    await _loadPlaylistsFromDB();
+    if (_cookie && _apiBase && _userProfile) {
+      _isLoggedIn = true;
+    }
+  }
 
-  return { open, close, _navTo };
+  // 🌟 2. 混合拉取所有歌单
+  async function getExposedPlaylists() {
+    const lists = [..._localPlaylists];
+    if (_isLoggedIn && _userProfile) {
+      try {
+        // 加上 timestamp 防止网易云接口数据被死缓存
+        const data = await _api(`/user/playlist?uid=${_userProfile.userId}&limit=100&timestamp=${Date.now()}`);
+        if (data.playlist) data.playlist.forEach(p => lists.push(p));
+      } catch(e) { console.warn("拉取云端歌单失败", e); }
+    }
+    return lists;
+  }
+
+  async function getExposedSongs(pl) {
+    if (pl.isLocal) return pl.songs ||[];
+    try {
+      const data = await _api(`/playlist/track/all?id=${pl.id}&limit=200&timestamp=${Date.now()}`);
+      return (data.songs ||[]).map(s => ({
+        id: s.id, title: s.name, artist: s.ar?.map(a => a.name).join(' / ') || '', cover: s.al?.picUrl || '', isCloud: true
+      }));
+    } catch(e) { return[]; }
+  }
+
+  async function playExposedSong(song, plSongs, plObj) {
+    _currentPlaylist = plSongs;
+    _currentPlaylistObj = plObj;
+    const idx = _currentPlaylist.findIndex(s => s.id === song.id);
+    if (idx !== -1) {
+      await _playSong(idx);
+      return true;
+    }
+    return false;
+  }
+
+  async function searchAndPlayCloud(keyword) {
+    try {
+      const data = await _api(`/search?keywords=${encodeURIComponent(keyword)}&limit=1`);
+      const s = data.result?.songs?.[0];
+      if (s) {
+        const song = { id: s.id, title: s.name, artist: s.artists?.map(a => a.name).join(' / ') || '', cover: s.album?.artist?.img1v1Url || '', isCloud: true };
+        _currentPlaylist = [song];
+        _currentPlaylistObj = { name: 'AI 点歌', isLocal: false };
+        await _playSong(0);
+        return song;
+      }
+    } catch(e){}
+    return null;
+  }
+
+  function getCurrentState() {
+    const song = (_currentIdx >= 0 && _currentPlaylist.length > _currentIdx) ? _currentPlaylist[_currentIdx] : null;
+    return { isPlaying: _isPlaying, song: song, lyrics: _lyrics ||[] };
+  }
+
+  return { 
+    open, close, _navTo, 
+    // 暴露给外部的接口
+    silentInit, getExposedPlaylists, getExposedSongs, playExposedSong, searchAndPlayCloud, getCurrentState 
+  };
 })();
