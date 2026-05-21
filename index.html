@@ -23296,6 +23296,9 @@ const storyMsgs = rawStoryMsgs;
 
             const eventTimestamp = unarchived[unarchived.length - 1].timestamp;
             const newCursorId = unarchived[unarchived.length - 1].id;
+            
+            // ✨ 核心修复：获取现实世界的“此时此刻”作为同步动作的时间戳
+            const currentSyncTime = Date.now(); 
 
             if (!isAuto) Toast.show('正在回溯时间轴并提炼新增记忆...');
 
@@ -23330,10 +23333,10 @@ ${dialogLog}`;
                         const onlineMsgs = await DB.messages.getPage(_realCharId, 0, 50).catch(()=>[]);
                         const lastTicket = onlineMsgs.find(m => m.role === 'system_ticket' && m.parts?.[0]?.action === 'story_archive');
                         
-                        let isSameDay = false;
+                       let isSameDay = false;
                         if (lastTicket) {
                             const d1 = new Date(lastTicket.timestamp);
-                            const d2 = new Date(eventTimestamp);
+                            const d2 = new Date(currentSyncTime); // 🌟 修复：用现实时间判断是否同一天归档
                             if (d1.getFullYear() === d2.getFullYear() && d1.getMonth() === d2.getMonth() && d1.getDate() === d2.getDate()) {
                                 isSameDay = true;
                             }
@@ -23343,7 +23346,7 @@ ${dialogLog}`;
 
                         if (isSameDay) {
                             lastTicket.parts[0].summary += '\n\n【后续进展】：\n' + newSummary;
-                            lastTicket.timestamp = eventTimestamp; 
+                            lastTicket.timestamp = currentSyncTime; // 🌟 修复：更新为最新同步的现实时间
                             await DB.messages.put(lastTicket);
                             finalMemoryText = lastTicket.parts[0].summary;
                             
@@ -23359,7 +23362,7 @@ ${dialogLog}`;
                                 role: 'system_ticket',
                                 parts:[{ type: 'system_ticket', action: 'story_archive', summary: newSummary }],
                                 content: `[线下记忆封存]`,
-                                timestamp: eventTimestamp 
+                                timestamp: currentSyncTime // 🌟 修复：必须使用现实时间，绝不能用过去剧情的时间！
                             };
                             const ticketId = await DB.messages.add(ticketMsg);
                             ticketMsg.id = ticketId;
@@ -23375,7 +23378,7 @@ ${dialogLog}`;
                         // 🌟 强力记忆补丁：把这段线下记忆写入独立缓存，永远跟着角色
                         await DB.settings.set(`offline-memory-${_realCharId}`, {
                             summary: finalMemoryText,
-                            timestamp: eventTimestamp
+                            timestamp: currentSyncTime // 🌟 修复：更新为现实同步时间
                         });
                         
                         if (typeof NotificationModule !== 'undefined' && !isAuto) {
