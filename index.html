@@ -1296,13 +1296,16 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
 /* ── HTML 自定义交互组件 ── */
 #conv-screen .cv-html-widget {
   max-width: 85%;
-  width: fit-content;
+  width: 85%;
   border-radius: 12px;
   overflow: hidden;
-  background: transparent; /* 透明背景，不带默认气泡样式 */
+  background: transparent;
   position: relative;
   z-index: 1;
-  color: inherit;
+  border: none;
+  display: block;
+  min-height: 60px;
+  transition: height 0.2s ease;
 }
 /* 解决多选模式下组件的滤镜表现 */
 #conv-screen.multi-select-mode .cv-html-widget {
@@ -7201,6 +7204,23 @@ const AuthModule = (() => {
 
   return { bindEvents };
 })();
+
+// ── HTML Widget 沙盒自适应高度 ──
+function _makeHtmlWidget(htmlContent) {
+  const id = 'w' + Date.now() + Math.random().toString(36).slice(2, 6);
+  const resizeScript = `<script>(function(){var id="${id}";function r(){var h=document.documentElement.scrollHeight||document.body.scrollHeight;parent.postMessage({type:'html-widget-resize',id:id,height:h},'*');}if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',r);}else{r();}new ResizeObserver(r).observe(document.body);})();<\/script>`;
+  const injected = htmlContent.replace(/<\/body>/i, resizeScript + '</body>');
+  const finalHtml = injected === htmlContent ? htmlContent + resizeScript : injected;
+  const escaped = finalHtml.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+ return `<iframe data-widget-id="${id}" class="cv-html-widget" srcdoc="${escaped}" sandbox="allow-scripts allow-forms" style="border:none;width:100%;display:block;min-height:60px;border-radius:12px;"></iframe>`;
+}
+
+window.addEventListener('message', (e) => {
+  if (e.data?.type === 'html-widget-resize') {
+    const iframe = document.querySelector(`iframe[data-widget-id="${e.data.id}"]`);
+    if (iframe) iframe.style.height = e.data.height + 'px';
+  }
+});
 
 document.addEventListener('DOMContentLoaded', async () => {
   AuthModule.bindEvents();
@@ -15362,7 +15382,7 @@ function _renderImgPreviewBar() {
         return row;
       }
       if (part.type === 'html') {
-        row.innerHTML = `${avatarHtml}<div class="cv-html-widget">${part.content}</div>`;
+        row.innerHTML = `${avatarHtml}${_makeHtmlWidget(part.content)}`;
         return row;
       }
      if (part.type === 'location') {
@@ -15408,7 +15428,7 @@ function _renderImgPreviewBar() {
       if (part.type === 'transfer')      return _buildTransferHtml(part, msg.id);
       if (part.type === 'user_transfer') return _buildUserTransferHtml(part, msg.id);
       if (part.type === 'image')         return _buildImgHtml(part, msg.id);
-      if (part.type === 'html')          return `<div class="cv-html-widget">${part.content}</div>`;
+      if (part.type === 'html')          return _makeHtmlWidget(part.content);
      if (part.type === 'location')      return _buildLocHtml(part, msg.id, msg.role);
     if (part.type === 'forum_share') {
           const fd = part.data;
