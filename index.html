@@ -16552,7 +16552,9 @@ function _renderImgPreviewBar() {
      let rawBubbles = _splitAiBubbles(response);
       let isFirstBubble = true;
 
-      for (const rawContent of rawBubbles) {
+      // 🌟 Fix: 用 index 循环代替 for-of，方便 emote 粘连时向 rawBubbles 注入新气泡
+      for (let _bi = 0; _bi < rawBubbles.length; _bi++) {
+        const rawContent = rawBubbles[_bi];
         const { text: strippedText, prompts: novelPrompts } = _stripNovelImgTags(rawContent);
         let src = _cleanAiBubble(strippedText || (novelPrompts.length ? novelPrompts.map(p => String(p).trim()).filter(Boolean).join(' · ') : ''));
         if (!strippedText.trim() && novelPrompts.length > 0 && !novelImgOnForPrompt) {
@@ -16564,7 +16566,8 @@ function _renderImgPreviewBar() {
         const rejectXferMatch = !isRecall && !isAcceptXfer && src.match(/^\[REJECT_TRANSFER\s*[:：]\s*(.+?)\]\s*$/i);
         const audioMatch    = !isRecall && !isAcceptXfer && !rejectXferMatch && src.match(/^\[AUDIO\s*[:：]\s*(\d+)\s*[:：]\s*([\s\S]+?)\]\s*$/i);
         const xferMatch     = !isRecall && !isAcceptXfer && !rejectXferMatch && !audioMatch && src.match(/^\[TRANSFER\s*[:：]\s*([0-9,，.]+)\s*[:：]\s*([\s\S]+?)\]\s*$/i);
-        const emoteMatch    = !isRecall && !isAcceptXfer && !rejectXferMatch && !audioMatch && !xferMatch && src.match(/^\[EMOTE\s*[:：]\s*(.+?)\]\s*$/i);
+        // 🌟 Fix: 放宽 emote 解析——去掉行尾 $ 约束，用第二捕获组接住粘连的正文
+        const emoteMatch    = !isRecall && !isAcceptXfer && !rejectXferMatch && !audioMatch && !xferMatch && src.match(/^\[EMOTE\s*[:：]\s*([^\]]+)\]\s*([\s\S]*)$/i);
         const quoteMatch    = !isRecall && !isAcceptXfer && !rejectXferMatch && !audioMatch && !xferMatch && !emoteMatch && src.match(/^\[QUOTE\s*[:：]\s*(.{1,40}?)\]\s*/i);
         const isCall = !isRecall && !isAcceptXfer && !rejectXferMatch && !audioMatch && !xferMatch && !emoteMatch && !quoteMatch && /^\[CALL\]\s*$/i.test(src);
         const postMatch    = !isRecall && !isAcceptXfer && !rejectXferMatch && !audioMatch && !xferMatch && !emoteMatch && !quoteMatch && !isCall && src.match(/^\[POST\s*[:：]\s*([\s\S]+?)\]\s*$/i);
@@ -16675,6 +16678,7 @@ function _renderImgPreviewBar() {
           displayContent = `[转账 ¥${amt}]`;
         } else if (emoteMatch) {
           const keyword = emoteMatch[1].trim();
+          const trailing = emoteMatch[2]?.trim(); // 🌟 Fix: 放宽后捕获到的粘连正文
           const url = EmoteModule.getUrlByKeyword(keyword, sessionCharId);
           if (url) {
             msgParts = [{ type: 'image', url: url, description: `[表情包:${keyword}]` }];
@@ -16683,6 +16687,8 @@ function _renderImgPreviewBar() {
             msgParts = [{ type: 'text', content: `*试图发送表情包：${keyword}*` }];
             displayContent = `[表情包]`;
             }
+          // 🌟 Fix: 如果 emote 后面粘连了正文，注入为紧接着的下一个气泡
+          if (trailing) rawBubbles.splice(_bi + 1, 0, trailing);
           } else if (locMatch) {
           const locName = locMatch[1].trim();
           const coord = _generateRandomCoord();
@@ -17069,7 +17075,8 @@ ${dialogueFlow.trim()}
    if (p.type === 'image') {
         if (p.description && p.description.startsWith('[表情包:')) {
           const kw = p.description.slice(5, -1);
-          return m.role === 'assistant' ? `[EMOTE:${kw}]` : `[用户发送了表情包：${kw}]`;
+          // 🌟 Fix: assistant 历史里 emote 前加 |||，让模型学到分气泡样板
+          return m.role === 'assistant' ? `||| [EMOTE:${kw}]` : `[用户发送了表情包：${kw}]`;
         }
         
         if (m.role === 'user') {
@@ -17081,9 +17088,17 @@ ${dialogueFlow.trim()}
         return p.description ? `[图片：${p.description}]` : '[角色发送了一张图片]';
       }
       if (p.type === 'system_ticket') return '';
-      if (p.quoteRef) return `[引用 ${p.quoteRef.name}: "${p.quoteRef.text}"] ${p.content}`;
+      // 🌟 Fix: 回填格式与 AI 输出协议对齐，用 [QUOTE:...] 而非中文 [引用 X: "..."]
+      if (p.quoteRef) return `[QUOTE:${p.quoteRef.text.slice(0,40)}]${p.content}`;
       return p.content;
-    }).filter(Boolean).join('\n');
+    }).filter(Boolean).reduce((acc, part) => {
+      if (!acc) return part;
+      // 🌟 Fix: EMOTE 自带 ||| 前缀，直接换行拼接（parser 按 ||| split）
+      if (part.startsWith('|||')) return acc + '\n' + part;
+      // 🌟 Fix: 上一部分以 EMOTE 结尾时，下一个普通文字也需要 ||| 分隔，否则会黏连进同一气泡
+      if (acc.trimEnd().match(/\[EMOTE:[^\]]+\]$/)) return acc + '\n|||\n' + part;
+      return acc + '\n' + part;
+    }, '');
   }
 
   // ── 组装 System Prompt ──
@@ -17828,32 +17843,24 @@ function back() {
 	    // 3. 初始优先按 ||| 切分
 	    let bubbles = text.split(/\|\|\|/).map(_cleanAiBubble).filter(Boolean);
 
-	    // 4. 没用 |||？尝试按【双换行符】切分
-	    if (bubbles.length === 1) {
-	        const byBlankLine = text.split(/\n\n+/).map(_cleanAiBubble).filter(Boolean);
-	        if (byBlankLine.length > 1) {
-	            bubbles = byBlankLine;
-	        } else {
-	            // 5. 连双换行都没用，只有【单换行】？
-	            // ⚠️ 核心修复：绝对不能把内部自带换行的高级卡片结构给切断！
-	          const isRecall = /^\[RECALL\]/i.test(bubbles[0]);
-	            const isHtml = /^\[HTML\]/i.test(bubbles[0]);
-	            const isQuote = /^\[QUOTE/i.test(bubbles[0]);
-	            const isAudio = /^\[AUDIO/i.test(bubbles[0]);
-	           const isEmote = /^\[EMOTE/i.test(bubbles[0]); // 🌟 新增表情包保护
-	            const isTransfer = /^\[(?:TRANSFER|ACCEPT_TRANSFER|REJECT_TRANSFER)/i.test(bubbles[0]);
-              const isRedEnvelope = /^\[RED_ENVELOPE/i.test(bubbles[0]);
-              const isLocation = /^\[LOCATION/i.test(bubbles[0]);
-	            
-	          // 👇 把原来的 if 改成这样，加入 !isTransfer && !isRedEnvelope && !isLocation
-if (!isRecall && !isHtml && !isQuote && !isAudio && !isEmote && !isTransfer && !isRedEnvelope && !isLocation) {
-    const bySingleLine = text.split(/\n+/).map(_cleanAiBubble).filter(Boolean);
-	                if (bySingleLine.length > 1) {
-	                    bubbles = bySingleLine;
-	                }
-	            }
-	        }
-	    }
+	    // 3.5 🌟 Fix: 后处理——把"独立 tag 开头、后面还跟着正文"的 segment 劈开
+	    //  场景：模型输出 [EMOTE:xxx]\n后续文字，|||split后变成一个段，需要再切一刀
+	    const STANDALONE_TAG_RE = /^(\[(?:EMOTE|AUDIO|TRANSFER|ACCEPT_TRANSFER|REJECT_TRANSFER|RED_ENVELOPE|RECALL|LOCATION|CALL)[^\]]*\])\s*\n+([\s\S]+)$/i;
+	    bubbles = bubbles.flatMap(b => {
+	        const m = b.match(STANDALONE_TAG_RE);
+	        if (m) return [m[1].trim(), m[2].trim()].filter(Boolean);
+	        return [b];
+	    });
+
+	    // 🌟 Fix: 对每个 bubble 单独按 \n 切割（不再只处理 length===1 的单块情况）
+	    // ⚠️ 有内部结构的 tag 不切：RECALL / HTML / QUOTE / AUDIO / TRANSFER / RED_ENVELOPE / LOCATION
+	    const PROTECTED_TAG_RE = /^\[(?:RECALL|HTML|QUOTE|AUDIO|TRANSFER|ACCEPT_TRANSFER|REJECT_TRANSFER|RED_ENVELOPE|LOCATION)/i;
+	    bubbles = bubbles.flatMap(b => {
+	        if (PROTECTED_TAG_RE.test(b)) return [b]; // 保护 tag，不切
+	        if (!/\n/.test(b)) return [b];             // 没换行，直接返回
+	        const lines = b.split(/\n+/).map(_cleanAiBubble).filter(Boolean);
+	        return lines.length > 1 ? lines : [b];
+	    });
 
 	    // 6. 终极兜底：完全糊成了一大段没有标点的文字墙（专门应对无标点空格断句设定）
 	    if (bubbles.length === 1 && bubbles[0].length > 40) {
@@ -22646,7 +22653,8 @@ await DB.settings.del(`offline-memory-${_realCharId}`);
                         return p.description ? `[图片: ${p.description}]` : '[图片]';
                     }
                     if (p.type === 'system_ticket') return '';
-                    if (p.quoteRef) return `[引用 ${p.quoteRef.name}: "${p.quoteRef.text}"] ${p.content}`;
+                    // 🌟 Fix: 与 QUOTE 协议对齐
+                    if (p.quoteRef) return `[QUOTE:${p.quoteRef.text.slice(0,40)}]${p.content}`;
                     return p.content || '';
                 }).filter(Boolean).join('');
             } else {
