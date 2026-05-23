@@ -7206,7 +7206,14 @@ const AuthModule = (() => {
 })();
 
 // ── HTML Widget 沙盒自适应高度 ──
+
 function _makeHtmlWidget(htmlContent) {
+  // 检查是否为原生样式气泡（如翻译挂件）
+  // 如果包含 cv-bubble 或 cv-translate-wrap 样式，直接渲染，使其完美融入主页面并继承主题样式与点击事件
+  if (htmlContent.includes('cv-bubble') || htmlContent.includes('cv-translate-wrap')) {
+    return htmlContent;
+  }
+
   const id = 'w' + Date.now() + Math.random().toString(36).slice(2, 6);
   const resizeScript = `<script>(function(){var id="${id}";function r(){var h=document.documentElement.scrollHeight||document.body.scrollHeight;parent.postMessage({type:'html-widget-resize',id:id,height:h},'*');}if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',r);}else{r();}new ResizeObserver(r).observe(document.body);})();<\/script>`;
   const injected = htmlContent.replace(/<\/body>/i, resizeScript + '</body>');
