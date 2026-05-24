@@ -16416,9 +16416,10 @@ function _renderImgPreviewBar() {
 
       // 时间感知
       let timeGapPrompt = '';
-      if (histMsgs.length >= 2) {
-        const lastMsg = histMsgs[histMsgs.length - 1];
-        const prevMsg = histMsgs[histMsgs.length - 2];
+    const realMsgs = histMsgs.filter(m => m.role === 'user' || m.role === 'assistant');
+      if (realMsgs.length >= 2) {
+        const lastMsg = realMsgs[realMsgs.length - 1];
+        const prevMsg = realMsgs[realMsgs.length - 2];
         const diffHours = (lastMsg.timestamp - prevMsg.timestamp) / (1000 * 60 * 60);
         if (diffHours >= 3) timeGapPrompt = `\n【重要时间感知】：距离上一次群里说话已过去 ${Math.floor(diffHours)} 小时。请自然适应时间跨度。`;
         else if (diffHours >= 1) timeGapPrompt = `\n【提示】：距离上一句过去了 ${Math.floor(diffHours)} 个多小时。`;
@@ -16866,9 +16867,10 @@ function _renderImgPreviewBar() {
       } catch(e) {}
 
       let timeGapPrompt = '';
-      if (timePerceptionOn && histMsgs.length >= 2) {
-        const lastMsg = histMsgs[histMsgs.length - 1];
-        const prevMsg = histMsgs[histMsgs.length - 2];
+     const realMsgs2 = histMsgs.filter(m => m.role === 'user' || m.role === 'assistant');
+      if (timePerceptionOn && realMsgs2.length >= 2) {
+        const lastMsg = realMsgs2[realMsgs2.length - 1];
+        const prevMsg = realMsgs2[realMsgs2.length - 2];
         const diffMs = lastMsg.timestamp - prevMsg.timestamp;
         const diffHours = diffMs / (1000 * 60 * 60);
 
@@ -21009,11 +21011,12 @@ async function _checkOfflineMessages(nowTime) {
                continue;
            }
 
-           // 立刻更新时间，防止并发
+          // 立刻更新时间，防止并发
+           const actualLostHours = Math.floor((nowTime - lastInteraction) / (1000 * 60 * 60));
            await DB.settings.set(`last-interaction-${charId}`, nowTime);
            
            _enqueueHeavyTask(`离线问候-${char.name}`, async () => {
-               await _triggerProactiveChat(char, intervalHours);
+               await _triggerProactiveChat(char, actualLostHours);
            });
         }
       }
