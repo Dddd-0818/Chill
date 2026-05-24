@@ -23135,7 +23135,7 @@ await DB.settings.del(`offline-memory-${_realCharId}`);
         
         const timeCtx = (!_cfgCrossSync && !_cfgTimeAware)
             ? ''
-            : `# 剧本时间轴 (Timeline)\n当前现实/系统时间是 ${fmtTimeFull(now)}。${timeGapPrompt}`;
+            : `# 剧本时间轴 (Timeline)\n当前现实/系统时间是 ${fmtTimeFull(now)} ${['星期日','星期一','星期二','星期三','星期四','星期五','星期六'][now.getDay()]}。${timeGapPrompt}`;
         
         // 【行程关联】全局开关控制：schedule-link-enabled 为 false 时跳过行程注入
         let scheduleContext = '';
