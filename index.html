@@ -152,7 +152,14 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
 /* ============================================================
    Home Screen
    ============================================================ */
-.scroll-content{height:100%;overflow-y:auto;padding:calc(env(safe-area-inset-top,0px) + 20px) 20px 120px;}
+
+.scroll-content {
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden; /* ← 加这个 */
+  padding: calc(env(safe-area-inset-top,0px) + 20px) 20px 120px;
+}
+
 .scroll-content::-webkit-scrollbar{display:none;}
 .header{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:24px;padding:0 4px;}
 .date-box h1{font-size:2.1333rem;font-weight:400;font-style:italic;line-height:1;margin-bottom:4px;}
@@ -169,6 +176,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
     scroll-snap-type: x mandatory;
     scrollbar-width: none;
     scroll-behavior: smooth;
+    overscroll-behavior-x: none;
 }
 .home-swiper::-webkit-scrollbar { display: none; }
 .home-page {
@@ -3635,10 +3643,14 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
   border-radius: 40px; display: flex; gap: 12px; padding: 8px 16px;
 }
 .rb-pill-white i { font-size: 1.1rem; color: var(--text-main); }
+
 .rb-search-box {
   display: flex; border: 1.5px solid var(--text-main); border-radius: 40px; overflow: hidden; 
   height: 36px; background: var(--bg-card);
+  min-width: 0;  /* ← 加这个，防止 flex 子项撑破父容器 */
+  flex-shrink: 1; /* ← 允许收缩 */
 }
+
 .rb-search-text {
   padding: 0 16px; display: flex; align-items: center; font-size: 0.7rem; font-weight: 800; 
   color: var(--text-main); outline: none; min-width: 60px;
