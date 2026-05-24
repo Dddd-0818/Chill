@@ -3801,6 +3801,290 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
   line-height: 1.45;
 }
 
+/* ═══════════════════════════════════════════
+   Global FAB 悬浮球
+   ═══════════════════════════════════════════ */
+#g-fab {
+  position: fixed;
+  right: 22px;
+  bottom: 112px;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--text-main);
+  color: var(--bg-device);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  cursor: pointer;
+  z-index: 8500;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  box-shadow: 0 4px 18px rgba(0,0,0,.2);
+  transition: transform .14s, box-shadow .14s;
+  will-change: transform;
+}
+#g-fab.fab-visible { display: flex; }
+#g-fab:active { transform: scale(.88); }
+#g-fab.fab-open { box-shadow: 0 2px 8px rgba(0,0,0,.12); }
+#g-fab .fab-icon-default,
+#g-fab .fab-icon-open { transition: opacity .15s, transform .15s; position: absolute; }
+#g-fab .fab-icon-open { opacity: 0; transform: rotate(-90deg); }
+#g-fab.fab-open .fab-icon-default { opacity: 0; transform: rotate(90deg); }
+#g-fab.fab-open .fab-icon-open { opacity: 1; transform: rotate(0deg); }
+
+#g-fab-panel {
+  position: fixed;
+  width: 218px;
+  background: var(--bg-device);
+  border: 1px solid var(--border-line);
+  border-radius: 16px;
+  z-index: 8499;
+  display: none;
+  flex-direction: column;
+  box-shadow: 0 12px 40px rgba(0,0,0,.14);
+  overflow: hidden;
+  transform-origin: bottom right;
+  transform: scale(.92) translateY(8px);
+  opacity: 0;
+  transition: transform .2s cubic-bezier(.34,1.56,.64,1), opacity .18s ease;
+  pointer-events: none;
+}
+#g-fab-panel.fab-open {
+  display: flex;
+  transform: scale(1) translateY(0);
+  opacity: 1;
+  pointer-events: auto;
+}
+.gf-header {
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid var(--border-line);
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.gf-header-title {
+  font-family: var(--font-mono2);
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: .18em;
+  color: var(--text-main);
+}
+.gf-header-sub {
+  font-family: var(--font-mono2);
+  font-size: 0.5rem;
+  color: var(--text-sub);
+  letter-spacing: .08em;
+}
+.gf-sec-label {
+  font-family: var(--font-mono2);
+  font-size: 0.48rem;
+  letter-spacing: .14em;
+  color: var(--text-sub);
+  padding: 10px 16px 4px;
+  text-transform: uppercase;
+  opacity: .7;
+}
+.gf-api-item {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  cursor: default;
+  transition: background .1s;
+}
+.gf-api-item-row:active { background: var(--border-line); }
+.gf-api-dot {
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  border: 1.5px solid var(--text-sub);
+  transition: background .15s, border-color .15s, transform .15s;
+}
+.gf-api-item.gf-active .gf-api-dot {
+  background: var(--text-main);
+  border-color: var(--text-main);
+  transform: scale(1.2);
+}
+.gf-api-meta { flex: 1; min-width: 0; }
+.gf-api-name {
+  font-family: var(--font-mono2);
+  font-size: 0.65rem;
+  color: var(--text-sub);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: color .1s;
+}
+.gf-api-item.gf-active .gf-api-name { color: var(--text-main); font-weight: 600; }
+.gf-api-model {
+  font-family: var(--font-mono2);
+  font-size: 0.48rem;
+  color: var(--text-sub);
+  opacity: .55;
+  margin-top: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* ── API section collapsible ── */
+.gf-sec-label {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.gf-sec-label:active { opacity: .6; }
+.gf-sec-chevron {
+  font-size: 0.55rem;
+  color: var(--text-sub);
+  transition: transform .22s cubic-bezier(.34,1.56,.64,1);
+  margin-right: 2px;
+}
+.gf-sec-label.gf-sec-open .gf-sec-chevron { transform: rotate(180deg); }
+
+.gf-api-wrapper {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height .28s cubic-bezier(.4,0,.2,1);
+}
+.gf-api-wrapper.gf-api-open { max-height: 400px; }
+
+/* ── model picker inside API item ── */
+.gf-api-item-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  cursor: pointer;
+  transition: background .1s;
+}
+.gf-api-item-row:active { background: var(--border-line); }
+.gf-model-toggle {
+  flex-shrink: 0;
+  font-family: var(--font-mono2);
+  font-size: 0.42rem;
+  color: var(--text-sub);
+  opacity: .55;
+  letter-spacing: .04em;
+  padding: 2px 5px;
+  border: 1px solid var(--border-line);
+  border-radius: 4px;
+  transition: all .15s;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.gf-model-toggle:active { background: var(--border-line); }
+.gf-model-wrapper {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height .22s ease;
+}
+.gf-model-wrapper.open { max-height: 200px; }
+.gf-model-list {
+  padding: 4px 12px 8px 28px;   /* 左缩进稍微收一点，给模型名更多横向空间 */
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  overflow-y: auto;
+  max-height: 160px;
+}
+
+.gf-model-item {
+  font-family: var(--font-mono2);
+  font-size: 0.62rem;      /* 字大一点 */
+  color: var(--text-sub);
+  padding: 9px 10px;       /* 上下 padding 加大，点击区更高 */
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: background .1s, color .1s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.gf-model-item:active { background: var(--border-line); }
+.gf-model-item.gf-model-active { color: var(--text-main); font-weight: 600; }
+.gf-model-item::before {
+  content: '';
+  flex-shrink: 0;
+  width: 4px; height: 4px;
+  border-radius: 50%;
+  background: var(--border-line);
+}
+.gf-model-item.gf-model-active::before { background: var(--text-main); }
+.gf-model-loading {
+  font-family: var(--font-mono2);
+  font-size: 0.5rem;
+  color: var(--text-sub);
+  padding: 8px 8px;
+  letter-spacing: .06em;
+  opacity: .6;
+}
+
+.gf-sync-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: var(--border-line);
+  border-top: 1px solid var(--border-line);
+  font-family: var(--font-mono2);
+  font-size: 0.55rem;
+}
+.gf-sync-msg { flex: 1; color: var(--text-sub); letter-spacing: .04em; }
+.gf-sync-btn {
+  background: var(--text-main);
+  color: var(--bg-device);
+  border: none;
+  border-radius: 6px;
+  font-family: var(--font-mono2);
+  font-size: 0.52rem;
+  padding: 3px 8px;
+  cursor: pointer;
+  letter-spacing: .04em;
+  white-space: nowrap;
+}
+.gf-sync-dismiss {
+  background: none;
+  border: none;
+  color: var(--text-sub);
+  cursor: pointer;
+  font-size: 0.7rem;
+  padding: 0 2px;
+  line-height: 1;
+}
+.gf-divider { height: 1px; background: var(--border-line); }
+.gf-action {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  cursor: pointer;
+  transition: background .1s;
+}
+.gf-action:active { background: var(--border-line); }
+.gf-action > i { font-size: 1rem; color: var(--text-sub); flex-shrink: 0; }
+.gf-action-label {
+  font-family: var(--font-mono2);
+  font-size: 0.65rem;
+  color: var(--text-main);
+  line-height: 1;
+}
+.gf-action-sub {
+  font-family: var(--font-mono2);
+  font-size: 0.48rem;
+  color: var(--text-sub);
+  margin-top: 2px;
+  letter-spacing: .06em;
+}
 </style>
 <body>
 <div class="device">
@@ -4545,6 +4829,18 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
             <label class="toggle-switch">
               <input type="checkbox" id="sys-toggle-icon-labels" checked
                 onchange="SystemModule.toggleIconLabels(this.checked)">
+              <div class="toggle-track"></div>
+              <div class="toggle-thumb"></div>
+            </label>
+          </div>
+          <div class="toggle-row">
+            <div class="toggle-row-info">
+              <div class="toggle-row-label">悬浮球</div>
+              <div class="toggle-row-desc">快速切换 API · 跳转剧情模式</div>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="sys-toggle-fab"
+                onchange="FABModule.setEnabled(this.checked)">
               <div class="toggle-track"></div>
               <div class="toggle-thumb"></div>
             </label>
@@ -8144,7 +8440,11 @@ const Router = (() => {
     if (pageId === 'data-page')    DataModule.refresh();
     if (pageId === 'ui-page')      UIModule.renderIconsEditGrid();
     if (pageId === 'api-page')     ApiModule.render();
-    if (pageId === 'system-page')  SystemModule.render();
+    if (pageId === 'system-page') {
+      SystemModule.render();
+      const ft = document.getElementById('sys-toggle-fab');
+      if (ft && typeof FABModule !== 'undefined') ft.checked = FABModule.isEnabled();
+    }
     if (pageId === 'novel-settings-page') NovelModule.restoreUI();
     if (pageId === 'agent-page')   AgentModule.renderSettings();
   }
@@ -9097,6 +9397,13 @@ const WBModule = (() => {
     try {
       _characters = (await DB.characters.getAll()).map(c => ({ id: String(c.id), name: c.name }));
     } catch(e) { _characters = []; }
+    // 启动时清理无词条的孤儿分类
+const usedCatIds = new Set(_entries.map(e => e.categoryId || 'default'));
+const cleaned = _categories.filter(c => c.id === 'default' || usedCatIds.has(c.id));
+if (cleaned.length !== _categories.length) {
+  _categories = cleaned;
+  try { await DB.settings.set(CAT_SETTINGS_KEY, _categories); } catch(e) {}
+}
     _rebuildFilterBar();
     _renderList();
   }
@@ -9307,17 +9614,31 @@ const WBModule = (() => {
   }
 
   /* ── delete ── */
-  function deleteEntry() {
-    _showModal({ title:'确认删除？', desc:'删除后此词条无法恢复，确定要移除该世界设定吗？', danger:true, confirmText:'删除 DELETE' }, async () => {
-      try {
-        await DB.worldInfo.del(_editId);
-        _entries = _entries.filter(x => x.id !== _editId);
-        _renderList();
-        closeEditor();
-      } catch(e) { console.error(e); }
-      _closeModal();
-    });
-  }
+function deleteEntry() {
+  _showModal({ title:'确认删除？', desc:'删除后此词条无法恢复，确定要移除该世界设定吗？', danger:true, confirmText:'删除 DELETE' }, async () => {
+    try {
+      // 记录被删词条所属分类
+      const deletingEntry = _entries.find(x => x.id === _editId);
+      const deletingCatId = deletingEntry ? (deletingEntry.categoryId || 'default') : null;
+
+      await DB.worldInfo.del(_editId);
+      _entries = _entries.filter(x => x.id !== _editId);
+
+      // 孤儿分类自动清理：非 default、且已无词条使用时移除
+      if (deletingCatId && deletingCatId !== 'default') {
+        const stillUsed = _entries.some(e => (e.categoryId || 'default') === deletingCatId);
+        if (!stillUsed) {
+          _categories = _categories.filter(c => c.id !== deletingCatId);
+          try { await DB.settings.set(CAT_SETTINGS_KEY, _categories); } catch(e) {}
+        }
+      }
+
+      _renderList();
+      closeEditor();
+    } catch(e) { console.error(e); }
+    _closeModal();
+  });
+}
 
   /* ── regex hint ── */
   function toggleRegexHint(el) {
@@ -22879,7 +23200,7 @@ ${scriptHistory || '（电影开场，暂无前文）'}
             const unarchived = msgs.filter(m => (m.id || 0) > lastArchivedId);
             
             // 如果积累了超过 30 条没封存，就在后台偷偷封存
-            if (unarchived.length >= 30) {
+            if (unarchived.length >=10) {
                 console.log(`[StoryChat] 触发自动记忆封存 (未封存条数: ${unarchived.length})`);
                 archiveStory(true); 
             }
@@ -23330,7 +23651,7 @@ const storyMsgs = rawStoryMsgs;
             }
 
             const eventTimestamp = unarchived[unarchived.length - 1].timestamp;
-            const newCursorId = unarchived[unarchived.length - 1].id;
+           const newCursorId = unarchived[0].id; 
             
             // ✨ 核心修复：获取现实世界的“此时此刻”作为同步动作的时间戳
             const currentSyncTime = Date.now(); 
@@ -23908,6 +24229,362 @@ ${newMessagesLog}
 //   'system-font-size'  → number (px, 12-20)
 //   'system-fonts'      → [{id, name, url, active}]
 // ============================================================
+// ============================================================
+// FABModule — 全局悬浮球 (API 快切 + 模型切换 + 剧情跳转)
+// ============================================================
+const FABModule = (() => {
+  const KEY_ENABLED = 'system-fab-enabled';
+  const KEY_POS     = 'g-fab-pos';
+
+  let _enabled       = false;
+  let _sessionApi    = null;    // 会话级 API 覆盖（不写 DB）
+  let _pendingSyncId = null;    // 待同步到设置的 API id
+  let _origGetActive = null;    // DB.api.getActive 原始引用
+  let _apiSectionOpen = false;  // API 区域折叠状态
+  let _expandedApiId  = null;   // 当前展开模型选择器的 API id
+  let _fetchedModels  = {};     // { [apiId]: string[] } 缓存
+
+  let _isDragging = false;
+  let _moved      = false;
+  let _ds         = {};
+
+  /* ── 初始化 ── */
+  async function init() {
+    // patch DB.api.getActive，支持会话级覆盖
+    _origGetActive = DB.api.getActive.bind(DB.api);
+    DB.api.getActive = async () => {
+      if (_sessionApi) return { ..._sessionApi };
+      return _origGetActive();
+    };
+
+    try {
+      const saved = await DB.settings.get(KEY_ENABLED);
+      _enabled = saved === true;
+    } catch(e) {}
+
+    _applyEnabled(_enabled);
+    _restorePos();
+    _bindDrag();
+    _bindOutsideClose();
+  }
+
+  function _applyEnabled(val) {
+    const fab = document.getElementById('g-fab');
+    if (!fab) return;
+    fab.classList.toggle('fab-visible', val);
+  }
+
+  async function setEnabled(val) {
+    _enabled = val;
+    _applyEnabled(val);
+    if (!val) closePanel();
+    try { await DB.settings.set(KEY_ENABLED, val); } catch(e) {}
+  }
+
+  function isEnabled() { return _enabled; }
+
+  /* ── 位置持久化 ── */
+  function _restorePos() {
+    const fab = document.getElementById('g-fab');
+    if (!fab) return;
+    try {
+      const s = JSON.parse(localStorage.getItem(KEY_POS));
+      if (s) {
+        fab.style.right  = 'auto';
+        fab.style.bottom = 'auto';
+        fab.style.left   = Math.min(s.x, window.innerWidth  - 48) + 'px';
+        fab.style.top    = Math.min(s.y, window.innerHeight - 48) + 'px';
+      }
+    } catch(e) {}
+  }
+
+  function _savePos() {
+    const fab = document.getElementById('g-fab');
+    if (!fab) return;
+    const r = fab.getBoundingClientRect();
+    try { localStorage.setItem(KEY_POS, JSON.stringify({ x: r.left, y: r.top })); } catch(e) {}
+  }
+
+  /* ── 拖拽 ── */
+  function _bindDrag() {
+    const fab = document.getElementById('g-fab');
+    if (!fab) return;
+    fab.addEventListener('pointerdown', e => {
+      _isDragging = true;
+      _moved      = false;
+      const r = fab.getBoundingClientRect();
+      _ds = { px: e.clientX, py: e.clientY, fx: r.left, fy: r.top };
+      fab.setPointerCapture(e.pointerId);
+    });
+    fab.addEventListener('pointermove', e => {
+      if (!_isDragging) return;
+      const dx = e.clientX - _ds.px;
+      const dy = e.clientY - _ds.py;
+      if (Math.abs(dx) > 5 || Math.abs(dy) > 5) _moved = true;
+      if (!_moved) return;
+      closePanel();
+      const nx = Math.max(0, Math.min(_ds.fx + dx, window.innerWidth  - 48));
+      const ny = Math.max(0, Math.min(_ds.fy + dy, window.innerHeight - 48));
+      fab.style.left   = nx + 'px';
+      fab.style.top    = ny + 'px';
+      fab.style.right  = 'auto';
+      fab.style.bottom = 'auto';
+    });
+    fab.addEventListener('pointerup', () => {
+      _isDragging = false;
+      if (_moved) { _savePos(); return; }
+      togglePanel();
+    });
+  }
+
+  function _bindOutsideClose() {
+    document.addEventListener('pointerdown', e => {
+      const panel = document.getElementById('g-fab-panel');
+      const fab   = document.getElementById('g-fab');
+      if (!panel?.classList.contains('fab-open')) return;
+      if (fab?.contains(e.target) || panel.contains(e.target)) return;
+      closePanel();
+    });
+  }
+
+  /* ── 面板开关 ── */
+  async function togglePanel() {
+    const panel = document.getElementById('g-fab-panel');
+    if (panel.classList.contains('fab-open')) { closePanel(); return; }
+    // 面板打开时不自动展开 API 区域
+    await _loadApiList();
+    panel.classList.add('fab-open');
+    document.getElementById('g-fab').classList.add('fab-open');
+    _positionPanel();
+  }
+
+  function closePanel() {
+    document.getElementById('g-fab-panel')?.classList.remove('fab-open');
+    document.getElementById('g-fab')?.classList.remove('fab-open');
+  }
+
+  /* ── API 区域折叠控制 ── */
+  async function toggleApiSection() {
+    _apiSectionOpen = !_apiSectionOpen;
+    const wrapper = document.getElementById('gf-api-wrapper');
+    const label   = document.getElementById('gf-api-toggle');
+    wrapper?.classList.toggle('gf-api-open', _apiSectionOpen);
+    label?.classList.toggle('gf-sec-open', _apiSectionOpen);
+    if (_apiSectionOpen) await _loadApiList();
+    _positionPanel();
+  }
+
+  function _positionPanel() {
+    const fab   = document.getElementById('g-fab');
+    const panel = document.getElementById('g-fab-panel');
+    if (!fab || !panel) return;
+    const fr = fab.getBoundingClientRect();
+    const pw = 218;
+    const ph = panel.offsetHeight || 240;
+    let top  = fr.top  - ph - 10;
+    let left = fr.left + fr.width / 2 - pw / 2;
+    if (top  < 8) top  = fr.bottom + 10;
+    if (left < 8) left = 8;
+    if (left + pw > window.innerWidth - 8) left = window.innerWidth - pw - 8;
+    panel.style.top    = top  + 'px';
+    panel.style.left   = left + 'px';
+    panel.style.right  = 'auto';
+    panel.style.bottom = 'auto';
+  }
+
+  /* ── API 列表渲染 ── */
+  function _esc(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  async function _loadApiList() {
+    const list = document.getElementById('gf-api-list');
+    if (!list) return;
+    try {
+      const apis = await DB.api.getAll();
+      const sessionId    = _sessionApi?.id ?? null;
+      const sessionModel = _sessionApi?.model ?? null;
+
+      if (!apis.length) {
+        list.innerHTML = '<div style="padding:12px 16px;font-family:var(--font-mono2);font-size:0.6rem;color:var(--text-sub);letter-spacing:.06em;">暂无 API 配置</div>';
+        return;
+      }
+
+      list.innerHTML = apis.map((api) => {
+        const isCurrent   = sessionId ? (api.id === sessionId) : api.isActive;
+        const dispModel   = isCurrent && sessionModel ? sessionModel : (api.model || '—');
+        const isExpanded  = _expandedApiId === api.id;
+        const cachedModels = _fetchedModels[api.id] || [];
+
+        const modelListHtml = isExpanded ? `
+          <div class="gf-model-list" id="gf-ml-${api.id}">
+            ${cachedModels.length
+              ? cachedModels.map(m => {
+                  const isActive = dispModel === m;
+                  return `<div class="gf-model-item${isActive ? ' gf-model-active' : ''}"
+                    onclick="event.stopPropagation();FABModule.selectModel(${api.id},'${_esc(m)}')">${_esc(m)}</div>`;
+                }).join('')
+              : `<div class="gf-model-loading" id="gf-ml-loading-${api.id}">拉取中…</div>`
+            }
+          </div>` : '';
+
+        return `
+        <div class="gf-api-item${isCurrent ? ' gf-active' : ''}" id="gf-api-item-${api.id}">
+          <div class="gf-api-item-row" onclick="FABModule.selectApi(${api.id})">
+            <div class="gf-api-dot"></div>
+            <div class="gf-api-meta">
+              <div class="gf-api-name">${_esc(api.name || 'Profile ' + api.id)}</div>
+              <div class="gf-api-model">${_esc(dispModel)}</div>
+            </div>
+            <div class="gf-model-toggle" onclick="event.stopPropagation();FABModule.toggleModelPicker(${api.id})">MODEL ▾</div>
+          </div>
+          <div class="gf-model-wrapper${isExpanded ? ' open' : ''}" id="gf-mw-${api.id}">
+            ${modelListHtml}
+          </div>
+        </div>`;
+      }).join('');
+    } catch(e) {
+      list.innerHTML = '<div style="padding:12px 16px;font-family:var(--font-mono2);font-size:0.6rem;color:var(--text-sub);">加载失败</div>';
+    }
+  }
+
+  /* ── 展开/收起模型选择器 ── */
+  async function toggleModelPicker(apiId) {
+    if (_expandedApiId === apiId) {
+      _expandedApiId = null;
+      await _loadApiList();
+      _positionPanel();
+      return;
+    }
+    _expandedApiId = apiId;
+    await _loadApiList();
+    _positionPanel();
+    if (!_fetchedModels[apiId]) {
+      await _fetchModels(apiId);
+    }
+  }
+
+  /* ── 拉取模型列表 ── */
+  async function _fetchModels(apiId) {
+    try {
+      const all = await DB.api.getAll();
+      const api = all.find(a => a.id === apiId);
+      if (!api) return;
+
+      if (api.savedModels && api.savedModels.length) {
+        _fetchedModels[apiId] = api.savedModels;
+        if (_expandedApiId === apiId) { await _loadApiList(); _positionPanel(); }
+        return;
+      }
+
+      const baseUrl     = (api.url || '').replace(/\/+$/, '');
+      const isAnthropic = baseUrl.includes('anthropic.com') || !baseUrl;
+      let models = [];
+
+      if (isAnthropic) {
+        const res = await fetch('https://api.anthropic.com/v1/models', {
+          headers: { 'x-api-key': api.key, 'anthropic-version': '2023-06-01' }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          models = (data.data || []).map(m => m.id).sort().reverse();
+        }
+      } else {
+        const res = await fetch(`${baseUrl}/v1/models`, {
+          headers: { 'Authorization': `Bearer ${api.key}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          models = (data.data || []).map(m => m.id || m).filter(Boolean).sort();
+        }
+      }
+
+      _fetchedModels[apiId] = models.length ? models : ['(获取失败)'];
+      try { await DB.api.put({ ...api, savedModels: models.length ? models : (api.savedModels || []) }); } catch(e) {}
+    } catch(e) {
+      _fetchedModels[apiId] = ['(网络错误)'];
+    }
+    if (_expandedApiId === apiId) { await _loadApiList(); _positionPanel(); }
+  }
+
+  /* ── 切换模型（会话级）── */
+  async function selectModel(apiId, model) {
+    try {
+      const all = await DB.api.getAll();
+      const api = all.find(a => a.id === apiId);
+      if (!api) return;
+      if (!_sessionApi || _sessionApi.id !== apiId) {
+        _sessionApi = { ...api, model };
+      } else {
+        _sessionApi = { ..._sessionApi, model };
+      }
+      _pendingSyncId = apiId;
+      const bar = document.getElementById('gf-sync-bar');
+      const msg = document.getElementById('gf-sync-msg');
+      if (bar) bar.style.display = 'flex';
+      if (msg) msg.textContent   = `已切 ${_esc(api.name || 'API')} · ${model}`;
+      await _loadApiList();
+      _positionPanel();
+    } catch(e) { console.error('[FABModule] selectModel error', e); }
+  }
+
+  /* ── 选择 API（仅会话生效）── */
+  async function selectApi(id) {
+    try {
+      const all = await DB.api.getAll();
+      const api = all.find(a => a.id === id);
+      if (!api) return;
+
+      _sessionApi    = { ...api };
+      _pendingSyncId = id;
+
+      await _loadApiList();
+
+      const bar = document.getElementById('gf-sync-bar');
+      const msg = document.getElementById('gf-sync-msg');
+      if (bar) bar.style.display = 'flex';
+      if (msg) msg.textContent   = `已切 ${_esc(api.name || 'API')}`;
+
+      _positionPanel();
+    } catch(e) { console.error('[FABModule] selectApi error', e); }
+  }
+
+  /* ── 同步到设置 ── */
+  async function confirmSync() {
+    if (!_pendingSyncId) return;
+    try {
+      await _origGetActive();
+      await DB.api.setActive(_pendingSyncId);
+      if (_sessionApi?.model) {
+        const all = await DB.api.getAll();
+        const api = all.find(a => a.id === _pendingSyncId);
+        if (api) await DB.api.put({ ...api, model: _sessionApi.model });
+      }
+      _sessionApi    = null;
+      _pendingSyncId = null;
+      try { ApiModule.render(); } catch(e) {}
+      dismissSync();
+      Toast.show('API 已同步到设置');
+    } catch(e) { Toast.show('同步失败'); }
+  }
+
+  /* ── 不同步，关掉提示条 ── */
+  function dismissSync() {
+    const bar = document.getElementById('gf-sync-bar');
+    if (bar) bar.style.display = 'none';
+    _positionPanel();
+  }
+
+  /* ── 跳转剧情 ── */
+  function goStory() {
+    closePanel();
+    Router.go('story-roster');
+  }
+
+  return { init, setEnabled, isEnabled, togglePanel, closePanel, toggleApiSection, toggleModelPicker, selectApi, selectModel, confirmSync, dismissSync, goStory };
+})();
+
+// ============================================================
 const SystemModule = (() => {
   const KEY_SIZE        = 'system-font-size';
   const KEY_FONTS       = 'system-fonts';
@@ -24222,6 +24899,7 @@ async function initApp() {
   try { await PersonaModule.init(); } catch(e) { console.warn('persona restore failed', e); }
   //世界书
   try { await WBModule.init(); } catch(e) { console.warn('wb init failed', e); }
+  try { await FABModule.init(); } catch(e) { console.warn('fab init failed', e); }
 // 动态广场初始化
   try { await FeedModule.init(); } catch(e) { console.warn('feed init failed', e); }
 // 论坛
@@ -24294,5 +24972,40 @@ try { await CoupleModule.init(); } catch(e) { console.warn('couple init failed',
 }
 
 </script>
+
+<!-- ── Global FAB 悬浮球 ── -->
+<div id="g-fab" ontouchstart="">
+  <i class="ph-thin ph-lightning fab-icon-default"></i>
+  <i class="ph-thin ph-x fab-icon-open"></i>
+</div>
+<div id="g-fab-panel">
+  <div class="gf-header">
+    <span class="gf-header-title">CTRL PANEL</span>
+    <span class="gf-header-sub">/ Quick Access</span>
+  </div>
+  <div class="gf-sec-label" id="gf-api-toggle" onclick="FABModule.toggleApiSection()">
+    <span>API NODE</span>
+    <span class="gf-sec-chevron">▾</span>
+  </div>
+  <div class="gf-api-wrapper" id="gf-api-wrapper">
+    <div id="gf-api-list">
+      <div style="padding:10px 16px;font-family:var(--font-mono2);font-size:0.6rem;color:var(--text-sub);">Loading...</div>
+    </div>
+  </div>
+  <div class="gf-sync-bar" id="gf-sync-bar" style="display:none">
+    <span class="gf-sync-msg" id="gf-sync-msg">已切换</span>
+    <button class="gf-sync-btn" onclick="FABModule.confirmSync()">同步设置</button>
+    <button class="gf-sync-dismiss" onclick="FABModule.dismissSync()">✕</button>
+  </div>
+  <div class="gf-divider"></div>
+  <div class="gf-action" onclick="FABModule.goStory()">
+    <i class="ph-thin ph-book-open-text"></i>
+    <div>
+      <div class="gf-action-label">剧情模式</div>
+      <div class="gf-action-sub">Story Mode →</div>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
