@@ -89,9 +89,9 @@ const SubjectsModule = (() => {
         #subjects-screen .card-img { width: 100%; height: 100%; object-fit: cover; filter: contrast(1.05) saturate(1.1); }
         #subjects-screen .img-wrapper::after { content: ''; position: absolute; bottom: 0; left: 0; width: 100%; height: 50%; background: linear-gradient(to top, var(--card-bg) 0%, rgba(244,244,244,0) 100%); pointer-events: none; }
         #subjects-screen .card-number { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); background: var(--text-dark); color: var(--text-light); font-size: 10px; font-weight: 800; padding: 4px 6px; border-radius: 4px; z-index: 2; box-shadow: 2px 2px 10px rgba(0,0,0,0.2); }
-        #subjects-screen .card-bottom { position: relative; margin-top: -30px; z-index: 2; display: flex; flex-direction: column; align-items: center; }
+        #subjects-screen .card-bottom { position: relative; margin-top: -30px; z-index: 2; display: flex; flex-direction: column; align-items: center; overflow: hidden; width: 100%; }
         #subjects-screen .pinyin-tag { font-family: var(--font-sans); font-size: 7px; font-weight: 800; color: #666; letter-spacing: 2.5px; margin-bottom: -5px; z-index: 3; text-transform: uppercase; }
-        #subjects-screen .card-signature { font-family: var(--font-sign); font-size: 34px; color: var(--text-dark); line-height: 1.2; transform: rotate(-5deg); margin-left: -5px; text-shadow: 1.5px 1.5px 0px #f4f4f4, -1.5px -1.5px 0px #f4f4f4; white-space: nowrap; }
+        #subjects-screen .card-signature { font-family: var(--font-sign); color: var(--text-dark); line-height: 1.2; transform: rotate(-5deg); margin-left: -5px; text-shadow: 1.5px 1.5px 0px #f4f4f4, -1.5px -1.5px 0px #f4f4f4; white-space: nowrap; }
         #subjects-screen .card-footer { display: flex; align-items: center; justify-content: flex-end; width: 100%; gap: 4px; margin-top: 4px; padding-right: 4px; }
         #subjects-screen .card-type { font-size: 11px; font-weight: 800; letter-spacing: -0.5px; text-transform: lowercase; }
         #subjects-screen .dots-icon { font-size: 14px; color: #888; }
@@ -2409,9 +2409,11 @@ const data = JSON.parse(cleaned.substring(start, end + 1));
                 const pinyin = c.name.toUpperCase(); 
                 const type = c.mbti ? c.mbti.toLowerCase() : 'ai node';
 
+                const nameLen = c.name.length;
+                const sigSize = nameLen <= 4 ? 34 : nameLen <= 6 ? 26 : nameLen <= 8 ? 20 : 15;
                 const signatureHtml = pinyin 
-                    ? `<div class="pinyin-tag">${pinyin}</div><div class="card-signature">${c.name}</div>`
-                    : `<div class="card-signature">${c.name}</div>`;
+                    ? `<div class="pinyin-tag">${pinyin}</div><div class="card-signature" style="font-size:${sigSize}px">${c.name}</div>`
+                    : `<div class="card-signature" style="font-size:${sigSize}px">${c.name}</div>`;
 
                 html += `
                     <div class="sub-card" onclick="SubjectsModule.openDashboard('${c.id}')">

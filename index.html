@@ -24370,19 +24370,20 @@ const FABModule = (() => {
   function isEnabled() { return _enabled; }
 
   /* ── 位置持久化 ── */
-  function _restorePos() {
+ function _restorePos() {
     const fab = document.getElementById('g-fab');
     if (!fab) return;
     try {
-      const s = JSON.parse(localStorage.getItem(KEY_POS));
-      if (s) {
-        fab.style.right  = 'auto';
-        fab.style.bottom = 'auto';
-        fab.style.left   = Math.min(s.x, window.innerWidth  - 48) + 'px';
-        fab.style.top    = Math.min(s.y, window.innerHeight - 48) + 'px';
-      }
+        const s = JSON.parse(localStorage.getItem(KEY_POS));
+        if (s) {
+            fab.style.right  = 'auto';
+            fab.style.bottom = 'auto';
+            // 🔧 Bug1修复：加 Math.max(0, ...) 防止负坐标，top 留 60px 避开状态栏
+            fab.style.left = Math.max(0,  Math.min(s.x, window.innerWidth  - 48)) + 'px';
+            fab.style.top  = Math.max(60, Math.min(s.y, window.innerHeight - 48)) + 'px';
+        }
     } catch(e) {}
-  }
+}
 
   function _savePos() {
     const fab = document.getElementById('g-fab');
@@ -24392,46 +24393,46 @@ const FABModule = (() => {
   }
 
   /* ── 拖拽 ── */
-  function _bindDrag() {
+function _bindDrag() {
     const fab = document.getElementById('g-fab');
     if (!fab) return;
-    fab.addEventListener('pointerdown', e => {
-      _isDragging = true;
-      _moved      = false;
-      const r = fab.getBoundingClientRect();
-      _ds = { px: e.clientX, py: e.clientY, fx: r.left, fy: r.top };
-      fab.setPointerCapture(e.pointerId);
-    });
-    fab.addEventListener('pointermove', e => {
-      if (!_isDragging) return;
-      const dx = e.clientX - _ds.px;
-      const dy = e.clientY - _ds.py;
-      if (Math.abs(dx) > 5 || Math.abs(dy) > 5) _moved = true;
-      if (!_moved) return;
-      closePanel();
-      const nx = Math.max(0, Math.min(_ds.fx + dx, window.innerWidth  - 48));
-      const ny = Math.max(0, Math.min(_ds.fy + dy, window.innerHeight - 48));
-      fab.style.left   = nx + 'px';
-      fab.style.top    = ny + 'px';
-      fab.style.right  = 'auto';
-      fab.style.bottom = 'auto';
-    });
-    fab.addEventListener('pointerup', () => {
-      _isDragging = false;
-      if (_moved) { _savePos(); return; }
-      togglePanel();
-    });
-  }
 
-  function _bindOutsideClose() {
-    document.addEventListener('pointerdown', e => {
-      const panel = document.getElementById('g-fab-panel');
-      const fab   = document.getElementById('g-fab');
-      if (!panel?.classList.contains('fab-open')) return;
-      if (fab?.contains(e.target) || panel.contains(e.target)) return;
-      closePanel();
+    fab.addEventListener('pointerdown', e => {
+        _isDragging = true;
+        _moved      = false;
+        const r = fab.getBoundingClientRect();
+        _ds = { px: e.clientX, py: e.clientY, fx: r.left, fy: r.top };
+        fab.setPointerCapture(e.pointerId);
     });
-  }
+
+    fab.addEventListener('pointermove', e => {
+        if (!_isDragging) return;
+        const dx = e.clientX - _ds.px;
+        const dy = e.clientY - _ds.py;
+        if (Math.abs(dx) > 5 || Math.abs(dy) > 5) _moved = true;
+        if (!_moved) return;
+        closePanel();
+        // top 同样留 60px 安全区
+        const nx = Math.max(0,  Math.min(_ds.fx + dx, window.innerWidth  - 48));
+        const ny = Math.max(60, Math.min(_ds.fy + dy, window.innerHeight - 48));
+        fab.style.left   = nx + 'px';
+        fab.style.top    = ny + 'px';
+        fab.style.right  = 'auto';
+        fab.style.bottom = 'auto';
+    });
+
+    // 🔧 Bug2/3修复：抽成公共函数，pointerup 和 pointercancel 都调用
+    const _endDrag = (e) => {
+        if (!_isDragging) return;
+        _isDragging = false;
+        try { fab.releasePointerCapture(e.pointerId); } catch(_) {}
+        if (_moved) { _savePos(); return; }
+        togglePanel();
+    };
+
+    fab.addEventListener('pointerup',     _endDrag);
+    fab.addEventListener('pointercancel', _endDrag);  // ← 核心修复
+}
 
   /* ── 面板开关 ── */
   async function togglePanel() {

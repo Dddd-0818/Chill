@@ -1638,36 +1638,39 @@ ${historyText}
 
     // --- 核心：路人随机发帖 ---
     async function _generateGuestPost() {
-        try {
-            const activeApi = await ApiModule.getSecondaryApi();
-            const prompt = `你是一个潜水在社交网络里的普通路人（你的身份可能是：苦逼打工人、熬夜修bug的程序员、失恋的保安、或者纯粹的赛博街溜子）。
+    try {
+        const activeApi = await ApiModule.getSecondaryApi();
+        
+        const prompt = `你是网络上一个真实存在的普通用户，此刻随手发了一条动态。
 
-【任务】：
-请用极度符合当代网友精神状态的口吻（例如：发疯文学、阴阳怪气、生无可恋、废话文学），发一条毫无上下文的牢骚动态。
+直接输出一条最近让你有感而发的碎碎念。
 
-【红线警告】：
-1. 充满鲜活的“人味”，可以是抱怨DDL、吐槽天气、晚上睡不着、甚至想吃炸鸡。
-2. 绝对不要像AI一样抒发什么大道理或正能量！越接地气、越像个疲惫的活人越好。
-3. 控制在 40 字以内，直接输出内容正文。`;
+要求：
+1. 必须有真实的小红书味——可以是某个瞬间的感受、一个奇怪的发现、莫名其妙的共情点、或者让人忍不住想评论的切入角
+2. 语气、内容、格式完全自由，不限题材，不要自我重复，每次都要是完全不同的情绪和场景
+3. 同时自己起一个符合内容气质的小红书风格用户名（比如：会发光的石头、三点一刻的月亮、戒不掉摆烂的Q、etc，风格随内容走）
+4. 字数 20-60 字
 
-            const response = await ApiHelper.chatCompletion(activeApi,[{ role: 'user', content: prompt }]);
-            
-            // 随机给路人起个破防的名字
-            const guestNames =["路过的打工人", "精神稳定状态0", "熬夜冠军", "纯爱战神", "赛博保安", "只想下班", "ANON. 404"];
-            const rName = guestNames[Math.floor(Math.random() * guestNames.length)];
+严格返回 JSON：{"name": "用户名", "content": "动态内容"}`;
 
-            _botPosts.push({
-                id: 'ed_guest_' + Date.now(),
-                type: 'guest',
-                authorName: rName,
-                content: response.trim(),
-                timestamp: Date.now(),
-                likes: Math.floor(Math.random() * 50),
-                comments:[]
-            });
-            await _saveBotPosts();
-        } catch(e){}
-    }
+        const response = await ApiHelper.chatCompletion(activeApi, [{ role: 'user', content: prompt }]);
+        const cleaned = response.replace(/```json|```/g, '').trim();
+        const start = cleaned.indexOf('{');
+        const end = cleaned.lastIndexOf('}');
+        const data = JSON.parse(cleaned.substring(start, end + 1));
+
+        _botPosts.push({
+            id: 'ed_guest_' + Date.now(),
+            type: 'guest',
+            authorName: data.name || '匿名路人',
+            content: data.content?.trim() || response.trim(),
+            timestamp: Date.now(),
+            likes: Math.floor(Math.random() * 50),
+            comments: []
+        });
+        await _saveBotPosts();
+    } catch(e) {}
+}
     
     // --- 核心：角色主动投稿 (提取私聊记忆) ---
     async function _generateRolePost(specificCharId = null) {
