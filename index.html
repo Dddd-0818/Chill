@@ -12525,6 +12525,7 @@ const NovelModule = (() => {
     if (isGptImage) {
       body.quality = 'auto';
       body.output_format = 'png';
+      body.response_format = 'b64_json';
     } else {
       body.response_format = 'b64_json';
     }
@@ -12748,7 +12749,7 @@ const NovelModule = (() => {
 
     const backend = effectiveBackend(cfg);
     const controller = new AbortController();
-    const timeoutMs = backend === 'openai' ? 120000 : 60000;
+    const timeoutMs = backend === 'openai' ? 300000 : 60000;
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
     // ===== 线路 1：免费 Pollinations 线路（高定氛围感特调版） =====
