@@ -28,6 +28,7 @@
 <script src="editorial.js"></script>
 <script src="couple.js"></script>
 <script src="updater.js"></script>
+<script src="fab-style.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700;800&family=Great+Vibes&family=Libre+Barcode+39+Text&family=Noto+Sans+SC:wght@300;400;500;700&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,700&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
@@ -5901,6 +5902,15 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
               为什么? https://i.postimg.cc/rpWsxxr5/IMG.jpg</span>
             </div>
             
+            <!-- 文件导入行 -->
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+              <button onclick="EmoteModule.triggerFileImport()" style="display:flex; align-items:center; gap:5px; padding:5px 10px; background:rgba(0,0,0,0.04); border:0.5px solid rgba(18,18,18,0.15); border-radius:6px; font-family:'Space Mono',monospace; font-size:0.6rem; color:#555; cursor:pointer; transition:0.2s;" onmousedown="this.style.opacity='0.6'" onmouseup="this.style.opacity='1'" onmouseleave="this.style.opacity='1'">
+                <i class="ph ph-file-arrow-up" style="font-size:0.85rem;"></i> 导入文件
+              </button>
+              <span style="font-family:'Space Mono',monospace; font-size:0.55rem; color:#aaa;">支持 .txt · .docx</span>
+            </div>
+            <input type="file" id="cv-emote-file-input" accept=".txt,.docx,.doc" style="display:none;" onchange="EmoteModule.handleFileImport(this)">
+
             <textarea id="cv-emote-batch-input" placeholder="确保上方选中了要操作的字典，在此粘贴内容..." style="width:100%; height:100px; padding:12px; background:rgba(255,255,255,0.5); border:1px solid rgba(18,18,18,0.1); border-radius:12px; font-family:'Space Mono',monospace; font-size:0.75rem; color:#121212; resize:none; line-height:1.5; outline:none; box-shadow:inset 0 2px 4px rgba(0,0,0,0.01); white-space: pre; margin-bottom:12px;"></textarea>
             
            <div style="display:flex;">
@@ -12377,6 +12387,38 @@ const EmoteModule = (() => {
     }
   }
 
+  function triggerFileImport() {
+    document.getElementById('cv-emote-file-input').value = '';
+    document.getElementById('cv-emote-file-input').click();
+  }
+
+  async function handleFileImport(input) {
+    const file = input.files && input.files[0];
+    if (!file) return;
+    const textarea = document.getElementById('cv-emote-batch-input');
+    const ext = file.name.split('.').pop().toLowerCase();
+    try {
+      if (ext === 'txt') {
+        const text = await file.text();
+        textarea.value = textarea.value ? textarea.value + '\n' + text : text;
+        Toast.show('文件已读取，可点击导入');
+      } else if (ext === 'docx' || ext === 'doc') {
+        if (typeof mammoth === 'undefined') { Toast.show('mammoth 未加载，无法解析 docx'); return; }
+        const arrayBuffer = await file.arrayBuffer();
+        const result = await mammoth.extractRawValue({ arrayBuffer });
+        const text = result.value || '';
+        if (!text.trim()) { Toast.show('文档内容为空或格式不支持'); return; }
+        textarea.value = textarea.value ? textarea.value + '\n' + text : text;
+        Toast.show('文件已读取，可点击导入');
+      } else {
+        Toast.show('仅支持 .txt 和 .docx');
+      }
+    } catch (e) {
+      console.error('file import error', e);
+      Toast.show('文件读取失败');
+    }
+  }
+
   function batchImport() {
     if (!_activeDictId) { Toast.show('请先展开一个字典'); return; }
     const text = document.getElementById('cv-emote-batch-input').value;
@@ -12444,7 +12486,7 @@ const EmoteModule = (() => {
     }
   }
 
-return { init, open, close, toggleDict, addDict, confirmAddDict, toggleGlobal, toggleCharBind, deleteDict, batchImport, getActiveEmotes, getUrlByKeyword, pick, toggleEditMode, toggleSelect, deleteSelected };
+return { init, open, close, toggleDict, addDict, confirmAddDict, toggleGlobal, toggleCharBind, deleteDict, batchImport, triggerFileImport, handleFileImport, getActiveEmotes, getUrlByKeyword, pick, toggleEditMode, toggleSelect, deleteSelected };
 })();
 
 // ============================================================
@@ -24987,6 +25029,7 @@ async function initApp() {
   try { await PersonaModule.init(); } catch(e) { console.warn('persona restore failed', e); }
   //世界书
   try { await WBModule.init(); } catch(e) { console.warn('wb init failed', e); }
+  try { await FABStyleModule.init(); } catch(e){ console.warn('fabstyle init failed', e); }
   try { await FABModule.init(); } catch(e) { console.warn('fab init failed', e); }
 // 动态广场初始化
   try { await FeedModule.init(); } catch(e) { console.warn('feed init failed', e); }
@@ -25093,6 +25136,14 @@ try { await CoupleModule.init(); } catch(e) { console.warn('couple init failed',
       <div class="gf-action-sub">Story Mode →</div>
     </div>
   </div>
+  <div class="gf-divider"></div>
+<div class="gf-action" onclick="FABModule.closePanel(); FABStyleModule.open();">
+  <i class="ph-thin ph-paint-brush-broad"></i>
+  <div>
+    <div class="gf-action-label">自定义外观</div>
+    <div class="gf-action-sub">FAB Style →</div>
+  </div>
+</div>
 </div>
 
 </body>
