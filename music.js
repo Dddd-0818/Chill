@@ -808,9 +808,15 @@ const MusicModule = (() => {
         <div class="ms-action-sheet">
           <div style="width:40px;height:4px;background:rgba(255,255,255,0.2);border-radius:2px;margin:0 auto 20px;"></div>
           <div style="text-align:center;font-family:var(--ms-font-en);letter-spacing:2px;font-size:1.1rem;margin-bottom:15px;">UPLOAD CENTER</div>
-          <div style="display:flex;gap:10px;margin-bottom:15px;">
+          <div style="display:flex;gap:10px;margin-bottom:10px;">
             <div class="ms-sheet-btn" id="ms-btn-add-music"><i class="ph ph-music-notes-plus" style="font-size:1.2rem;"></i> 添加音乐</div>
             <div class="ms-sheet-btn" id="ms-btn-add-lrc"><i class="ph ph-text-aa" style="font-size:1.2rem;"></i> 导入歌词</div>
+          </div>
+          <div class="ms-sheet-btn" id="ms-btn-add-url" style="margin-bottom:10px;"><i class="ph ph-link" style="font-size:1.2rem;"></i> 添加音乐链接</div>
+          <div id="ms-url-input-panel" style="display:none;background:rgba(0,0,0,0.3);border-radius:10px;padding:15px;border:1px solid rgba(255,255,255,0.06);margin-bottom:10px;">
+            <input type="text" id="ms-url-audio-url" placeholder="音乐直链（mp3 / m4a / flac / ogg…）" style="font-size:0.9rem;">
+            <input type="text" id="ms-url-audio-name" placeholder="歌曲名称（留空则自动从链接提取）" style="margin-top:12px;font-size:0.9rem;">
+            <div id="ms-btn-url-confirm" style="width:100%;margin-top:14px;padding:10px;border-radius:20px;border:1px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.04);color:#fff;cursor:pointer;font-size:0.88rem;letter-spacing:2px;text-align:center;">添 加</div>
           </div>
           <div id="ms-pending-list"></div>
           <button class="ms-sheet-confirm" id="ms-btn-confirm-upload">确 认 上 传</button>
@@ -883,7 +889,7 @@ const MusicModule = (() => {
     try {
       await _ensureDB();
       // 存储时排除 session-only 的 blob url
-      const meta = { ...pl, songs: (pl.songs || []).map(s => { const {url,...r}=s; return r; }) };
+      const meta = { ...pl, songs: (pl.songs || []).map(s => { if (s.isUrl) return { ...s }; const {url,...r}=s; return r; }) };
       await MusicDB.put('playlists', meta);
     } catch(e) { console.warn('[MusicModule] 保存歌单失败:', e); }
   }
@@ -1630,7 +1636,7 @@ if (fwLabelNum) {
           }
         }
       } catch(e) {}
-    } else if (!song.isCloud) {
+    } else if (!song.isCloud && !song.isUrl) {
       url = await _getLocalPlaybackUrl(song);
     }
     
@@ -1723,6 +1729,9 @@ if (fwLabelNum) {
     _pendingFiles.forEach(item => {
       const el = document.createElement('div');
       el.className = 'ms-pending-item ms-fade-in';
+      const displayName = item.type === 'URL_AUDIO'
+        ? item.title
+        : item.file.name;
       const matchInfo = item.type === 'LRC'
         ? (item.matchedName
             ? `<span class="ms-lrc-match">→ ${item.matchedName}</span>`
@@ -1730,8 +1739,8 @@ if (fwLabelNum) {
         : '';
       el.innerHTML = `
         <div style="display:flex;align-items:center;flex:1;overflow:hidden;margin-right:10px;gap:6px;flex-wrap:wrap;">
-          <span class="ms-pending-type">${item.type}</span>
-          <span class="ms-pending-name">${item.file.name}</span>
+          <span class="ms-pending-type">${item.type === 'URL_AUDIO' ? 'URL' : item.type}</span>
+          <span class="ms-pending-name">${displayName}</span>
           ${matchInfo}
         </div>
         <i class="ph ph-x-circle ms-pending-del" data-id="${item.id}"></i>`;
@@ -1750,6 +1759,7 @@ if (fwLabelNum) {
     if (btn) { btn.textContent = '处理中...'; btn.disabled = true; }
     try {
       const audioItems = _pendingFiles.filter(f => f.type === 'AUDIO');
+      const urlItems   = _pendingFiles.filter(f => f.type === 'URL_AUDIO');
       const lrcItems   = _pendingFiles.filter(f => f.type === 'LRC');
 
       // ① 处理音频文件 → 写入 IndexedDB
@@ -1769,6 +1779,21 @@ if (fwLabelNum) {
             isCloud: false
           });
         } catch(e) { console.error('[MusicModule] 音频存储失败:', e); }
+      }
+
+      // ① - URL 类型歌曲 → 直接写入歌单，无需存 blob
+      for (const item of urlItems) {
+        newSongs.push({
+          id: item.songId,
+          title: item.title,
+          artist: 'URL',
+          cover: _currentPlaylistObj.cover,
+          url: item.url,
+          hasLrc: false,
+          lrcId: null,
+          isCloud: false,
+          isUrl: true
+        });
       }
 
       // ② 处理 LRC — 按匹配结果写入 IndexedDB
@@ -1981,7 +2006,13 @@ if (fwLabelNum) {
 
     _$('ms-btn-pl-back').onclick = _navBack;
     _$('ms-btn-sl-back').onclick = _navBack;
-    _$('ms-sl-upload-btn').onclick = () => { _pendingFiles =[]; _renderPendingList(); _openModal('ms-modal-upload'); };
+    _$('ms-sl-upload-btn').onclick = () => {
+      _pendingFiles = [];
+      _renderPendingList();
+      const panel = _$('ms-url-input-panel');
+      if (panel) panel.style.display = 'none';
+      _openModal('ms-modal-upload');
+    };
     _$('ms-btn-search-back').onclick = _navBack;
     _$('ms-search-input').oninput = _handleSearch;
 
@@ -2075,6 +2106,42 @@ if (fwLabelNum) {
     };
     _$('ms-btn-add-music').onclick = () => _$('ms-file-music').click();
     _$('ms-btn-add-lrc').onclick = () => _$('ms-file-lrc').click();
+
+    // URL 添加按钮 — 展开/收起输入面板
+    _$('ms-btn-add-url').onclick = () => {
+      const panel = _$('ms-url-input-panel');
+      if (!panel) return;
+      const isVisible = panel.style.display !== 'none';
+      panel.style.display = isVisible ? 'none' : 'block';
+      if (!isVisible) setTimeout(() => _$('ms-url-audio-url')?.focus(), 50);
+    };
+
+    // URL 确认添加
+    _$('ms-btn-url-confirm').onclick = () => {
+      const rawUrl = (_$('ms-url-audio-url')?.value || '').trim();
+      if (!rawUrl) { if (typeof Toast !== 'undefined') Toast.show('请输入音乐链接'); return; }
+      // 简单校验：必须是 http/https
+      if (!/^https?:\/\//i.test(rawUrl)) { if (typeof Toast !== 'undefined') Toast.show('请输入有效的 http/https 链接'); return; }
+      // 提取默认名称（取 pathname 最后一段，去掉扩展名）
+      let defaultName = '未知歌曲';
+      try {
+        const pathname = new URL(rawUrl).pathname;
+        const seg = decodeURIComponent(pathname.split('/').filter(Boolean).pop() || '');
+        if (seg) defaultName = seg.replace(/\.[^.]+$/, '');
+      } catch(e) {}
+      const customName = (_$('ms-url-audio-name')?.value || '').trim();
+      const title = customName || defaultName;
+      const songId = 'url_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+      _pendingFiles.push({ id: Date.now() + Math.random(), songId, type: 'URL_AUDIO', url: rawUrl, title });
+      _updatePendingMatches();
+      _renderPendingList();
+      // 清空输入并收起面板
+      if (_$('ms-url-audio-url')) _$('ms-url-audio-url').value = '';
+      if (_$('ms-url-audio-name')) _$('ms-url-audio-name').value = '';
+      _$('ms-url-input-panel').style.display = 'none';
+      if (typeof Toast !== 'undefined') Toast.show(`已加入：${title}`);
+    };
+
     _$('ms-btn-confirm-upload').onclick = _confirmUpload;
 
     _$('ms-btn-cancel-create').onclick = () => _closeModal('ms-modal-create-pl');
