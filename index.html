@@ -10246,18 +10246,29 @@ ${char.mbti  ? `- MBTI：${char.mbti}` : ''}
   }
 
   // ── 删除角色 ──
-  async function deleteCharacter() {
-    if (!_currentId) return;
-    if (!confirm('确定销毁此档案？')) return;
-    try {
+ async function deleteCharacter() {
+  if (!_currentId) return;
+  if (!confirm('确定销毁此档案？')) return;
+  try {
     await Assets.remove(`char-avatar-${_currentId}`).catch(() => {});
-      await DB.characters.del(_currentId);
-      _currentId = null;
-      await renderRoster();
-      showView('list');
-      Toast.show('档案已销毁');
-    } catch(e) { Toast.show('删除失败'); console.error(e); }
-  }
+    await DB.characters.del(_currentId);
+
+    // ✅ 新增：从所有群聊中移除该角色
+    const charIdStr = String(_currentId);
+    const allGc = GroupChatModule.getAll();
+    for (const gc of allGc) {
+      if (gc.members.includes(charIdStr)) {
+        gc.members = gc.members.filter(mid => mid !== charIdStr);
+        await GroupChatModule.update(gc);
+      }
+    }
+
+    _currentId = null;
+    await renderRoster();
+    showView('list');
+    Toast.show('档案已销毁');
+  } catch(e) { Toast.show('删除失败'); console.error(e); }
+}
 
   // ── 头像上传 ──
   document.getElementById('char-upload-box').addEventListener('click', () => {
@@ -14160,17 +14171,17 @@ const ConvModule = (() => {
       _charImgUrl = '';
 
       // 加载所有成员角色信息
-      for (const mId of _gcMeta.members) {
-        try {
-          const c = await DB.characters.get(Number(mId));
-          // 优先使用角色自身存储的 avatarUrl key，再 fallback 到 char-avatar-{id}
-          const avatarKey = c?.avatarUrl || `char-avatar-${mId}`;
-          const url = avatarKey ? await Assets.getUrl(avatarKey).catch(() => '') || '' : '';
-          const member = { id: String(mId), name: c?.name || '角色', char: c, imgUrl: url };
-          _gcMembers.push(member);
-          _gcMemberMap[String(mId)] = member;
-        } catch(e) {}
-      }
+     for (const mId of _gcMeta.members) {
+  try {
+    const c = await DB.characters.get(Number(mId));
+    if (!c) continue;  // ✅ 新增这一行：角色已删除则跳过
+    const avatarKey = c?.avatarUrl || `char-avatar-${mId}`;
+    const url = avatarKey ? await Assets.getUrl(avatarKey).catch(() => '') || '' : '';
+    const member = { id: String(mId), name: c?.name || '角色', char: c, imgUrl: url };
+    _gcMembers.push(member);
+    _gcMemberMap[String(mId)] = member;
+  } catch(e) {}
+}
     } else {
       // ── 私聊模式（原逻辑）──
       await DB.settings.set(`last-interaction-${charId}`, Date.now());
@@ -16581,7 +16592,7 @@ function _renderImgPreviewBar() {
 
     if (typeof KeepAliveModule !== 'undefined') KeepAliveModule.start(); // 开启保活
      const response = await ApiHelper.chatCompletion(activeApi,[
-        { role: 'user', content: systemPrompt },
+       { role: 'system', content: systemPrompt },
         ...apiMessages // <<< 现在这里只发送那条虚拟指令，不再重复
       ]);
      if (typeof KeepAliveModule !== 'undefined') KeepAliveModule.stop(); // 关闭保活
@@ -17033,7 +17044,7 @@ function _renderImgPreviewBar() {
       // ===========================
       if (typeof KeepAliveModule !== 'undefined') KeepAliveModule.start(); // 开启保活
       const response = await ApiHelper.chatCompletion(activeApi,[
-        { role: 'user', content: systemPrompt },
+       { role: 'system', content: systemPrompt },
         ...apiMessages
       ]);
       if (typeof KeepAliveModule !== 'undefined') KeepAliveModule.stop(); // 关闭保活
@@ -17817,7 +17828,7 @@ ${emoteBlock}
 以上高级行为（引用、撤回、语音、红包、表情包等）可以在同一轮群聊中自由组合，用 ||| 分隔不同气泡即可。
 高级行为标签必须保持机器可识别：标签只能出现在气泡开头！
 
-现在，请同时扮演群里的所有活人，开始展现你们真实的群聊生态！记住每条消息都要带 [角色名]: 前缀。`;
+现在，请同时扮演群里的所有活人，开始展现你们真实的群聊生态！记住每条消息都要带 [角色名]: 前缀。${_detectOverusedBehaviors(histMsgs)}`;
 
   }
 
@@ -17852,6 +17863,38 @@ ${emoteBlock}
   }
 
   // ── 组装 System Prompt ──
+
+  // 🌟 检测最近 AI 消息是否过度使用某种高级行为，返回需要冷却的行为列表
+  function _detectOverusedBehaviors(histMsgs) {
+    // 只看最近 6 条 assistant 消息
+    const recentAI = histMsgs
+      .filter(m => m.role === 'assistant' && !m.recalled)
+      .slice(-6);
+
+    if (recentAI.length < 2) return '';
+
+    // 统计各行为出现次数
+    let quoteCnt = 0, audioCnt = 0, recallCnt = 0;
+    for (const m of recentAI) {
+      const text = _formatMsgForAI(m) || '';
+      if (/\[QUOTE:/i.test(text))  quoteCnt++;
+      if (/\[语音消息/i.test(text)) audioCnt++;
+      if (m.recalled || /你发出后立刻撤回/.test(text)) recallCnt++;
+    }
+
+    const warnings = [];
+    const total = recentAI.length;
+    // 超过半数的消息都用了同一个行为 → 触发冷却
+    if (quoteCnt >= Math.ceil(total / 2))
+      warnings.push(`⚠️ 行为冷却令：你在最近 ${total} 条消息里已经连续使用了 ${quoteCnt} 次【引用回复 [QUOTE]】。接下来【至少 3 条】消息里，请绝对不要再用引用，直接自然地回复即可。`);
+    if (audioCnt >= Math.ceil(total / 2))
+      warnings.push(`⚠️ 行为冷却令：你在最近 ${total} 条消息里已经连续使用了 ${audioCnt} 次【语音条 [AUDIO]】。接下来【至少 3 条】消息里，请绝对不要再发语音，用文字表达。`);
+    if (recallCnt >= Math.ceil(total / 2))
+      warnings.push(`⚠️ 行为冷却令：你在最近 ${total} 条消息里已经连续使用了 ${recallCnt} 次【撤回 [RECALL]】。接下来【至少 3 条】消息里，请绝对不要再撤回，直接发出你想说的话。`);
+
+    if (warnings.length === 0) return '';
+    return `\n# 🚨 当前行为冷却指令（最高优先级，立即执行）\n${warnings.join('\n')}\n`;
+  }
 
 function _buildSystemPrompt(histMsgs, novelImgOn = false, worldBookBlock = '', timePerceptionOn = true, timeGapPrompt = '', memorySummary = '', crossWindowMsgs =[], scheduleContext = '', isFreeEngine = false) {
     let timeCtx = '';
@@ -18097,7 +18140,7 @@ ${emoteBlock}
 **示例：**
 [QUOTE:今天特别累]听到你说累，我第一反应就是想让你把头靠过来。
 
-现在，请作为【${charName}】，绝对禁止任何动作描写和心理活动。开始你的表演。`;
+现在，请作为【${charName}】，绝对禁止任何动作描写和心理活动。开始你的表演。${_detectOverusedBehaviors(histMsgs)}`;
   }
 // ── 组装 API messages（只传最近消息，不含 system）──
   async function _buildApiMessages(histMsgs, activeApi, currentRound) {
