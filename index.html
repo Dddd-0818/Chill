@@ -515,6 +515,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
 /* Toast */
 .toast{position:absolute;bottom:120px;left:50%;transform:translateX(-50%) translateY(16px);background:var(--text-main);color:var(--bg-device);padding:10px 20px;border-radius:100px;font-size:0.8667rem;font-weight:500;white-space:nowrap;opacity:0;pointer-events:none;transition:transform .28s,opacity .28s;z-index:9999;}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+/* 长文本：换行的圆角矩形，限宽并允许长串断行，避免左右被屏幕切掉 */
+.toast.toast-long{white-space:normal;border-radius:16px;max-width:min(86vw,420px);width:max-content;line-height:1.45;text-align:left;padding:12px 16px;word-break:break-word;overflow-wrap:anywhere;}
 
 /* Profile Edit Modal (bottom sheet) */
 .modal-overlay{position:absolute;inset:0;background:rgba(0,0,0,.6);z-index:500;display:flex;align-items:flex-end;opacity:0;pointer-events:none;transition:opacity .3s;}
@@ -8324,12 +8326,19 @@ const Assets = (() => {
 // ============================================================
 const Toast = (() => {
   let timer;
-  function show(msg, duration = 2200) {
+  function show(msg, duration) {
     const el = document.getElementById('toast');
-    el.textContent = msg;
+    const text = String(msg ?? '');
+    el.textContent = text;
+    // 长文本（>22 字符或含换行）切换到可换行的圆角矩形，避免左右被屏幕切掉
+    const isLong = text.length > 22 || /\n/.test(text);
+    el.classList.toggle('toast-long', isLong);
+    // 未显式指定时长则按长度估算停留时间，长报错留久一点方便阅读（封顶 8 秒）
+    const dur = duration != null ? duration
+      : Math.min(8000, Math.max(2200, text.length * 80));
     el.classList.add('show');
     clearTimeout(timer);
-    timer = setTimeout(() => el.classList.remove('show'), duration);
+    timer = setTimeout(() => el.classList.remove('show'), dur);
   }
   return { show };
 })();
@@ -12594,9 +12603,9 @@ const NovelModule = (() => {
       size,
     };
     if (isGptImage) {
+      // gpt-image-* 默认即返回 b64_json，且部分转发端对 response_format 报参数错误，故不传
       body.quality = 'auto';
       body.output_format = 'png';
-      body.response_format = 'b64_json';
     } else {
       body.response_format = 'b64_json';
     }
@@ -12613,18 +12622,35 @@ const NovelModule = (() => {
 
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      const msg = err.error?.message || err.message || err.error || `HTTP ${res.status}`;
-      Toast.show('OpenAI 生图失败：' + msg);
+      const e = err.error || err;
+      const base = e?.message || e || `HTTP ${res.status}`;
+      const code = e?.code ? `（${e.code}）` : '';
+      Toast.show(`OpenAI 生图失败：HTTP ${res.status}${code} ${base}`);
       return null;
     }
     const data = await res.json();
-    const b64 = data.data?.[0]?.b64_json;
-    if (!b64) {
-      Toast.show('OpenAI 生图返回异常（无图像数据）');
-      return null;
+    const item = data.data?.[0] || {};
+    const b64 = item.b64_json;
+    const imgUrl = item.url;
+    if (b64) {
+      const binary = Uint8Array.from(atob(b64), ch => ch.charCodeAt(0));
+      return new Blob([binary], { type: 'image/png' });
     }
-    const binary = Uint8Array.from(atob(b64), ch => ch.charCodeAt(0));
-    return new Blob([binary], { type: 'image/png' });
+    // 兜底：个别转发端忽略请求、改回 url，下载成 blob
+    if (imgUrl) {
+      try {
+        const imgRes = await fetch(imgUrl, { signal });
+        if (imgRes.ok) return await imgRes.blob();
+        Toast.show('OpenAI 图片下载失败：HTTP ' + imgRes.status);
+        return null;
+      } catch (e) {
+        if (e.name === 'AbortError') throw e;
+        Toast.show('OpenAI 图片下载异常：' + (e.message || ''));
+        return null;
+      }
+    }
+    Toast.show('OpenAI 生图返回异常（无图像数据）');
+    return null;
   }
   const UC_V3 = 'nsfw, lowres, jpeg artifacts, worst quality, watermark, blurry, very displeasing';
   const UC_V45C = 'blurry, lowres, upscaled, artistic error, scan artifacts, jpeg artifacts, logo, too many watermarks, negative space, blank page';
@@ -17565,8 +17591,13 @@ ${dialogueFlow.trim()}
     }
     const parts = m.parts?.length ? m.parts : [{ type: 'text', content: m.content || '' }];
     return parts.map(p => {
-      if (p.type === 'audio')         return `[语音消息(${_fmtDuration(p.duration)}): ${p.transcript}]`;
+      // 🌟 Fix: 回填格式与 AI 输出协议对齐，用 [AUDIO:秒:逐字稿] 而非中文展示文案，
+      //         否则模型会照着历史里的中文格式仿写，导致解析器认不出、明文泄漏。
+      if (p.type === 'audio')         return m.role === 'assistant'
+                                        ? `[AUDIO:${p.duration || 0}:${p.transcript || ''}]`
+                                        : `[语音消息(${_fmtDuration(p.duration)}): ${p.transcript}]`;
       if (p.type === 'redenvelope') {
+        if (m.role === 'assistant') return `[RED_ENVELOPE:${p.amount}:${p.memo || ''}]`;
         const claimInfo = (p.claims || []).map(c => `${c.name}:¥${c.amount.toFixed(2)}`).join(', ');
         return `[红包 ¥${p.amount}: ${p.memo}${claimInfo ? '，已领取: ' + claimInfo : ''}]`;
       }
@@ -17576,10 +17607,13 @@ ${dialogueFlow.trim()}
 内容提要：${p.data.title ? '【'+p.data.title+'】' : ''}${p.data.content.slice(0, 80)}...
 （提示：你可以根据这篇帖子的内容跟我展开讨论，或者发表你的看法、吐槽）`;
       }
-      if (p.type === 'transfer')      return `[转账 ¥${p.amount}: ${p.memo}，状态:${p.status === 'collected' ? '已收款' : '待收款'}]`;
+      // 🌟 Fix: 同理，assistant 历史里的转账回填成协议标签 [TRANSFER:金额:备注]
+      if (p.type === 'transfer')      return m.role === 'assistant'
+                                        ? `[TRANSFER:${p.amount}:${p.memo || ''}]`
+                                        : `[转账 ¥${p.amount}: ${p.memo}，状态:${p.status === 'collected' ? '已收款' : '待收款'}]`;
       if (p.type === 'user_transfer') return `[我给你转账 ¥${p.amount}: ${p.memo}，状态:${p.status === 'accepted' ? '你已接受' : p.status === 'rejected' ? '你已拒绝' : '待你决定'}]`;
      if (p.type === 'html')          return '[向用户发送了一个交互组件]';
-      if (p.type === 'location')      return m.role === 'assistant' ? `[我发送了当前位置：${p.name}]` : `[用户共享了当前位置：${p.name}]`;
+      if (p.type === 'location')      return m.role === 'assistant' ? `[LOCATION:${p.name}]` : `[用户共享了当前位置：${p.name}]`;
    if (p.type === 'image') {
         if (p.description && p.description.startsWith('[表情包:')) {
           const kw = p.description.slice(5, -1);
@@ -18053,6 +18087,8 @@ ${histSection}
 **示例：**
 [RECALL]我...我好喜欢你。[THOUGHT]天啊这么直接太羞人了，他会怎么想？不行不行，得换个说法。[NEWMSG]咳...我是说，你今天看起来还不错。
 
+**⚠️ 严格禁止：** 撤回动作【只能】通过上面的 [RECALL]…[THOUGHT]…[NEWMSG] 标签实现，由系统渲染成撤回效果。【绝对不要】用自然语言或括号旁白去"描述"撤回，例如绝不能输出「(你发出后立刻撤回了此条消息：…)」「我撤回了刚才那句」这类文字——这些不会被识别成撤回，只会变成普通文字暴露给用户，属于严重出戏。要么用标签，要么就正常说话。
+
 # 高级行为：语音条 (Audio Message)
 **使用时机：** 情绪难以用文字表达时、想让对话更亲密随意时、说了很长一段感性的话时。
 
@@ -18061,6 +18097,7 @@ ${histSection}
 	**格式（整条气泡只用这一个标签，不加其他文字）：**
 	[AUDIO:秒数:语音内容逐字稿]
 	**硬性规则：** [AUDIO...] 必须独占一个气泡；不要在标签前后添加“我发个语音”、引号、括号或任何普通文字。
+	**⚠️ 注意：** 必须用英文标签 [AUDIO:秒数:内容]，绝对不要写成「[语音消息(0:09): …]」这种带中文“语音消息”字样的格式——那是系统渲染后的样子，你直接照写会变成普通文字、无法播放。
 
 秒数根据内容长度自然估算（短句5-15秒，长段20-40秒）。
 
@@ -18074,6 +18111,7 @@ ${histSection}
 
 **格式（整条气泡只用这一个标签）：**
 [TRANSFER:金额:备注说明]
+**⚠️ 注意：** 必须用英文标签 [TRANSFER:金额:备注]，绝对不要写成「[转账 ¥16.66: …，状态:已收款]」这种带中文“转账”“状态”字样的格式——那是系统渲染后的样子，你照写会变成普通文字、无法转账。
 
 **示例：**
 [TRANSFER:88:上次请你喝咖啡的钱，不用谢]
@@ -18396,6 +18434,51 @@ function back() {
 
 	    // 3. 初始优先按 ||| 切分
 	    let bubbles = text.split(/\|\|\|/).map(_cleanAiBubble).filter(Boolean);
+
+	    // 3.2 🌟 Fix: QUOTE 气泡专用拆分
+	    //  问题：[QUOTE:用户原话]后面一大段正文，因开头是 [QUOTE 被整体保护，
+	    //        导致引用后所有文字糊进同一个气泡、不分割。
+	    //  方案：保留 [QUOTE:...] 标签 + 紧随的第一句在同一气泡，其余正文按句/换行切成独立气泡。
+	    const QUOTE_HEAD_RE = /^(\[QUOTE\s*[:：]\s*[\s\S]{1,40}?\])\s*([\s\S]*)$/i;
+	    bubbles = bubbles.flatMap(b => {
+	        const m = b.match(QUOTE_HEAD_RE);
+	        if (!m) return [b];
+	        const tag = m[1];
+	        const rest = (m[2] || '').trim();
+	        if (!rest) return [b];                 // 只有引用标签，不动
+	        // 先按硬换行切；没有换行再按句末标点切；都切不开时套用“无标点流”兜底
+	        let segs;
+	        if (/\n/.test(rest)) {
+	            segs = rest.split(/\n+/).map(s => s.trim()).filter(Boolean);
+	        } else {
+	            // 策略 A：按句末标点切
+	            let sentences = rest.match(/[^。！？…~.!?]+[。！？…~.!?]+/g);
+	            // 策略 B：无标点流——多空格/Tab、以及夹在两个汉字间的单空格都视为断句
+	            if (!sentences || sentences.length <= 1) {
+	                const englishChars = (rest.match(/[a-zA-Z]/g) || []).length;
+	                const isEnglishContext = englishChars > rest.length * 0.5;
+	                if (!isEnglishContext) {
+	                    let spaceText = rest.replace(/[　\t]+/g, '|||').replace(/ {2,}/g, '|||');
+	                    spaceText = spaceText.replace(/([^\x00-\x7F]) ([^\x00-\x7F])/g, '$1|||$2');
+	                    const sp = spaceText.split('|||').map(s => s.trim()).filter(Boolean);
+	                    if (sp.length > 1) sentences = sp;
+	                }
+	            }
+	            // 策略 C：实在切不开且超过 40 字，按逗号强切
+	            if ((!sentences || sentences.length <= 1) && rest.length > 40) {
+	                sentences = rest.match(/[^，,]+[，,]*/g);
+	            }
+	            if (sentences && sentences.length > 1) {
+	                segs = sentences.map(s => s.trim()).filter(Boolean);
+	            } else {
+	                segs = [rest];                 // 整段就一句，不强拆
+	            }
+	        }
+	        // 第一句跟 QUOTE 标签同气泡，其余各自独立
+	        const out = [`${tag}${segs[0]}`];
+	        for (let i = 1; i < segs.length; i++) out.push(segs[i]);
+	        return out.map(_cleanAiBubble).filter(Boolean);
+	    });
 
 	    // 3.5 🌟 Fix: 后处理——把"独立 tag 开头、后面还跟着正文"的 segment 劈开
 	    //  场景：模型输出 [EMOTE:xxx]\n后续文字，|||split后变成一个段，需要再切一刀
@@ -23201,9 +23284,12 @@ await DB.settings.del(`offline-memory-${_realCharId}`);
                 txt = m.role === 'user' ? m.content : '[此消息已被撤回]';
             } else if (m.parts && m.parts.length > 0) {
                 txt = m.parts.map(p => {
-                    if (p.type === 'audio') return `[语音消息: ${p.transcript}]`;
-                    if (p.type === 'redenvelope') return `[红包 ¥${p.amount}: ${p.memo}]`;
-                    if (p.type === 'transfer' || p.type === 'user_transfer') return `[转账 ¥${p.amount}: ${p.memo}]`;
+                    // 🌟 Fix: assistant 侧回填成协议标签，避免模型仿写中文展示格式
+                    const isAsst = m.role !== 'user';
+                    if (p.type === 'audio') return isAsst ? `[AUDIO:${p.duration || 0}:${p.transcript || ''}]` : `[语音消息: ${p.transcript}]`;
+                    if (p.type === 'redenvelope') return isAsst ? `[RED_ENVELOPE:${p.amount}:${p.memo || ''}]` : `[红包 ¥${p.amount}: ${p.memo}]`;
+                    if (p.type === 'transfer') return isAsst ? `[TRANSFER:${p.amount}:${p.memo || ''}]` : `[转账 ¥${p.amount}: ${p.memo}]`;
+                    if (p.type === 'user_transfer') return `[转账 ¥${p.amount}: ${p.memo}]`;
                     if (p.type === 'image') {
                         if (p.description && p.description.startsWith('[表情包:')) {
                             return `[表情包: ${p.description.slice(5, -1)}]`;
