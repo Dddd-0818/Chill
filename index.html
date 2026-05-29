@@ -25096,6 +25096,36 @@ const SpaceModule = (() => {
 
 async function initApp() {
   try { await DB.init(); } catch(e) { console.error('DB init failed:', e); return; }
+
+  // 🌟 首屏外观优先：壁纸 + 图标在 DB 就绪后立即并行加载，
+  //    不再排在十几个后台模块后面，避免冷启动先闪一下裸界面。
+  (async () => {
+    try {
+      const url = await Assets.getUrl('wallpaper');
+      if (url) UIModule.applyWallpaper(url);
+    } catch(e) { console.warn('wallpaper restore failed', e); }
+  })();
+  (async () => {
+    for (let i = 0; i < ICON_DEFAULTS.length; i++) {
+      Assets.getUrl(`icon-${i}`).then(url => {
+        if (!url) return;
+        const box = document.querySelector(`.icon-box[data-icon-id="${i}"]`);
+        if (box) box.innerHTML = `<img class="icon-custom" src="${url}" alt="">`;
+      }).catch(() => {});
+    }
+  })();
+  // 头像
+  Assets.getUrl('avatar').then(url => {
+    if (url) document.getElementById('profile-avatar').src = url;
+  }).catch(() => {});
+  // 拍立得（正反面）
+  Assets.getUrl('polaroid-front').then(url => {
+    if (url) document.getElementById('polaroid-front-img').src = url;
+  }).catch(() => {});
+  Assets.getUrl('polaroid-back').then(url => {
+    if (url) document.getElementById('polaroid-back-img').src = url;
+  }).catch(() => {});
+
   try { await GroupChatModule.init(); } catch(e) { console.warn('groupchat init failed', e); }
   try { await VoiceModule.init(); } catch(e) { console.warn('voice init failed', e); }
   try { await NovelModule.init(); NovelModule.syncBackendUI?.(); } catch(e) { console.warn('novel init failed', e); }
@@ -25143,36 +25173,6 @@ try { await CoupleModule.init(); } catch(e) { console.warn('couple init failed',
       document.getElementById('profile-tags').innerHTML   = (profile.tags || []).map(t => `<span class="tag">#${t}</span>`).join('');
     }
   } catch(e) { console.warn('profile restore failed', e); }
-
-  // 头像
-  try {
-    const url = await Assets.getUrl('avatar');
-    if (url) document.getElementById('profile-avatar').src = url;
-  } catch(e) { console.warn('avatar restore failed', e); }
-
-  // 拍立得
-  try {
-    const fUrl = await Assets.getUrl('polaroid-front');
-    if (fUrl) document.getElementById('polaroid-front-img').src = fUrl;
-    const bUrl = await Assets.getUrl('polaroid-back');
-    if (bUrl) document.getElementById('polaroid-back-img').src = bUrl;
-  } catch(e) { console.warn('polaroid restore failed', e); }
-
-  // 壁纸
-  try {
-    const url = await Assets.getUrl('wallpaper');
-    if (url) UIModule.applyWallpaper(url);
-  } catch(e) { console.warn('wallpaper restore failed', e); }
-
-  // 图标
- for (let i = 0; i < ICON_DEFAULTS.length; i++) {
-    try {
-      const url = await Assets.getUrl(`icon-${i}`);
-      if (!url) continue;
-     const box = document.querySelector(`.icon-box[data-icon-id="${i}"]`);
-      if (box) box.innerHTML = `<img class="icon-custom" src="${url}" alt="">`;
-    } catch(e) { /* 单个图标失败不影响其他 */ }
-  }
 
   // 通知刷新
   try { await NotifModule.refresh(); } catch(e) { console.warn('notif refresh failed', e); }
