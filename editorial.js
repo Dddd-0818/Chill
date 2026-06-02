@@ -912,7 +912,7 @@ const EditorialModule = (() => {
         // 获取用户名字
         let userName = '我';
         try {
-            const profile = await DB.settings.get('profile');
+            const profile = await DB.settings.get('global-profile');
             if (profile && profile.name) userName = profile.name;
         } catch(e) {}
 

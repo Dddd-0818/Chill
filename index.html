@@ -15,6 +15,11 @@
 <script src="https://unpkg.com/fflate@0.8.2/umd/index.js"></script>
 <script src="https://unpkg.com/mammoth@1.6.0/mammoth.browser.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+ <script src="https://unpkg.com/vconsole@latest/dist/vconsole.min.js"></script>
+<script>
+  // 初始化 VConsole
+  var vConsole = new VConsole();
+</script>
 <script src="music.js"></script>
 <script src="chill-meet-bundle.js"></script>
 <script src="diary.js"></script>
@@ -27,6 +32,7 @@
 <script src="subjects.js"></script>
 <script src="editorial.js"></script>
 <script src="couple.js"></script>
+<script src="group-story.js"></script>
 <script src="updater.js"></script>
 <script src="fab-style.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -458,6 +464,24 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
 .btn-outline:active{opacity:.6;}
 .btn-ghost{background:none;border:none;color:var(--s-text-secondary);font-size:0.8rem;text-decoration:underline;padding:10px;cursor:pointer;width:100%;font-family:'DM Sans',sans-serif;}
 .fetch-link{position:absolute;right:0;top:0;font-size:0.8rem;color:var(--s-accent);text-decoration:underline;cursor:pointer;font-weight:500;}
+
+/* 🌟 预设命名弹窗（自包含，不依赖任何父容器）*/
+.preset-name-overlay{position:fixed;inset:0;z-index:99999;background:rgba(239,236,231,0.92);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);display:flex;justify-content:center;align-items:center;padding:24px;opacity:0;pointer-events:none;transition:opacity 0.3s ease;}
+.preset-name-overlay.active{opacity:1;pointer-events:auto;}
+.preset-name-modal{width:100%;max-width:340px;background:#FFFFFF;border-radius:20px;padding:28px 24px;box-shadow:0 24px 60px rgba(0,0,0,0.18);transform:translateY(12px) scale(0.98);opacity:0;transition:all 0.35s cubic-bezier(0.16,1,0.3,1);text-align:left;}
+.preset-name-overlay.active .preset-name-modal{transform:translateY(0) scale(1);opacity:1;}
+.preset-name-title{font-family:'Cormorant Garamond',serif;font-size:1.6rem;font-weight:600;color:#121212;margin:0 0 24px;}
+.preset-name-actions{display:flex;gap:12px;justify-content:flex-end;}
+.preset-name-cancel,.preset-name-confirm{font-family:'DM Sans',sans-serif;font-size:0.85rem;padding:10px 22px;border-radius:30px;cursor:pointer;border:0.5px solid #121212;}
+.preset-name-cancel{background:transparent;color:#121212;}
+.preset-name-confirm{background:#121212;color:#fff;}
+.preset-name-cancel:active{background:rgba(0,0,0,0.05);}
+.preset-name-confirm:active{opacity:0.85;}
+[data-theme="dark"] .preset-name-overlay{background:rgba(15,15,15,0.92);}
+[data-theme="dark"] .preset-name-modal{background:#1a1a1a;}
+[data-theme="dark"] .preset-name-title{color:#F4F3F0;}
+[data-theme="dark"] .preset-name-cancel{color:#F4F3F0;border-color:#F4F3F0;}
+[data-theme="dark"] .preset-name-confirm{background:#F4F3F0;color:#111;border-color:#F4F3F0;}
 
 /* API active indicator */
 .api-active-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--s-accent);margin-right:6px;vertical-align:middle;}
@@ -3135,6 +3159,38 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
 
 .cv-mn-close:active { background: rgba(0,0,0,0.05); transform: translateX(-50%) scale(0.9); }
 
+/* 🌟 心声落地页（未生成态 / 主动入口） */
+.cv-mn-landing {
+    position: absolute; display: flex; flex-direction: column; align-items: center;
+    gap: 14px; width: 280px; text-align: center; transition: opacity 0.4s;
+}
+.cv-mn-landing.hidden { opacity: 0; pointer-events: none; }
+.cv-mn-landing-label { font-family: 'Space Mono', monospace; font-size: 9px; letter-spacing: 3px; color: #8B8B8B; }
+.cv-mn-landing-title { font-family: 'Noto Serif SC', serif; font-size: 22px; line-height: 1.5; color: #2A2A2A; margin-bottom: 18px; }
+.cv-mn-landing-btn {
+    width: 200px; padding: 13px 0; font-family: 'Space Mono', monospace; font-size: 11px;
+    letter-spacing: 2px; cursor: pointer; border-radius: 30px; transition: all 0.25s; border: 0.5px solid;
+}
+.cv-mn-landing-btn.primary { background: #1E1E1E; color: #fff; border-color: #1E1E1E; }
+.cv-mn-landing-btn.primary:active { transform: scale(0.96); opacity: 0.85; }
+.cv-mn-landing-btn.ghost { background: transparent; color: #2A2A2A; border-color: rgba(0,0,0,0.2); }
+.cv-mn-landing-btn.ghost:active { background: rgba(0,0,0,0.04); }
+[data-theme="dark"] .cv-mn-landing-title { color: #F4F3F0; }
+[data-theme="dark"] .cv-mn-landing-btn.primary { background: #F4F3F0; color: #111; border-color: #F4F3F0; }
+[data-theme="dark"] .cv-mn-landing-btn.ghost { color: #F4F3F0; border-color: rgba(255,255,255,0.25); }
+
+/* 🌟 刷新按钮（缓存态左上角） */
+.cv-mn-refresh {
+    position: absolute; top: -24px; left: 0; font-family: 'Space Mono', monospace; font-size: 9px;
+    color: #8B8B8B; letter-spacing: 1px; cursor: pointer; border-bottom: 0.5px solid #8B8B8B;
+    padding-bottom: 2px; z-index: 10; opacity: 0; transition: color 0.3s, border-color 0.3s, opacity 0.4s;
+    display: flex; align-items: center; gap: 4px;
+}
+.cv-mn-refresh { pointer-events: none; }
+.cv-mn-board.show .cv-mn-refresh { opacity: 1; pointer-events: auto; transition-delay: 0.7s; }
+.cv-mn-refresh:active { color: #121212; border-color: #121212; }
+.cv-mn-refresh i { font-size: 11px; }
+
 /* 心声历史记录样式 */
 .cv-mn-history-btn {
     top: -24px; right: 0; font-family: 'Space Mono', monospace; font-size: 9px;
@@ -4406,6 +4462,10 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
     <div class="icon-box" data-icon-id="13"><i class="ph ph-newspaper"></i></div>
     <span class="icon-label">观测志</span>
 </div>
+    <div class="icon-cell" id="icon-groupstory">
+    <div class="icon-box" data-icon-id="14"><i class="ph ph-users-three"></i></div>
+    <span class="icon-label">群像</span>
+</div>
       </div>
     </div>
   </div>
@@ -4640,8 +4700,13 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
           <input type="password" id="novel-api-key" class="input-line" placeholder="粘贴 API Token" autocomplete="off">
         </div>
         <div class="input-wrapper">
+          <label class="label-text">反代 Base URL（可选）</label>
+          <input type="text" id="novel-nai-base" class="input-line" placeholder="留空直连 image.novelai.net" autocomplete="off">
+          <p style="font-size:0.68rem;color:var(--s-text-secondary);line-height:1.4;margin-top:6px;">留空直连官方；CORS 失败再填反代根地址。</p>
+        </div>
+        <div class="input-wrapper">
           <label class="label-text">模型 / MODEL</label>
-          <select id="novel-model" class="select-stylish">
+          <select id="novel-model" class="select-stylish" onchange="NovelModule.syncNaiAdvancedUI()">
             <option value="nai-diffusion-3">nai-diffusion-3</option>
             <option value="nai-diffusion-4-5-curated">nai-diffusion-4-5-curated</option>
             <option value="nai-diffusion-4-5-full">nai-diffusion-4-5-full</option>
@@ -4673,6 +4738,21 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
             <option value="k_dpmpp_2m_sde">k_dpmpp_2m_sde</option>
           </select>
         </div>
+        <div class="input-wrapper">
+          <label class="label-text">种子 Seed</label>
+          <div style="display:flex;gap:10px;align-items:center;">
+            <input type="number" id="novel-nai-seed" class="input-line" style="flex:1;margin:0;" min="0" max="4294967295" step="1" placeholder="留空＝每次随机" inputmode="numeric" autocomplete="off">
+            <button type="button" class="btn-ghost" onclick="NovelModule.randomNaiSeed()" style="width:auto;padding:10px 14px;flex-shrink:0;">随机</button>
+          </div>
+          <p style="font-size:0.68rem;color:var(--s-text-secondary);line-height:1.4;margin-top:6px;">留空随机；填数可复现同图。</p>
+        </div>
+        <div class="input-wrapper" style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+          <div>
+            <label class="label-text" style="margin:0;">SMEA</label>
+            <p id="novel-nai-smea-hint" style="font-size:0.68rem;color:var(--s-text-secondary);line-height:1.4;margin-top:4px;">V3 可用；V4 自动关闭。</p>
+          </div>
+          <input type="checkbox" id="novel-nai-smea" checked>
+        </div>
         </div><!-- /novel-backend-panel-novelai -->
 
         <div id="novel-backend-panel-openai" style="display:none;">
@@ -4692,6 +4772,17 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
           <input type="text" id="novel-openai-model" class="input-line" placeholder="先拉取列表或手动输入模型名" autocomplete="off" value="dall-e-3">
         </div>
         <p style="font-size:0.68rem;color:var(--s-text-secondary);line-height:1.4;margin-top:-4px;">尺寸见下方：DALL·E 竖/横为 1024×1792 / 1792×1024；<strong>GPT Image（gpt-image-*）</strong>竖/横为 1024×1536 / 1536×1024。dall-e-2 非方形时回落为 1024×1024。</p>
+
+        <!-- 🌟 OpenAI 配置预设（名字 + Base + Key）-->
+        <div style="margin-top:18px; margin-bottom:18px; border-top:0.5px solid rgba(18,18,18,0.1); padding-top:14px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+            <span style="font-size:0.8rem; font-weight:600; color:var(--s-text-primary);">配置预设 / Saved Configs</span>
+            <button type="button" onclick="NovelModule.saveApiPreset()" style="font-size:0.68rem; background:transparent; border:none; color:var(--s-accent, #121212); font-weight:700; cursor:pointer; padding:0; text-decoration:underline;">+ 存为新预设</button>
+          </div>
+          <div id="novel-api-presets-list" style="display:flex; flex-direction:column; gap:6px;">
+            <!-- JS 动态渲染 -->
+          </div>
+        </div>
         </div><!-- /novel-backend-panel-openai -->
 
         <div class="input-wrapper" id="novel-shared-size-wrap">
@@ -4744,6 +4835,36 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
         <div style="margin-top:20px;font-family:'Space Mono',monospace;font-size:0.6rem;color:var(--s-text-secondary);letter-spacing:0.5px;line-height:1.6;">
           保存后：<strong>画风前缀</strong>（全局或角色专属）会拼在每条生图提示<strong>最前</strong>；<strong>剧情画面</strong>以对话里模型输出的 <span style="user-select:all;">[NOVEL_IMG]</span> 为主。角色写了专属正/反向则<strong>只</strong>用专属项对应一侧，不再叠全局；该侧留空则回退全局。<br>
           开启配图后，系统提示会要求模型在 <span style="user-select:all;">[NOVEL_IMG]</span> 内<strong>仅使用英文</strong>；关闭配图时则要求仅用<strong>中文</strong>描述画面、勿使用该标签。
+        </div>
+      </div>
+    </div>
+
+    <!-- 🌟 OpenAI 生图配置预设命名弹窗 -->
+    <div class="preset-name-overlay" id="novel-api-preset-overlay">
+      <div class="preset-name-modal">
+        <h2 class="preset-name-title">Save Config</h2>
+        <input type="text" id="novel-api-preset-name" placeholder="给这套配置起个名字..." value="新配置"
+               style="width:100%; background:transparent; border:none; border-bottom:1px solid rgba(0,0,0,0.1); font-family:'Cormorant Garamond',serif; font-size:1.5rem; padding:0.5rem 0; color:#121212; outline:none; transition:border-color 0.3s; margin-bottom:32px;"
+               onfocus="this.style.borderBottomColor='#121212'"
+               onblur="this.style.borderBottomColor='rgba(0,0,0,0.1)'">
+        <div class="preset-name-actions">
+          <button class="preset-name-cancel" onclick="document.getElementById('novel-api-preset-overlay').classList.remove('active')">Cancel</button>
+          <button class="preset-name-confirm" onclick="NovelModule.confirmSaveApiPreset()">Save</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 🌟 提示词预设命名弹窗 -->
+    <div class="preset-name-overlay" id="prompt-preset-overlay">
+      <div class="preset-name-modal">
+        <h2 class="preset-name-title">Save Prompt</h2>
+        <input type="text" id="prompt-preset-name" placeholder="给这套提示词起个名字..." value="新预设"
+               style="width:100%; background:transparent; border:none; border-bottom:1px solid rgba(0,0,0,0.1); font-family:'Cormorant Garamond',serif; font-size:1.5rem; padding:0.5rem 0; color:#121212; outline:none; transition:border-color 0.3s; margin-bottom:32px;"
+               onfocus="this.style.borderBottomColor='#121212'"
+               onblur="this.style.borderBottomColor='rgba(0,0,0,0.1)'">
+        <div class="preset-name-actions">
+          <button class="preset-name-cancel" onclick="document.getElementById('prompt-preset-overlay').classList.remove('active')">Cancel</button>
+          <button class="preset-name-confirm" onclick="PromptPresetModule.confirmSave()">Save</button>
         </div>
       </div>
     </div>
@@ -6022,6 +6143,23 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
         </div>
       </div>
     </div>
+
+    <!-- 🌟 群聊改名弹窗 -->
+    <div class="gc-overlay" id="gc-rename-overlay" style="z-index: 360;">
+      <div class="gc-modal">
+        <div class="gc-modal-header">
+          <span>Rename Group</span>
+          <button class="gc-modal-close" onclick="GroupChatModule.closeRenameModal()"><i class="ph-thin ph-x"></i></button>
+        </div>
+        <div class="gc-modal-body">
+          <div class="gc-char-label">群聊名称：</div>
+          <input type="text" class="gc-input" id="gc-rename-input" placeholder="输入新的群聊名字…" maxlength="30">
+        </div>
+        <div class="gc-modal-footer">
+          <button class="gc-confirm-btn" onclick="GroupChatModule.confirmRename()">保存</button>
+        </div>
+      </div>
+    </div>
     <!-- Settings Panel -->
     <div class="cv-settings-panel" id="cv-settings-panel">
       <div class="cv-sp-header">
@@ -6106,6 +6244,54 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
                     style="width:100%;min-height:80px;padding:10px;background:rgba(0,0,0,0.03);border:0.5px solid rgba(18,18,18,0.1);border-radius:10px;font-size:0.8rem;font-family:inherit;color:#121212;resize:none;outline:none;line-height:1.5;"
                     placeholder="选填。填写后仅本角色使用；留空则采用生图设置中的全局反向提示词（若全局亦为空则使用模型默认 UC）。" onclick="event.stopPropagation()"></textarea>
                 </div>
+              </div>
+            </div>
+
+            <!-- 🌟 提示词预设（正/负面共享库）-->
+            <div style="margin-top:8px; padding:10px 12px; background:rgba(0,0,0,0.02); border:0.5px solid rgba(18,18,18,0.08); border-radius:12px;">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                <span style="font-size:0.72rem; font-weight:600; color:#121212;">提示词预设 / Prompt Presets</span>
+                <button onclick="event.stopPropagation(); PromptPresetModule.saveFrom('chat')" style="font-size:0.6rem;background:transparent;border:none;color:#121212;font-weight:700;cursor:pointer;">+ 存为新预设</button>
+              </div>
+              <div id="cv-prompt-presets-list" style="display:flex;flex-direction:column;gap:4px;"></div>
+            </div>
+
+            <!-- 🔒 锁脸 / Face Lock（角色专属基准脸）-->
+            <div style="margin-top:10px; padding:12px; background:rgba(0,0,0,0.02); border:0.5px solid rgba(18,18,18,0.08); border-radius:12px;">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                <span style="font-size:0.72rem; font-weight:600; color:#121212;">🔒 锁脸 / Face Lock</span>
+                <span style="font-size:0.58rem; color:#999;">仅 gpt-image 系列</span>
+              </div>
+              <p style="font-size:0.62rem; color:#999; line-height:1.5; margin:0 0 10px;">传一张基准脸，之后该角色生图（聊天 &amp; 剧情）都会尽量保持同一张脸。每张约 1~3 分钟、单价偏高。</p>
+
+              <!-- ⚠️ 版权 / 肖像权声明 + 确认勾选（未勾选则禁止上传）-->
+              <div style="border:0.5px solid rgba(180,120,40,0.35); background:rgba(200,140,40,0.06); border-radius:10px; padding:10px 12px; margin-bottom:12px;">
+                <div style="font-size:0.64rem; font-weight:700; color:#9A6A1E; letter-spacing:0.5px; margin-bottom:5px;">⚠ 上传前请确认</div>
+                <p style="font-size:0.6rem; color:#8A6A2E; line-height:1.6; margin:0 0 9px;">基准脸仅本地保存，但每次生图都会随请求发往你设定的生图服务。请只用<strong>自己拥有或已获授权</strong>的图；勿用明星、网红、他人私照等无权使用的肖像。由此产生的版权、肖像权与隐私后果由你自行承担。</p>
+                <label style="display:flex; align-items:flex-start; gap:7px; cursor:pointer;" onclick="event.stopPropagation()">
+                  <input type="checkbox" id="cv-face-consent" onchange="ConvModule._onFaceConsent(this.checked)" style="margin-top:1px; flex-shrink:0;">
+                  <span style="font-size:0.6rem; color:#7A5A1E; line-height:1.5; font-weight:600;">我已确认对该图片享有使用权，并知悉它会被发送给生图服务处理。</span>
+                </label>
+              </div>
+
+              <div style="display:flex; gap:10px; align-items:center;">
+                <div id="cv-face-thumb" style="width:64px; height:64px; border-radius:12px; border:0.5px solid rgba(18,18,18,0.15); background:rgba(0,0,0,0.03) center/cover no-repeat; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:0.55rem; color:#aaa; overflow:hidden;">无</div>
+                <div style="display:flex; flex-direction:column; gap:6px; flex:1;">
+                  <button type="button" id="cv-face-upload-btn" disabled onclick="event.stopPropagation(); ConvModule._pickFace()" style="font-size:0.7rem; padding:7px 0; background:#bbb; color:#fff; border:none; border-radius:8px; cursor:not-allowed;">上传 / 更换基准脸</button>
+                  <button type="button" id="cv-face-remove-btn" onclick="event.stopPropagation(); ConvModule._removeFace()" style="font-size:0.66rem; padding:6px 0; background:transparent; color:#D93A3A; border:0.5px solid rgba(217,58,58,0.4); border-radius:8px; cursor:pointer; display:none;">移除基准脸</button>
+                </div>
+                <input type="file" id="cv-face-file" accept="image/*" style="display:none">
+              </div>
+              <div id="cv-face-fidelity-row" style="display:none; align-items:center; justify-content:space-between; margin-top:12px; padding-top:10px; border-top:0.5px solid rgba(18,18,18,0.08);">
+                <div>
+                  <div style="font-size:0.7rem; font-weight:600; color:#121212;">高保真锁脸</div>
+                  <div style="font-size:0.58rem; color:#999;">开=脸最像但姿势表情偏僵；关=脸像且姿势自由</div>
+                </div>
+                <label class="toggle-switch" onclick="event.stopPropagation()">
+                  <input type="checkbox" id="cv-face-fidelity" onchange="ConvModule._setFaceFidelity(this.checked)">
+                  <div class="toggle-track"></div>
+                  <div class="toggle-thumb"></div>
+                </label>
               </div>
             </div>
           </div>
@@ -6589,7 +6775,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
     <!-- ==================== 心声拼贴面板 ==================== -->
     <div id="cv-monologue-overlay" onclick="if(event.target===this) MonologueModule.close()">
         <!-- 盲盒动画 -->
-        <div class="cv-mn-loader" id="cv-mn-loader">
+        <div class="cv-mn-loader hidden" id="cv-mn-loader">
             <svg class="cv-mn-gift" viewBox="0 0 40 40">
                 <path class="cv-mn-gift-star" d="M20,6 L20.8,10.2 L25,11 L20.8,11.8 L20,16 L19.2,11.8 L15,11 L19.2,10.2 Z" fill="#2a2a2a" />
                 <rect x="12" y="20" width="16" height="14" fill="#F7F7F7" stroke="#2a2a2a" stroke-width="0.75" />
@@ -6603,9 +6789,21 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
             <div class="cv-mn-loader-text">Extracting Vibe...</div>
         </div>
 
+        <!-- 🌟 落地页：从未生成 / 主动入口 -->
+        <div class="cv-mn-landing hidden" id="cv-mn-landing">
+            <div class="cv-mn-landing-label">INNER MONOLOGUE</div>
+            <div class="cv-mn-landing-title">窥探 ta 此刻的<br>内心独白</div>
+            <button class="cv-mn-landing-btn primary" onclick="MonologueModule.generate()">偷听此刻心声</button>
+            <button class="cv-mn-landing-btn ghost" onclick="MonologueModule.openHistory()">查看过往心声</button>
+        </div>
+
         <!-- 拼贴主面板 -->
         <div class="cv-mn-board" id="cv-mn-board">
             <div class="cv-mn-clip"></div>
+            <!-- 🌟 刷新（重新偷听）按钮：缓存态可见 -->
+            <div class="cv-mn-refresh" id="cv-mn-refresh" onclick="event.stopPropagation(); MonologueModule.generate()">
+                <i class="ph-thin ph-arrow-clockwise"></i> RE-LISTEN
+            </div>
             <!-- 纸片1：底层票据 -->
             <div class="cv-mn-layer cv-mn-receipt">
                 <div class="cv-mn-r-item">
@@ -6808,6 +7006,18 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
         </div>
        <label class="wb-toggle">
           <input type="checkbox" id="wb-always-on" onchange="WBModule.toggleAlwaysOn(this)">
+          <div class="wb-track"></div>
+          <div class="wb-thumb"></div>
+        </label>
+      </div>
+      <!-- Group Inject (群像注入) -->
+      <div class="wb-set-cell full">
+        <div>
+          <div class="wb-set-title">群像注入 ENSEMBLE</div>
+          <div class="wb-set-desc">让该词条出现在群像剧情模式的选书列表中</div>
+        </div>
+       <label class="wb-toggle">
+          <input type="checkbox" id="wb-group-inject">
           <div class="wb-track"></div>
           <div class="wb-thumb"></div>
         </label>
@@ -7102,6 +7312,15 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
                           <div class="set-group" style="margin-top:16px;">
                               <span class="set-label">Negative / 排除元素 (反向)</span>
                               <textarea class="set-textarea" id="sc-set-novel-negative" placeholder="例如：nsfw, worst quality, text, watermark..."></textarea>
+                          </div>
+
+                          <!-- 🌟 提示词预设（与聊天共享库）-->
+                          <div class="set-group" style="margin-top:16px; border-top:0.5px solid rgba(255,255,255,0.12); padding-top:14px;">
+                              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                                <span class="set-label" style="margin:0;">Prompt Presets / 提示词预设</span>
+                                <button onclick="PromptPresetModule.saveFrom('story')" style="font-size:10px;background:transparent;border:none;color:var(--sc-ink);font-weight:700;cursor:pointer;">+ 存为新预设</button>
+                              </div>
+                              <div id="sc-prompt-presets-list" style="display:flex;flex-direction:column;gap:6px;"></div>
                           </div>
                       </div>
                       
@@ -8409,7 +8628,7 @@ const KeepAliveModule = (() => {
 // ============================================================
 const Router = (() => {
   // 恢复原状，不把 home-screen 放在这里，让它永远沉在最底部
-  const TOP_SCREENS =['settings-screen', 'character-screen', 'chat-screen', 'conv-screen', 'worldbook-screen', 'story-roster-screen', 'story-chat-screen', 'forum-screen','lifestyle-screen', 'codex-screen', 'auth-screen', 'claim-screen'];
+  const TOP_SCREENS =['settings-screen', 'character-screen', 'chat-screen', 'conv-screen', 'worldbook-screen', 'story-roster-screen', 'story-chat-screen', 'forum-screen','lifestyle-screen', 'codex-screen', 'auth-screen', 'claim-screen','group-story-screen'];
   
   const _subStack = {};
   
@@ -8536,6 +8755,7 @@ const ApiHelper = (() => {
       models:     `${apiVersion}/models`,
       embeddings: `${apiVersion}/embeddings`,
       images:     `${apiVersion}/images/generations`,
+      imageEdits: `${apiVersion}/images/edits`,
     };
     return root + (paths[type] ?? paths.chat);
   }
@@ -8808,7 +9028,8 @@ const ICON_DEFAULTS =[
   'ph ph-users',            // 10 情侣
   'ph ph-cloud',            // 11 云端
   'ph ph-question',         // 12 索引
-  'ph ph-newspaper'         // 13 观测志
+  'ph ph-newspaper',        // 13 观测志
+  'ph ph-users-three'       // 14 群像
 ];
 
 let _pendingIconId = null;
@@ -9397,6 +9618,15 @@ document.getElementById('icon-codex')?.addEventListener('click', () => {
   }
 });
 
+// 群像
+document.getElementById('icon-groupstory')?.addEventListener('click', () => {
+  if (typeof GroupStoryModule !== 'undefined') {
+    GroupStoryModule.open();
+  } else {
+    Toast.show('群像模块未加载，请检查 group-story.js 是否存在');
+  }
+});
+
 // 查手机
 document.getElementById('icon-phone')?.addEventListener('click', () => {
   if (typeof SubjectsModule !== 'undefined') { // ✨ 修改模块名
@@ -9569,6 +9799,7 @@ if (cleaned.length !== _categories.length) {
       document.getElementById('wb-content').value = '';
       document.getElementById('wb-is-regex').checked = false;
       document.getElementById('wb-always-on').checked = false;
+      document.getElementById('wb-group-inject').checked = false;
       document.getElementById('wb-enabled').checked  = true;
       document.getElementById('wb-weight').value  = '5';
       document.getElementById('wb-weight-val').textContent = 'W.5';
@@ -9589,6 +9820,7 @@ if (cleaned.length !== _categories.length) {
       document.getElementById('wb-content').value = e.content;
       document.getElementById('wb-is-regex').checked = !!e.isRegex;
       document.getElementById('wb-always-on').checked = !!e.isAlwaysOn;
+      document.getElementById('wb-group-inject').checked = !!e.isGroupInject;
       document.getElementById('wb-enabled').checked  = e.enabled !== false;
       document.getElementById('wb-weight').value  = String(e.weight || 5);
       document.getElementById('wb-weight-val').textContent = `W.${e.weight || 5}`;
@@ -9639,6 +9871,7 @@ if (cleaned.length !== _categories.length) {
       content,
       isRegex:      document.getElementById('wb-is-regex').checked,
       isAlwaysOn:   document.getElementById('wb-always-on').checked,
+      isGroupInject: document.getElementById('wb-group-inject').checked,
       enabled:      document.getElementById('wb-enabled').checked,
       weight:       parseInt(document.getElementById('wb-weight').value) || 5,
       categoryId:   _editorCatId,
@@ -9925,7 +10158,11 @@ function deleteEntry() {
     onEnter, setFilter, openEditor, closeEditor, saveEntry, deleteEntry,
     toggleEntry, toggleRegexHint, toggleCS, newCategory,
     _selectCat, _toggleChar, _closeModal,
-    getMatchingEntries, getMatchingEntries, toggleAlwaysOn
+    getMatchingEntries, toggleAlwaysOn,
+    // 🎭 群像专用：返回所有标记了「群像注入」且已启用的词条
+    getGroupEntries: function() {
+      return _entries.filter(e => e.enabled !== false && e.isGroupInject);
+    }
   };
 })();
  // 【还原】打开音乐模块的点击事件
@@ -12528,11 +12765,120 @@ return { init, open, close, toggleDict, addDict, confirmAddDict, toggleGlobal, t
 })();
 
 // ============================================================
+// PromptPresetModule — 生图正/负面提示词预设（聊天 & 剧情共享库）
+// ============================================================
+const PromptPresetModule = (() => {
+  const KEY = 'novel-prompt-presets';
+  let _pending = null; // 'chat' | 'story'
+
+  const FIELDS = {
+    chat:  { pos: 'cv-novel-prefix',     neg: 'cv-novel-negative' },
+    story: { pos: 'sc-set-novel-prefix', neg: 'sc-set-novel-negative' },
+  };
+  const LIST_ID = { chat: 'cv-prompt-presets-list', story: 'sc-prompt-presets-list' };
+
+  function _esc(s) { const d = document.createElement('div'); d.textContent = s == null ? '' : s; return d.innerHTML; }
+  async function _all() {
+    let p = [];
+    try { p = await DB.settings.get(KEY) || []; } catch(e){}
+    return Array.isArray(p) ? p : [];
+  }
+
+  function saveFrom(source) {
+    _pending = source;
+    const f = FIELDS[source]; if (!f) return;
+    const pos = document.getElementById(f.pos)?.value.trim() || '';
+    const neg = document.getElementById(f.neg)?.value.trim() || '';
+    if (!pos && !neg) { Toast.show('正/负面都为空，先写点内容'); return; }
+    const overlay = document.getElementById('prompt-preset-overlay');
+    // 🌟 关键：移到 body，逃离带 transform 的 .screen/.settings-page 祖先，否则 fixed 会错位
+    if (overlay && overlay.parentElement !== document.body) document.body.appendChild(overlay);
+    const nameInput = document.getElementById('prompt-preset-name');
+    if (nameInput) nameInput.value = '新预设';
+    overlay.classList.add('active');
+    setTimeout(() => { nameInput?.focus(); nameInput?.select(); }, 300);
+  }
+
+  async function confirmSave() {
+    const name = document.getElementById('prompt-preset-name')?.value.trim() || '';
+    if (!name) { Toast.show('名字不能为空'); return; }
+    const f = FIELDS[_pending]; if (!f) { document.getElementById('prompt-preset-overlay').classList.remove('active'); return; }
+    const positive = document.getElementById(f.pos)?.value.trim() || '';
+    const negative = document.getElementById(f.neg)?.value.trim() || '';
+    try {
+      const presets = await _all();
+      presets.push({ id: 'pp_' + Date.now(), name, positive, negative });
+      await DB.settings.set(KEY, presets);
+      document.getElementById('prompt-preset-overlay').classList.remove('active');
+      await renderAll();
+      Toast.show('提示词预设已保存');
+    } catch(e) { Toast.show('保存失败'); console.error('[PromptPreset] save', e); }
+  }
+
+  // 套用到指定界面（chat / story）的正负面输入框
+  async function apply(id, target) {
+    const presets = await _all();
+    const p = presets.find(x => x.id === id);
+    if (!p) return;
+    const f = FIELDS[target]; if (!f) return;
+    const posEl = document.getElementById(f.pos);
+    const negEl = document.getElementById(f.neg);
+    if (posEl) posEl.value = p.positive || '';
+    if (negEl) negEl.value = p.negative || '';
+    Toast.show(`已套用「${p.name}」${target === 'chat' ? '到聊天' : '到剧情'}`);
+  }
+
+  async function remove(id) {
+    if (!confirm('确定删除这套提示词预设吗？')) return;
+    try {
+      let presets = await _all();
+      presets = presets.filter(x => x.id !== id);
+      await DB.settings.set(KEY, presets);
+      await renderAll();
+    } catch(e) {}
+  }
+
+  async function _renderInto(target) {
+    const list = document.getElementById(LIST_ID[target]);
+    if (!list) return;
+    const presets = await _all();
+    const isStory = target === 'story';
+    const subColor  = isStory ? 'rgba(255,255,255,0.45)' : '#888';
+    const nameColor = isStory ? 'var(--sc-ink, #f4f3f0)' : '#121212';
+    const useBorder = isStory ? 'rgba(255,255,255,0.35)' : '#121212';
+    const bg = isStory ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)';
+    const bd = isStory ? 'rgba(255,255,255,0.12)' : 'rgba(18,18,18,0.1)';
+    if (presets.length === 0) {
+      list.innerHTML = `<div style="font-size:0.66rem;color:${subColor};padding:4px 2px;">暂无预设。在正/负面框写好后点「存为新预设」。</div>`;
+      return;
+    }
+    list.innerHTML = presets.map(p => {
+      const preview = [p.positive, p.negative].filter(Boolean).join(' / ').slice(0, 40) || '（空）';
+      return `
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; padding:8px 10px; background:${bg}; border:0.5px solid ${bd}; border-radius:10px;">
+        <div style="min-width:0; flex:1;">
+          <div style="font-size:0.78rem; font-weight:600; color:${nameColor}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${_esc(p.name)}</div>
+          <div style="font-family:'Space Mono',monospace; font-size:0.58rem; color:${subColor}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${_esc(preview)}</div>
+        </div>
+        <button onclick="PromptPresetModule.apply('${p.id}','${target}')" style="background:transparent; border:1px solid ${useBorder}; border-radius:6px; padding:3px 10px; font-size:0.6rem; cursor:pointer; color:${nameColor}; flex-shrink:0;">使用</button>
+        <button onclick="PromptPresetModule.remove('${p.id}')" style="background:transparent; border:none; color:#D93A3A; font-size:0.85rem; cursor:pointer; flex-shrink:0;"><i class="ph ph-trash"></i></button>
+      </div>`;
+    }).join('');
+  }
+
+  async function renderAll() { await _renderInto('chat'); await _renderInto('story'); }
+  function renderChat()  { return _renderInto('chat'); }
+  function renderStory() { return _renderInto('story'); }
+
+  return { saveFrom, confirmSave, apply, remove, renderAll, renderChat, renderStory };
+})();
+
+// ============================================================
 // NovelModule — NovelAI / Pollinations / OpenAI 兼容 生图引擎
 // ============================================================
 const NovelModule = (() => {
   const KEY_CFG = 'novel-config';
-  const API = 'https://image.novelai.net/ai/generate-image';
+  const NAI_HOST_DEFAULT = 'https://image.novelai.net';
 
   /** @param {Record<string, unknown>} cfg */
   function effectiveBackend(cfg) {
@@ -12552,6 +12898,46 @@ const NovelModule = (() => {
     return false;
   }
 
+  function _isNaiV4(model) {
+    return /^nai-diffusion-4/i.test(String(model || '').trim());
+  }
+
+  function _resolveNaiApiUrl(cfg) {
+    const raw = String(cfg?.naiBaseUrl || '').trim().replace(/\/+$/, '');
+    if (!raw) return `${NAI_HOST_DEFAULT}/ai/generate-image`;
+    if (/\/ai\/generate-image$/i.test(raw)) return raw;
+    return `${raw}/ai/generate-image`;
+  }
+
+  function _resolveNaiSeed(cfg) {
+    let seed = Number(cfg?.naiSeed);
+    if (!Number.isFinite(seed) || seed < 0) {
+      return Math.floor(Math.random() * 4294967295);
+    }
+    return Math.min(4294967295, Math.max(0, Math.floor(seed)));
+  }
+
+  function syncNaiAdvancedUI() {
+    const modelEl = document.getElementById('novel-model');
+    const smeaEl = document.getElementById('novel-nai-smea');
+    const hintEl = document.getElementById('novel-nai-smea-hint');
+    if (!modelEl || !smeaEl) return;
+    const isV4 = _isNaiV4(modelEl.value);
+    if (isV4) {
+      smeaEl.checked = false;
+      smeaEl.disabled = true;
+      if (hintEl) hintEl.textContent = 'V4 不可用';
+    } else {
+      smeaEl.disabled = false;
+      if (hintEl) hintEl.textContent = 'V3 可用；V4 自动关闭。';
+    }
+  }
+
+  function randomNaiSeed() {
+    const el = document.getElementById('novel-nai-seed');
+    if (el) el.value = String(Math.floor(Math.random() * 4294967295));
+  }
+
   function syncBackendUI() {
     const sel = document.getElementById('novel-img-backend');
     const v = sel?.value || 'pollinations';
@@ -12559,21 +12945,143 @@ const NovelModule = (() => {
     const panO = document.getElementById('novel-backend-panel-openai');
     if (panN) panN.style.display = v === 'novelai' ? '' : 'none';
     if (panO) panO.style.display = v === 'openai' ? '' : 'none';
+    if (v === 'novelai') syncNaiAdvancedUI();
   }
 
   /**
    * OpenAI Images API（或兼容端点），返回 PNG/WebP blob
    */
+  // 🔒 锁脸生图：POST /v1/images/edits（multipart），喂角色基准脸 + input_fidelity
+  async function _generateOpenAIEditBlob(mergedPrompt, cfg, signal) {
+    const key = (cfg.openaiApiKey || '').trim();
+    const root = (cfg.openaiBaseUrl || '').trim() || 'https://api.openai.com';
+    const url = ApiHelper.buildUrl(root, 'imageEdits');
+    const model = cfg.openaiImageModel || 'gpt-image-2';
+
+    const sizeMapGptImg = {
+      '832x1216': '1024x1536',
+      '1216x832': '1536x1024',
+      '1024x1024': '1024x1024',
+    };
+    const size = sizeMapGptImg[cfg.size || '832x1216'] || '1024x1024';
+
+    let prompt = String(mergedPrompt || '').trim();
+    // 锁脸时强调"保持身份、但允许新姿势表情"，并把负面词并进去
+    const neg = (cfg.negativePrompt || '').trim();
+    const facePreamble = 'Keep the same facial identity and features as the reference person. ';
+    prompt = facePreamble + prompt;
+    if (neg) prompt = `${prompt}\n\nAvoid: ${neg}`;
+    if (prompt.length > 8000) prompt = prompt.slice(0, 8000);
+
+    const fidelity = (cfg.faceFidelity === 'high') ? 'high' : 'low';
+
+    const faceBlob = cfg.faceRefBlob;
+    if (!faceBlob) {
+      console.warn('[IMG][🔒] faceRefBlob 为空，回退普通生图');
+      return null;
+    }
+
+    const fd = new FormData();
+    fd.append('model', model);
+    fd.append('image', new File([faceBlob], 'face.png', { type: faceBlob.type || 'image/png' }));
+    fd.append('prompt', prompt);
+    fd.append('size', size);
+    fd.append('n', '1');
+    fd.append('input_fidelity', fidelity);
+
+    const _t0 = Date.now();
+    const _elapsed = () => `${((Date.now() - _t0) / 1000).toFixed(1)}s`;
+    console.log('[IMG][🔒1] 锁脸 edits 请求', { url, model, size, fidelity, promptLen: prompt.length });
+
+    let res;
+    try {
+      res = await fetch(url, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${key}` }, // multipart 不手动设 Content-Type
+        body: fd,
+        signal,
+      });
+      console.log('[IMG][🔒2] 收到响应', _elapsed(), 'status =', res.status);
+    } catch (fetchErr) {
+      console.error('[IMG][🔒X] fetch 抛错', _elapsed(), fetchErr.name, fetchErr.message);
+      throw fetchErr;
+    }
+
+    if (!res.ok) {
+      const rawErrText = await res.text().catch(() => '');
+      console.warn('[IMG][🔒X] 错误体 =', rawErrText.slice(0, 500));
+      let err = {}; try { err = JSON.parse(rawErrText); } catch (_) {}
+      const e = err.error || err;
+      const msg = e?.message || e || `HTTP ${res.status}`;
+      // 若是 input_fidelity 不被支持，自动重试一次（不带该参数）
+      if (/input_fidelity/i.test(rawErrText)) {
+        console.warn('[IMG][🔒] 站子不支持 input_fidelity，去掉该参数重试…');
+        fd.delete('input_fidelity');
+        try {
+          const res2 = await fetch(url, { method: 'POST', headers: { Authorization: `Bearer ${key}` }, body: fd, signal });
+          if (res2.ok) return await _parseImageResponse(res2, signal, _elapsed);
+        } catch (e2) { if (e2.name === 'AbortError') throw e2; }
+      }
+      Toast.show(`锁脸生图失败：HTTP ${res.status} ${msg}`);
+      return null;
+    }
+
+    return await _parseImageResponse(res, signal, _elapsed);
+  }
+
+  // 解析 OpenAI 图像响应为 Blob（b64 优先，url 兜底），edits/generations 共用
+  async function _parseImageResponse(res, signal, _elapsed) {
+    const rawText = await res.text();
+    let data; try { data = JSON.parse(rawText); } catch (pe) {
+      console.error('[IMG][X] 锁脸返回非 JSON', rawText.slice(0, 200));
+      Toast.show('锁脸生图返回非 JSON（可能是网关报错页）');
+      return null;
+    }
+    const item = (data.data && data.data[0]) || (Array.isArray(data) ? data[0] : null) || data || {};
+    let b64 = item.b64_json || item.image || item.image_base64 || item.b64 || data.b64_json || null;
+    const imgUrl = item.url || item.image_url || data.url || null;
+    if (b64) {
+      try {
+        if (typeof b64 === 'string') {
+          const comma = b64.indexOf('base64,');
+          if (comma !== -1) b64 = b64.slice(comma + 7);
+          b64 = b64.replace(/\s/g, '');
+        }
+        const binary = Uint8Array.from(atob(b64), ch => ch.charCodeAt(0));
+        return new Blob([binary], { type: 'image/png' });
+      } catch (decErr) {
+        console.error('[IMG][X] 锁脸 b64 解码失败', decErr);
+        Toast.show('锁脸图片解码失败：' + (decErr.message || ''));
+        return null;
+      }
+    }
+    if (imgUrl) {
+      try {
+        const imgRes = await fetch(imgUrl, { signal });
+        if (imgRes.ok) return await imgRes.blob();
+      } catch (e) { if (e.name === 'AbortError') throw e; }
+    }
+    Toast.show('锁脸生图返回异常（无图像数据）');
+    return null;
+  }
+
   async function _generateOpenAIImageBlob(mergedPrompt, cfg, signal) {
     const key = (cfg.openaiApiKey || '').trim();
     if (!key) {
       Toast.show('请填写 OpenAI 生图 API Key');
       return null;
     }
-    const root = (cfg.openaiBaseUrl || '').trim() || 'https://api.openai.com';
-    const url = ApiHelper.buildUrl(root, 'images');
     const model = cfg.openaiImageModel || 'dall-e-3';
     const isGptImage = /^gpt-image-/i.test(String(model));
+
+    // 🔒 锁脸分支：角色配了基准脸 + 用的是 gpt-image 系列 → 走 /images/edits
+    if (cfg.faceRefBlob && isGptImage) {
+      console.log('[IMG][🔒] 检测到角色基准脸，转入锁脸 edits 分支，fidelity =', cfg.faceFidelity || 'low');
+      return await _generateOpenAIEditBlob(mergedPrompt, cfg, signal);
+    }
+
+    const root = (cfg.openaiBaseUrl || '').trim() || 'https://api.openai.com';
+    const url = ApiHelper.buildUrl(root, 'images');
 
     const sizeMapDalle = {
       '832x1216': '1024x1792',
@@ -12610,45 +13118,119 @@ const NovelModule = (() => {
       body.response_format = 'b64_json';
     }
 
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${key}`,
-      },
-      body: JSON.stringify(body),
-      signal,
-    });
+    // ===== 生图链路日志 START =====
+    const _t0 = Date.now();
+    const _elapsed = () => `${((Date.now() - _t0) / 1000).toFixed(1)}s`;
+    console.log('[IMG][1/6] 准备发请求', { url, model, size, isGptImage, promptLen: prompt.length });
+    console.log('[IMG][1/6] 请求体 body =', JSON.stringify(body).slice(0, 300));
+
+    // 监听 abort（超时/手动取消）
+    if (signal) {
+      signal.addEventListener('abort', () => {
+        console.warn('[IMG][!] signal 被 abort 触发，已等待', _elapsed(), '（可能是客户端超时或页面被冻结）');
+      });
+    }
+
+    let res;
+    try {
+      console.log('[IMG][2/6] fetch 发出，开始等待响应头…', _elapsed());
+      res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${key}`,
+        },
+        body: JSON.stringify(body),
+        signal,
+      });
+      console.log('[IMG][3/6] 收到响应头！', _elapsed(), 'status =', res.status, 'ok =', res.ok, 'type =', res.type);
+      // 打印响应头（注意：CORS 下可能只看得到部分头）
+      try {
+        const hdrs = {};
+        res.headers.forEach((v, k) => { hdrs[k] = v; });
+        console.log('[IMG][3/6] 响应头明细 =', hdrs);
+      } catch (he) { console.warn('[IMG] 读响应头失败', he); }
+    } catch (fetchErr) {
+      console.error('[IMG][X] fetch 阶段就抛错了', _elapsed(), 'name =', fetchErr.name, 'message =', fetchErr.message, fetchErr);
+      throw fetchErr; // 交给外层 catch 区分 AbortError / 网络错误
+    }
 
     if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
+      console.warn('[IMG][3/6] status 非 2xx，尝试读错误体…', _elapsed());
+      const rawErrText = await res.text().catch((e) => { console.warn('[IMG] 读错误体失败', e); return ''; });
+      console.warn('[IMG][3/6] 错误体原文 =', rawErrText.slice(0, 500));
+      let err = {};
+      try { err = JSON.parse(rawErrText); } catch (_) {}
       const e = err.error || err;
       const base = e?.message || e || `HTTP ${res.status}`;
       const code = e?.code ? `（${e.code}）` : '';
       Toast.show(`OpenAI 生图失败：HTTP ${res.status}${code} ${base}`);
       return null;
     }
-    const data = await res.json();
-    const item = data.data?.[0] || {};
-    const b64 = item.b64_json;
-    const imgUrl = item.url;
+
+    console.log('[IMG][4/6] 开始读响应体（这一步会等整个 body 下载完，b64 大图很慢）…', _elapsed());
+    const rawText = await res.text();
+    console.log('[IMG][5/6] 响应体读取完成！', _elapsed(), '总长度 =', rawText.length, '字符');
+    console.log('[IMG][5/6] 响应体开头 200 字符 =', rawText.slice(0, 200));
+
+    let data;
+    try {
+      data = JSON.parse(rawText);
+      console.log('[IMG][6/6] JSON 解析成功，顶层 keys =', Object.keys(data || {}));
+    } catch (pe) {
+      console.error('[IMG][X] JSON 解析失败！响应不是合法 JSON。', _elapsed(), pe);
+      console.error('[IMG][X] 响应体结尾 200 字符 =', rawText.slice(-200));
+      Toast.show('OpenAI 生图返回非 JSON（可能是网关报错页）');
+      return null;
+    }
+    // ===== 生图链路日志 END =====
+
+    const item = (data.data && data.data[0]) || (Array.isArray(data) ? data[0] : null) || data || {};
+    console.log('[IMG][6/6] item keys =', Object.keys(item || {}), '| 有 b64_json?', !!item.b64_json, '| 有 url?', !!item.url);
+
+    // 兼容多种转发端字段命名：b64_json / image / image_base64 / b64
+    let b64 = item.b64_json || item.image || item.image_base64 || item.b64 || data.b64_json || null;
+    const imgUrl = item.url || item.image_url || data.url || null;
+
     if (b64) {
-      const binary = Uint8Array.from(atob(b64), ch => ch.charCodeAt(0));
-      return new Blob([binary], { type: 'image/png' });
+      try {
+        // 去掉可能的 data:image/...;base64, 前缀；去掉空白/换行（atob 对这些会抛 InvalidCharacterError）
+        if (typeof b64 === 'string') {
+          const comma = b64.indexOf('base64,');
+          if (comma !== -1) b64 = b64.slice(comma + 7);
+          b64 = b64.replace(/\s/g, '');
+        }
+        const binary = Uint8Array.from(atob(b64), ch => ch.charCodeAt(0));
+        const blob = new Blob([binary], { type: 'image/png' });
+        console.log('[IMG][✓] 成功！图片解码完成，blob 大小 =', (blob.size / 1024).toFixed(1), 'KB，总耗时', _elapsed());
+        return blob;
+      } catch (decErr) {
+        console.error('[IMG][X] b64 解码失败', _elapsed(), decErr, 'sample:', String(b64).slice(0, 80));
+        Toast.show('OpenAI 图片解码失败：' + (decErr.message || ''));
+        return null;
+      }
     }
     // 兜底：个别转发端忽略请求、改回 url，下载成 blob
     if (imgUrl) {
+      console.log('[IMG] 无 b64，走 url 兜底下载：', imgUrl, _elapsed());
       try {
         const imgRes = await fetch(imgUrl, { signal });
-        if (imgRes.ok) return await imgRes.blob();
+        if (imgRes.ok) {
+          const b = await imgRes.blob();
+          console.log('[IMG][✓] url 兜底下载成功，大小', (b.size / 1024).toFixed(1), 'KB', _elapsed());
+          return b;
+        }
+        console.warn('[IMG][X] url 兜底下载失败 HTTP', imgRes.status, _elapsed());
         Toast.show('OpenAI 图片下载失败：HTTP ' + imgRes.status);
         return null;
       } catch (e) {
         if (e.name === 'AbortError') throw e;
+        console.error('[IMG][X] url 兜底下载异常', e, _elapsed());
         Toast.show('OpenAI 图片下载异常：' + (e.message || ''));
         return null;
       }
     }
+    console.error('[IMG][X] 响应里既无 b64 也无 url！data =', JSON.stringify(data).slice(0, 500), _elapsed());
     Toast.show('OpenAI 生图返回异常（无图像数据）');
     return null;
   }
@@ -12664,10 +13246,18 @@ const NovelModule = (() => {
     return {
       imgBackend: document.getElementById('novel-img-backend')?.value || 'pollinations',
       apiKey: document.getElementById('novel-api-key')?.value.trim() || '',
+      naiBaseUrl: document.getElementById('novel-nai-base')?.value.trim() || '',
       model:  document.getElementById('novel-model')?.value || 'nai-diffusion-3',
       steps:  parseInt(document.getElementById('novel-steps')?.value || '28', 10),
       scale:  parseFloat(document.getElementById('novel-scale')?.value || '5'),
       sampler: document.getElementById('novel-sampler')?.value || 'k_euler',
+      naiSeed: (() => {
+        const t = document.getElementById('novel-nai-seed')?.value.trim();
+        if (!t) return -1;
+        const n = parseInt(t, 10);
+        return Number.isFinite(n) && n >= 0 ? Math.min(4294967295, n) : -1;
+      })(),
+      naiSmea: document.getElementById('novel-nai-smea')?.checked !== false,
       size:   document.getElementById('novel-size')?.value || '832x1216',
       positivePrompt: document.getElementById('novel-prompt-positive')?.value.trim() || '',
       negativePrompt: document.getElementById('novel-prompt-negative')?.value.trim() || '',
@@ -12701,12 +13291,15 @@ const NovelModule = (() => {
     const [sw, sh] = (cfg.size || '832x1216').split('x').map(Number);
     const w = sw || 832;
     const h = sh || 1216;
+    const seedUse = _resolveNaiSeed(cfg);
+    const smeaOn = cfg.naiSmea !== false && !_isNaiV4(model);
     const base = {
       width: w,
       height: h,
       steps: Number(cfg.steps) || 28,
       scale: Number(cfg.scale) || 5,
       sampler: cfg.sampler || 'k_euler',
+      seed: seedUse,
       n_samples: 1,
       qualityToggle: true,
       negative_prompt: (cfg.negativePrompt && cfg.negativePrompt.trim()) || _defaultUc(model),
@@ -12717,7 +13310,10 @@ const NovelModule = (() => {
       return {
         ...base,
         params_version: 1,
+        extra_noise_seed: seedUse,
         ucPreset: /curated/i.test(model) ? 3 : 5,
+        sm: false,
+        sm_dyn: false,
         v4_prompt: {
           caption: { base_caption: augmentedPrompt, char_captions:[] },
           use_coords: false,
@@ -12733,7 +13329,7 @@ const NovelModule = (() => {
       legacy: false,
       legacy_v3_extend: false,
       ucPreset: 4,
-      sm: false,
+      sm: smeaOn,
       sm_dyn: false,
       deliberate_euler_ancestral_bug: true,
     };
@@ -12765,6 +13361,7 @@ const NovelModule = (() => {
       const backendLegacy = _cfg.imgBackend || ((_cfg.apiKey && String(_cfg.apiKey).trim()) ? 'novelai' : 'pollinations');
       set('novel-img-backend', backendLegacy);
       set('novel-api-key', _cfg.apiKey || '');
+      set('novel-nai-base', _cfg.naiBaseUrl || '');
       set('novel-model', _cfg.model || 'nai-diffusion-3');
       set('novel-steps', _cfg.steps ?? 28);
       set('novel-scale', _cfg.scale ?? 5);
@@ -12783,11 +13380,14 @@ const NovelModule = (() => {
       if (sv) sv.textContent = String(_cfg.steps ?? 28);
       const scv = document.getElementById('novel-scale-val');
       if (scv) scv.textContent = parseFloat(_cfg.scale ?? 5).toFixed(1);
+      const seedEl = document.getElementById('novel-nai-seed');
+      if (seedEl) seedEl.value = Number(_cfg.naiSeed) >= 0 ? String(_cfg.naiSeed) : '';
+      const smeaEl = document.getElementById('novel-nai-smea');
+      if (smeaEl) smeaEl.checked = _isNaiV4(_cfg.model || '') ? false : (_cfg.naiSmea !== false);
     }
     syncBackendUI();
+    _renderApiPresets();
   }
-  
-  // ── 新增：动态拉取 OpenAI 模型 ──
   async function fetchModels() {
     const url = document.getElementById('novel-openai-base').value.trim() || 'https://api.openai.com';
     const key = document.getElementById('novel-openai-key').value.trim();
@@ -12839,6 +13439,115 @@ const NovelModule = (() => {
     Toast.show('生图配置已保存');
   }
 
+  // ── 🔒 角色基准脸（锁脸）存取 ──
+  const _faceKey = id => `novel-face-${id}`;
+  const _faceFidelityKey = id => `novel-face-fidelity-${id}`;
+
+  // 读取某角色的基准脸 blob + 保真度
+  async function _getCharFace(charId) {
+    let blob = null, fidelity = 'low';
+    try {
+      const rec = await DB.assets.get(_faceKey(charId));
+      if (rec && rec.blob) blob = rec.blob;
+    } catch (e) {}
+    try {
+      const f = await DB.settings.get(_faceFidelityKey(charId));
+      if (f === 'high' || f === 'low') fidelity = f;
+    } catch (e) {}
+    return { blob, fidelity };
+  }
+
+  // 保存基准脸（File/Blob）
+  async function saveCharFace(charId, fileOrBlob) {
+    await Assets.saveBlob(_faceKey(charId), fileOrBlob, 1024, 0.9);
+  }
+  async function removeCharFace(charId) {
+    try { await Assets.remove(_faceKey(charId)); } catch (e) {}
+  }
+  async function setCharFaceFidelity(charId, fidelity) {
+    await DB.settings.set(_faceFidelityKey(charId), fidelity === 'high' ? 'high' : 'low');
+  }
+  async function getCharFaceUrl(charId) {
+    try { return await Assets.getUrl(_faceKey(charId)); } catch (e) { return null; }
+  }
+
+
+  async function _renderApiPresets() {
+    const list = document.getElementById('novel-api-presets-list');
+    if (!list) return;
+    let presets = [];
+    try { presets = await DB.settings.get(API_PRESETS_KEY) || []; } catch(e){}
+    if (!Array.isArray(presets)) presets = [];
+    if (presets.length === 0) {
+      list.innerHTML = '<div style="font-size:0.68rem;color:var(--s-text-secondary);padding:6px 2px;">暂无预设，填好上面的 Base/Key 后点「存为新预设」</div>';
+      return;
+    }
+    list.innerHTML = presets.map(p => `
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; padding:8px 10px; background:rgba(0,0,0,0.03); border:0.5px solid rgba(18,18,18,0.1); border-radius:10px;">
+        <div style="min-width:0; flex:1;">
+          <div style="font-size:0.8rem; font-weight:600; color:var(--s-text-primary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${_esc(p.name)}</div>
+          <div style="font-family:'Space Mono',monospace; font-size:0.6rem; color:var(--s-text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${_esc(p.openaiBaseUrl || 'https://api.openai.com')}</div>
+        </div>
+        <button onclick="NovelModule.applyApiPreset('${p.id}')" style="background:transparent; border:1px solid #121212; border-radius:6px; padding:3px 10px; font-size:0.62rem; cursor:pointer; color:#121212; flex-shrink:0;">使用</button>
+        <button onclick="NovelModule.deleteApiPreset('${p.id}')" style="background:transparent; border:none; color:#D93A3A; font-size:0.9rem; cursor:pointer; flex-shrink:0;"><i class="ph ph-trash"></i></button>
+      </div>`).join('');
+  }
+
+  function _esc(s) { const d = document.createElement('div'); d.textContent = s == null ? '' : s; return d.innerHTML; }
+
+  function saveApiPreset() {
+    const base = document.getElementById('novel-openai-base')?.value.trim() || '';
+    const key  = document.getElementById('novel-openai-key')?.value.trim() || '';
+    if (!key) { Toast.show('请先填写 API Key 再存预设'); return; }
+    const overlay = document.getElementById('novel-api-preset-overlay');
+    // 🌟 移到 body，逃离带 transform 的祖先，避免 fixed 弹窗错位
+    if (overlay && overlay.parentElement !== document.body) document.body.appendChild(overlay);
+    const nameInput = document.getElementById('novel-api-preset-name');
+    if (nameInput) nameInput.value = base ? base.replace(/^https?:\/\//,'').split('/')[0] : '新配置';
+    overlay.classList.add('active');
+    setTimeout(() => { nameInput?.focus(); nameInput?.select(); }, 300);
+  }
+
+  async function confirmSaveApiPreset() {
+    const name = document.getElementById('novel-api-preset-name')?.value.trim() || '';
+    if (!name) { Toast.show('名字不能为空'); return; }
+    const base = document.getElementById('novel-openai-base')?.value.trim() || '';
+    const key  = document.getElementById('novel-openai-key')?.value.trim() || '';
+    try {
+      let presets = await DB.settings.get(API_PRESETS_KEY) || [];
+      if (!Array.isArray(presets)) presets = [];
+      presets.push({ id: 'napi_' + Date.now(), name, openaiBaseUrl: base, openaiApiKey: key });
+      await DB.settings.set(API_PRESETS_KEY, presets);
+      document.getElementById('novel-api-preset-overlay').classList.remove('active');
+      _renderApiPresets();
+      Toast.show('配置预设已保存');
+    } catch(e) { Toast.show('保存失败'); console.error('[NovelModule] saveApiPreset', e); }
+  }
+
+  async function applyApiPreset(id) {
+    try {
+      const presets = await DB.settings.get(API_PRESETS_KEY) || [];
+      const p = (Array.isArray(presets) ? presets : []).find(x => x.id === id);
+      if (!p) return;
+      const baseEl = document.getElementById('novel-openai-base');
+      const keyEl  = document.getElementById('novel-openai-key');
+      if (baseEl) baseEl.value = p.openaiBaseUrl || '';
+      if (keyEl)  keyEl.value  = p.openaiApiKey || '';
+      await save(); // 套用后直接落库
+      Toast.show(`已套用「${p.name}」`);
+    } catch(e) { Toast.show('套用失败'); console.error(e); }
+  }
+
+  async function deleteApiPreset(id) {
+    if (!confirm('确定删除这套配置预设吗？')) return;
+    try {
+      let presets = await DB.settings.get(API_PRESETS_KEY) || [];
+      presets = (Array.isArray(presets) ? presets : []).filter(x => x.id !== id);
+      await DB.settings.set(API_PRESETS_KEY, presets);
+      _renderApiPresets();
+    } catch(e) {}
+  }
+
   function getCfg() { return _cfg; }
 // 🌟 核心分流引擎：后端 = 免费 / NovelAI / OpenAI 兼容
   async function generateImageBlob(mergedPrompt, runtimeCfg) {
@@ -12886,15 +13595,19 @@ const NovelModule = (() => {
 
     // ===== 线路 2：OpenAI Images（/v1/images/generations） =====
     if (backend === 'openai') {
+      console.log('[IMG][0/6] 进入 OpenAI 生图分支，客户端超时设定 =', timeoutMs / 1000, '秒');
       try {
         const blob = await _generateOpenAIImageBlob(mergedPrompt, cfg, controller.signal);
         clearTimeout(timeoutId);
+        console.log('[IMG] generateImageBlob 返回，blob =', blob ? `${(blob.size/1024).toFixed(1)}KB` : 'null（已在内部 Toast 报错）');
         return blob;
       } catch (fetchErr) {
         clearTimeout(timeoutId);
         if (fetchErr.name === 'AbortError') {
+          console.error('[IMG][X] 外层捕获 AbortError —— 请求被中断（客户端超时 / 页面冻结 / 手动取消）');
           Toast.show('OpenAI 生图超时，请稍后重试');
         } else {
+          console.error('[IMG][X] 外层捕获网络错误 name =', fetchErr.name, 'msg =', fetchErr.message, fetchErr);
           Toast.show('OpenAI 网络错误：' + (fetchErr.message || ''));
         }
         return null;
@@ -12916,9 +13629,10 @@ const NovelModule = (() => {
       parameters: _buildParameters(model, aug, cfg),
     };
     
+    const naiUrl = _resolveNaiApiUrl(cfg);
     let res;
     try {
-      res = await fetch(API, {
+      res = await fetch(naiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -13045,6 +13759,12 @@ const NovelModule = (() => {
     const effectiveNeg = charExclusiveNeg || globalNeg;
     const mergedCfg = { ...(cfgForChat || {}), negativePrompt: effectiveNeg };
 
+    // 🔒 锁脸：取该角色的基准脸 + 保真度，注入 cfg（有脸才会触发 edits 分支）
+    try {
+      const face = await _getCharFace(charId);
+      if (face.blob) { mergedCfg.faceRefBlob = face.blob; mergedCfg.faceFidelity = face.fidelity; }
+    } catch (e) { console.warn('[Face] 读取基准脸失败', e); }
+
     const screen = document.getElementById('conv-screen');
     const convOpen = screen && (screen.classList.contains('active') || screen.classList.contains('qr-active'));
     const pendingCount = innerPrompts.filter(p => {
@@ -13146,7 +13866,7 @@ const NovelModule = (() => {
     }
   }
 
-  return { init, save, getCfg, restoreUI, syncBackendUI, effectiveBackend, isPaidImgEngine, generateImageBlob, attachImagesForChar, testGenerate, clearTestPreview, downloadTestPreview,fetchModels, onModelSelectChange};
+  return { init, save, getCfg, restoreUI, syncBackendUI, syncNaiAdvancedUI, randomNaiSeed, effectiveBackend, isPaidImgEngine, generateImageBlob, attachImagesForChar, testGenerate, clearTestPreview, downloadTestPreview, fetchModels, onModelSelectChange, saveApiPreset, confirmSaveApiPreset, applyApiPreset, deleteApiPreset, _renderApiPresets, saveCharFace, removeCharFace, setCharFaceFidelity, getCharFaceUrl, _getCharFace };
 })();
 
  // ============================================================
@@ -14133,11 +14853,55 @@ const GroupChatModule = (() => {
     }
   }
 
+  // ── 🌟 群聊改名 ──
+  let _renameGcId = null;
+  function openRenameModal(gcId) {
+    const gc = get(gcId);
+    if (!gc) { Toast.show('群聊不存在'); return; }
+    _renameGcId = gcId;
+    const input = document.getElementById('gc-rename-input');
+    if (input) input.value = gc.name || '';
+    document.getElementById('gc-rename-overlay').classList.add('active');
+    setTimeout(() => { input?.focus(); input?.select(); }, 300);
+  }
+
+  function closeRenameModal() {
+    document.getElementById('gc-rename-overlay').classList.remove('active');
+    _renameGcId = null;
+  }
+
+  async function confirmRename() {
+    const gc = get(_renameGcId);
+    if (!gc) { closeRenameModal(); return; }
+    const input = document.getElementById('gc-rename-input');
+    const newName = input ? input.value.trim() : '';
+    if (!newName) { Toast.show('群名不能为空'); return; }
+    if (newName === gc.name) { closeRenameModal(); return; }
+
+    gc.name = newName;
+    await update(gc);
+
+    // 刷新各处 UI
+    await renderList();
+    const nameEl = document.getElementById('cv-header-name');
+    const convScreen = document.getElementById('conv-screen');
+    if (nameEl && convScreen && convScreen.classList.contains('active') && convScreen.dataset.cvCharId === gc.id) {
+      nameEl.textContent = newName;
+    }
+    if (document.getElementById('ch-view-detail')?.classList.contains('active')) {
+      try { ChatModule.openDetail(gc.id); } catch(e) {}
+    }
+
+    closeRenameModal();
+    Toast.show('群名已更新');
+  }
+
 return {
     init, getAll, get, isGroupChat, create, update, remove,
     renderList, enterGroupChat,
     openCreateModal, closeCreateModal, toggleMember, confirmCreate, confirmDelete, onPersonaChange,
-    openInviteModal, closeInviteModal, toggleInviteMember, confirmInvite // <--- 新增这四个
+    openInviteModal, closeInviteModal, toggleInviteMember, confirmInvite, // <--- 新增这四个
+    openRenameModal, closeRenameModal, confirmRename // <--- 🌟 群聊改名
   };
 })();
 
@@ -14228,7 +14992,12 @@ const ConvModule = (() => {
     const statusEl = document.querySelector('#conv-screen .cv-header-status'); // 🌟 新增：获取状态栏元素
 
   if (_isGroup) {
-      if (nameEl) nameEl.textContent = _gcMeta.name;
+      if (nameEl) {
+        nameEl.textContent = _gcMeta.name;
+        nameEl.style.cursor = 'pointer';
+        nameEl.title = '点击修改群名';
+        nameEl.onclick = () => GroupChatModule.openRenameModal(_charId);
+      }
       // 群聊头像使用专属保存的，或者默认图
       if (avatarEl) {
         if (_gcMeta.avatarKey) {
@@ -14252,7 +15021,13 @@ const ConvModule = (() => {
       let useAlias = false;
       try { useAlias = (await DB.settings.get(`alias-mode-${charId}`)) === true; } catch(e) {}
       if (useAlias && (!_char || !_char.title || !_char.title.trim())) useAlias = false;
-      if (nameEl) nameEl.textContent = useAlias ? _char.title : (_char?.name || '—');
+      if (nameEl) {
+        nameEl.textContent = useAlias ? _char.title : (_char?.name || '—');
+        // 私聊模式：清掉群聊改名的点击态
+        nameEl.style.cursor = 'default';
+        nameEl.title = '';
+        nameEl.onclick = null;
+      }
       
       if (avatarEl) {
         avatarEl.src = _charImgUrl;
@@ -14288,7 +15063,8 @@ const ConvModule = (() => {
     }
 
     // 🌟 终极修复：把“潜意识观测台”的入口转移到顶部的【名字】上！
-    if (nameEl) {
+    // ⚠️ 仅私聊：群聊时名字已绑定「改名」，不可被覆盖
+    if (nameEl && !_isGroup) {
       nameEl.style.cursor = 'pointer';
       nameEl.title = '打开潜意识观测台';
       nameEl.onclick = () => ConvModule.openContextConsole();
@@ -16369,6 +17145,12 @@ function _renderImgPreviewBar() {
       const globalNeg = (base?.negativePrompt || '').trim();
       const effectiveNeg = (charNeg || '').trim() || globalNeg;
       const mergedCfg = { ...(base || {}), negativePrompt: effectiveNeg };
+      try {
+        if (_charId) {
+          const face = await NovelModule._getCharFace(_charId);
+          if (face.blob) { mergedCfg.faceRefBlob = face.blob; mergedCfg.faceFidelity = face.fidelity; }
+        }
+      } catch (e) {}
       const blob = await NovelModule.generateImageBlob(part.novelMergedPrompt, mergedCfg);
       if (!blob) return;
       Assets.clearCache(assetKey);
@@ -17252,6 +18034,12 @@ function _renderImgPreviewBar() {
              const charPos = await _getNovelPrefix();
              const charNeg = await _getNovelNegative();
              const mergedCfg = { ...(_cfg || await NovelModule.init()), negativePrompt: charNeg || '' };
+             try {
+               if (_charId) {
+                 const face = await NovelModule._getCharFace(_charId);
+                 if (face.blob) { mergedCfg.faceRefBlob = face.blob; mergedCfg.faceFidelity = face.fidelity; }
+               }
+             } catch (e) {}
              const augPrompt = [charPos, imgPrompt].filter(Boolean).join(', ');
              
              try {
@@ -17900,9 +18688,10 @@ ${emoteBlock}
 
   // 🌟 检测最近 AI 消息是否过度使用某种高级行为，返回需要冷却的行为列表
   function _detectOverusedBehaviors(histMsgs) {
-    // 只看最近 6 条 assistant 消息
+    // 🌟 撤回统计必须包含 recalled 消息，否则 AI 自己的撤回行为永远统计不到（冷却令对撤回彻底失效）
+    // 所以这里【不过滤 recalled】，只取最近 6 条 assistant 消息
     const recentAI = histMsgs
-      .filter(m => m.role === 'assistant' && !m.recalled)
+      .filter(m => m.role === 'assistant')
       .slice(-6);
 
     if (recentAI.length < 2) return '';
@@ -17910,21 +18699,23 @@ ${emoteBlock}
     // 统计各行为出现次数
     let quoteCnt = 0, audioCnt = 0, recallCnt = 0;
     for (const m of recentAI) {
+      // 撤回直接看 recalled 标记，不依赖文本（撤回消息回填后文本里不一定带 [RECALL]）
+      if (m.recalled) recallCnt++;
       const text = _formatMsgForAI(m) || '';
       if (/\[QUOTE:/i.test(text))  quoteCnt++;
       if (/\[语音消息/i.test(text)) audioCnt++;
-      if (m.recalled || /你发出后立刻撤回/.test(text)) recallCnt++;
     }
 
     const warnings = [];
     const total = recentAI.length;
-    // 超过半数的消息都用了同一个行为 → 触发冷却
+    // 引用/语音：超过半数才冷却（保留原有宽松度）
     if (quoteCnt >= Math.ceil(total / 2))
       warnings.push(`⚠️ 行为冷却令：你在最近 ${total} 条消息里已经连续使用了 ${quoteCnt} 次【引用回复 [QUOTE]】。接下来【至少 3 条】消息里，请绝对不要再用引用，直接自然地回复即可。`);
     if (audioCnt >= Math.ceil(total / 2))
       warnings.push(`⚠️ 行为冷却令：你在最近 ${total} 条消息里已经连续使用了 ${audioCnt} 次【语音条 [AUDIO]】。接下来【至少 3 条】消息里，请绝对不要再发语音，用文字表达。`);
-    if (recallCnt >= Math.ceil(total / 2))
-      warnings.push(`⚠️ 行为冷却令：你在最近 ${total} 条消息里已经连续使用了 ${recallCnt} 次【撤回 [RECALL]】。接下来【至少 3 条】消息里，请绝对不要再撤回，直接发出你想说的话。`);
+    // 🌟 撤回门槛单独收紧：撤回本就该「极少使用」，最近 6 条里只要出现 2 次就立即冷却
+    if (recallCnt >= 2)
+      warnings.push(`⚠️ 行为冷却令（撤回严重超频）：你在最近 ${total} 条消息里已经撤回了 ${recallCnt} 次。撤回是【极少数情况】才允许的行为，正常人不会每轮都撤回。接下来【至少 5 条】消息里，绝对禁止再使用 [RECALL]，把想说的话直接发出来即可。`);
 
     if (warnings.length === 0) return '';
     return `\n# 🚨 当前行为冷却指令（最高优先级，立即执行）\n${warnings.join('\n')}\n`;
@@ -18078,7 +18869,11 @@ ${histSection}
 2. **策略性失言：** 差点说漏嘴暴露秘密，立刻用别的话掩盖。
 3. **语气不当的修正：** 因情绪说出了过重的话，理智让你想温和些。
 
-**【关键原则】：** 这是高级行为，滥用会显得做作。请保持稀有性，只在真正画龙点睛的时刻使用。
+**【关键原则·硬性频率铁律】：** 撤回是【极其稀有】的高级行为，绝大多数对话轮次都【不应该】出现撤回。
+- 默认状态：每一轮回复都【不撤回】，直接把想说的话发出来。
+- 只有当上面三种「使用时机」之一真实、强烈地成立时才考虑使用，且【连续多轮内最多只能出现一次】。
+- 严禁把撤回当成口头禅或固定句式：如果你最近几条消息里已经撤回过，这一轮就【绝对不要】再撤回。
+- 自检：在输出 [RECALL] 前先问自己「这次不撤回会不会更自然？」——如果答案是「差不多」或「会」，那就【不要撤回】。
 
 **格式（必须严格遵守）：**
 当你想撤回某条消息时，在那条气泡的位置用以下格式输出，不要加任何额外内容：
@@ -18603,6 +19398,101 @@ if (!isRecall && !isHtml && !isQuote && !isAudio && !isEmote && !isTransfer && !
     } catch (e) {}
   }
 
+  // ── 🔒 锁脸 UI（角色专属基准脸）──
+  let _faceConsent = false; // 当前角色是否已勾选授权确认
+
+  function _applyFaceUploadEnabled() {
+    const btn = document.getElementById('cv-face-upload-btn');
+    if (!btn) return;
+    if (_faceConsent) {
+      btn.disabled = false;
+      btn.style.background = '#121212';
+      btn.style.cursor = 'pointer';
+    } else {
+      btn.disabled = true;
+      btn.style.background = '#bbb';
+      btn.style.cursor = 'not-allowed';
+    }
+  }
+
+  function _onFaceConsent(checked) {
+    _faceConsent = !!checked;
+    _applyFaceUploadEnabled();
+  }
+
+  function _pickFace() {
+    if (!_faceConsent) { Toast.show('请先勾选上方的授权确认'); return; }
+    document.getElementById('cv-face-file')?.click();
+  }
+
+  async function _loadFaceLock() {
+    if (!_charId) return;
+    const thumb = document.getElementById('cv-face-thumb');
+    const removeBtn = document.getElementById('cv-face-remove-btn');
+    const fidRow = document.getElementById('cv-face-fidelity-row');
+    const fidToggle = document.getElementById('cv-face-fidelity');
+    const consentBox = document.getElementById('cv-face-consent');
+    let hasFace = false;
+    try {
+      const url = await NovelModule.getCharFaceUrl(_charId);
+      if (url && thumb) {
+        hasFace = true;
+        thumb.style.backgroundImage = `url("${url}")`;
+        thumb.textContent = '';
+        if (removeBtn) removeBtn.style.display = 'block';
+        if (fidRow) fidRow.style.display = 'flex';
+      } else if (thumb) {
+        thumb.style.backgroundImage = '';
+        thumb.textContent = '无';
+        if (removeBtn) removeBtn.style.display = 'none';
+        if (fidRow) fidRow.style.display = 'none';
+      }
+    } catch (e) {}
+    // 已有基准脸 → 视为已授权（允许直接更换）；否则要求重新勾选
+    _faceConsent = hasFace;
+    if (consentBox) consentBox.checked = hasFace;
+    _applyFaceUploadEnabled();
+    // 保真度开关状态
+    try {
+      const face = await NovelModule._getCharFace(_charId);
+      if (fidToggle) fidToggle.checked = (face.fidelity === 'high');
+    } catch (e) {}
+    // 绑定文件选择（每个角色重绑一次即可，用 onchange 覆盖）
+    const fileInput = document.getElementById('cv-face-file');
+    if (fileInput) {
+      fileInput.onchange = async (e) => {
+        const f = e.target.files && e.target.files[0];
+        if (!f) return;
+        if (!_faceConsent) { Toast.show('请先勾选授权确认'); e.target.value = ''; return; }
+        if (f.size > 8 * 1024 * 1024) { Toast.show('图片请小于 8MB'); e.target.value = ''; return; }
+        try {
+          await NovelModule.saveCharFace(_charId, f);
+          Toast.show('基准脸已保存');
+          await _loadFaceLock();
+        } catch (err) { Toast.show('保存失败：' + (err.message || '')); }
+        e.target.value = '';
+      };
+    }
+  }
+
+  async function _removeFace() {
+    if (!_charId) return;
+    try {
+      await NovelModule.removeCharFace(_charId);
+      Toast.show('已移除基准脸');
+      await _loadFaceLock();
+    } catch (e) { Toast.show('移除失败'); }
+  }
+
+  async function _setFaceFidelity(isHigh) {
+    if (!_charId) return;
+    try {
+      await NovelModule.setCharFaceFidelity(_charId, isHigh ? 'high' : 'low');
+      Toast.show(isHigh ? '已切换：高保真锁脸' : '已切换：自由姿势');
+    } catch (e) {}
+  }
+
+
   async function _loadNovelToggle() {
     try {
       const v = await DB.settings.get(_novelToggleKey());
@@ -18694,6 +19584,7 @@ if (!isRecall && !isHtml && !isQuote && !isAudio && !isEmote && !isTransfer && !
     _loadNovelToggle();
     _loadNovelPrefix();
     _loadNovelNegative();
+    _loadFaceLock();
     _syncNovelCharPromptsVisibility();
     _loadTranslateToggle();
     _loadMemoryRounds();
@@ -18703,6 +19594,7 @@ if (!isRecall && !isHtml && !isQuote && !isAudio && !isEmote && !isTransfer && !
     _loadCustomCSS();
     _loadMemorySettings();
     _loadOfflineSettings();
+    PromptPresetModule.renderChat();
 
   // 🌟 核心修复：如果是群聊，暴力隐藏所有单聊专属的设置项
     const panel = document.getElementById('cv-settings-panel');
@@ -20690,7 +21582,7 @@ if (action === 'quote') {
     document.getElementById('cv-dist-overlay').classList.remove('active');
   }
   
-  return { enter, back, openQuickReply, closeQuickReply,openSettings, closeSettings, openFuncPanel, loadMore, sendUserMsg, sendAndTriggerAI, fetchModels, closeApiModal, confirmApi, openRecallModal, closeRecallModal, collectTransfer, openHangTag, closeHangTag, tearHangTag, sendUserTransfer, sendImgMsg, closeMenu,handleMenuAction,cancelQuote, updateMultiSelectUI, cancelMultiSelect, favoriteSelected, deleteSelected,addEmoteToPreview,_openImgViewer, _openImgViewerFromEl, _viewerDownloadImage, _regenerateNovelFromViewer, toggleAudio, clearWallpaper, clearHistory, deleteChat, _toggleAccordion, _selectRadio, _selectPersona,_removePendingImg,playAudio, previewVoice, _toggleTTS, _toggleNovel, _toggleTranslate, _appendNovelImageMessage, _replaceMessageBubble, _showNovelPending, _hideNovelPending, _toggleAlias,copyDefaultCSS, applyAndSaveCSS, clearCustomCSS, saveCssPreset, confirmSaveCssPreset, applyCssPreset, deleteCssPreset,manualSummarize, clearMemory, archiveToWorldBook, confirmArchive, syncSummary, _onSummaryEdit,openCallRecordModal, closeCallRecordModal,_toggleOfflineMsg, _scrollToBottom, openContextConsole,_splitAiBubbles, openLocModal, closeLocModal, sendLocationMsg, openDistModal, closeDistModal };
+  return { enter, back, openQuickReply, closeQuickReply,openSettings, closeSettings, openFuncPanel, loadMore, sendUserMsg, sendAndTriggerAI, fetchModels, closeApiModal, confirmApi, openRecallModal, closeRecallModal, collectTransfer, openHangTag, closeHangTag, tearHangTag, sendUserTransfer, sendImgMsg, closeMenu,handleMenuAction,cancelQuote, updateMultiSelectUI, cancelMultiSelect, favoriteSelected, deleteSelected,addEmoteToPreview,_openImgViewer, _openImgViewerFromEl, _viewerDownloadImage, _regenerateNovelFromViewer, toggleAudio, clearWallpaper, clearHistory, deleteChat, _toggleAccordion, _selectRadio, _selectPersona,_removePendingImg,playAudio, previewVoice, _toggleTTS, _toggleNovel, _toggleTranslate, _appendNovelImageMessage, _replaceMessageBubble, _showNovelPending, _hideNovelPending, _toggleAlias,copyDefaultCSS, applyAndSaveCSS, clearCustomCSS, saveCssPreset, confirmSaveCssPreset, applyCssPreset, deleteCssPreset,manualSummarize, clearMemory, archiveToWorldBook, confirmArchive, syncSummary, _onSummaryEdit,openCallRecordModal, closeCallRecordModal,_toggleOfflineMsg, _scrollToBottom, openContextConsole,_splitAiBubbles, openLocModal, closeLocModal, sendLocationMsg, openDistModal, closeDistModal, _removeFace, _setFaceFidelity, _onFaceConsent, _pickFace };
 })();
 /** 供 NovelModule 等脚本用 window 访问；const 不会自动挂到 window */
 window.ConvModule = ConvModule;
@@ -21836,6 +22728,12 @@ ${formatBlock}
            
            if (baseCfg) {
                const mergedCfg = { ...baseCfg, negativePrompt: charNeg || baseCfg.negativePrompt };
+               try {
+                 if (charId && NovelModule._getCharFace) {
+                   const face = await NovelModule._getCharFace(charId);
+                   if (face.blob) { mergedCfg.faceRefBlob = face.blob; mergedCfg.faceFidelity = face.fidelity; }
+                 }
+               } catch (e) {}
                const augPrompt = [charPos, imgPrompt].filter(Boolean).join(', ');
                
                try {
@@ -21917,15 +22815,61 @@ const MonologueModule = (() => {
     wavePath.style.strokeDashoffset = '0';
   }
 
+  // 把缓存的 state 直接渲染进面板（零等待）
+  function _renderState(data) {
+    const d = new Date(data.timestamp || Date.now());
+    document.getElementById('cv-mn-time').textContent = `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')} CST`;
+    document.getElementById('cv-mn-location').textContent  = data.location || 'Unknown';
+    document.getElementById('cv-mn-weather').textContent   = data.weather  || 'Unknown';
+    document.getElementById('cv-mn-quote').innerHTML       = (data.monologue || '...').replace(/\n/g, '<br>');
+    document.getElementById('cv-mn-ootd').textContent      = data.ootd  || '—';
+    document.getElementById('cv-mn-vibe').textContent      = data.vibe  || '—';
+    document.getElementById('cv-mn-state').textContent     = data.state || '—';
+    document.getElementById('cv-mn-em-title').textContent  = data.emotionTitle  || '情绪波动';
+    document.getElementById('cv-mn-em-status').textContent = data.emotionStatus || '未知';
+  }
+
+  // 入口：点头像调用。优先秒开上次缓存，没有就显示落地页，绝不自动生成。
   async function open(charId) {
-    const overlay = document.getElementById('cv-monologue-overlay');
-    const loader = document.getElementById('cv-mn-loader');
-    const board = document.getElementById('cv-mn-board');
-    
-    // 初始化 UI 状态
+    _currentCharId = charId;
+    const overlay  = document.getElementById('cv-monologue-overlay');
+    const loader   = document.getElementById('cv-mn-loader');
+    const landing  = document.getElementById('cv-mn-landing');
+    const board    = document.getElementById('cv-mn-board');
+
     overlay.classList.add('active');
-    loader.classList.remove('hidden');
+    loader.classList.add('hidden');
     board.classList.remove('show');
+    document.getElementById('cv-mn-history-wrap').classList.remove('active');
+
+    let lastState = null;
+    try { lastState = await DB.settings.get(STATE_KEY_PREFIX + charId); } catch(e) {}
+
+    if (lastState) {
+      // 有缓存 → 秒开上次心声（带 RE-LISTEN 按钮可重新生成）
+      landing.classList.add('hidden');
+      _renderState(lastState);
+      board.classList.add('show');
+      setTimeout(_drawElegantCurve, 400);
+    } else {
+      // 没缓存 → 落地页，让用户自己选生成 or 看历史
+      landing.classList.remove('hidden');
+    }
+  }
+
+  // 真正调用 API 生成新心声（落地页按钮 / RE-LISTEN 按钮触发）
+  async function generate(charId) {
+    charId = charId || _currentCharId;
+    if (!charId) return;
+    _currentCharId = charId;
+
+    const loader  = document.getElementById('cv-mn-loader');
+    const landing = document.getElementById('cv-mn-landing');
+    const board   = document.getElementById('cv-mn-board');
+
+    landing.classList.add('hidden');
+    board.classList.remove('show');
+    loader.classList.remove('hidden');
 
     // 填充当前时间
     const now = new Date();
@@ -22035,14 +22979,7 @@ JSON 格式：
       await DB.settings.set(HISTORY_KEY_PREFIX + charId, history);
 
       // 填入数据到 UI
-      document.getElementById('cv-mn-location').textContent = data.location || 'Unknown';
-      document.getElementById('cv-mn-weather').textContent  = data.weather || 'Unknown';
-      document.getElementById('cv-mn-quote').innerHTML      = (data.monologue || '...').replace(/\n/g, '<br>');
-      document.getElementById('cv-mn-ootd').textContent     = data.ootd || '—';
-      document.getElementById('cv-mn-vibe').textContent     = data.vibe || '—';
-      document.getElementById('cv-mn-state').textContent    = data.state || '—';
-      document.getElementById('cv-mn-em-title').textContent = data.emotionTitle || '情绪波动';
-      document.getElementById('cv-mn-em-status').textContent= data.emotionStatus || '未知';
+      _renderState(currentState);
 
       // 切换动画状态
       loader.classList.add('hidden');
@@ -22052,7 +22989,9 @@ JSON 格式：
     } catch (e) {
       console.error('[MonologueModule] error', e);
       Toast.show(e.message || '获取心声失败');
-      close();
+      loader.classList.add('hidden');
+      // 失败时退回落地页，便于重试，而非直接关闭
+      document.getElementById('cv-mn-landing').classList.remove('hidden');
     }
   }
 
@@ -22108,7 +23047,7 @@ JSON 格式：
     document.getElementById('cv-mn-history-wrap').classList.remove('active');
   }
 
-  return { open, close, openHistory, closeHistory };
+  return { open, generate, close, openHistory, closeHistory };
 })();
 // ============================================================
 // StoryModule — 剧情模式选角模块 (算法提取标签 + 专属莫兰迪配色)
@@ -22301,6 +23240,31 @@ const StoryChatModule = (() => {
     let _cfgTimeAware = true;
     let _editingMsgId = null; 
     let _tempSwipes = {}; 
+    let _storyViewerCtx = { assetKey: '' };
+
+    function _storyImgPromptKey(assetKey) {
+        return `story-img-prompt-${assetKey}`;
+    }
+
+    async function _storyNovelMergedCfg() {
+        const baseCfg = (typeof NovelModule !== 'undefined' && NovelModule.getCfg)
+            ? (NovelModule.getCfg() || await NovelModule.init())
+            : null;
+        if (!baseCfg) return null;
+        const merged = {
+            ...baseCfg,
+            negativePrompt: _cfgNovelNegative || baseCfg.negativePrompt,
+            size: _cfgNovelSize,
+        };
+        // 🔒 锁脸：剧情自动复用该角色在聊天里设的基准脸（剧情设置无需另传）
+        try {
+            if (_storyCharId && NovelModule._getCharFace) {
+                const face = await NovelModule._getCharFace(_storyCharId);
+                if (face.blob) { merged.faceRefBlob = face.blob; merged.faceFidelity = face.fidelity; }
+            }
+        } catch (e) { console.warn('[Story][Face] 读取基准脸失败', e); }
+        return merged;
+    }
     
     const MORANDI_COLORS =[
         '#111111', '#333333', '#555555', '#888888', // 黑灰
@@ -22763,6 +23727,7 @@ const StoryChatModule = (() => {
     async function openSettings() {
         await _loadSettings();
         await _renderWBList();
+        PromptPresetModule.renderStory();
         document.getElementById('sc-settings-panel').classList.add('active');
     }
 
@@ -22987,24 +23952,16 @@ await DB.settings.del(`offline-memory-${_realCharId}`);
         }
 
         try {
-            // 获取底层全局生图配置（比如后端的 API Key 等）
-            const baseCfg = (typeof NovelModule !== 'undefined' && NovelModule.getCfg) ? (NovelModule.getCfg() || await NovelModule.init()) : null;
-            
-            // 🌟 核心：用剧情专属的“画幅、正向、反向提示词” 强行覆盖全局配置
-            const mergedCfg = baseCfg ? { 
-                ...baseCfg, 
-                negativePrompt: _cfgNovelNegative || baseCfg.negativePrompt,
-                size: _cfgNovelSize // 强行使用剧情面板设定的画幅尺寸！
-            } : null;
+            const mergedCfg = await _storyNovelMergedCfg();
 
             let appendedImgs = "";
             for (const p of prompts) {
-                // 拼接剧情专属画风前缀
                 const augPrompt = [_cfgNovelPrefix, p].filter(Boolean).join(', ');
                 const blob = await NovelModule.generateImageBlob(augPrompt, mergedCfg);
                 if (blob) {
                     const assetKey = `story-img-${_storyCharId}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
                     await Assets.saveBlob(assetKey, blob, 1200, 0.85);
+                    try { await DB.settings.set(_storyImgPromptKey(assetKey), augPrompt); } catch (e) { /* ignore */ }
                     appendedImgs += `\n\n[IMG:${assetKey}]`;
                 }
             }
@@ -23047,6 +24004,7 @@ await DB.settings.del(`offline-memory-${_realCharId}`);
                 <div id="sc-img-viewer-inner">
                     <img id="sc-img-viewer-img" src="" alt="">
                     <div id="sc-img-viewer-actions">
+                        <button type="button" class="cv-img-viewer-btn" id="sc-img-viewer-regen" onclick="StoryChatModule.regenerateStoryImage()"><i class="ph ph-arrows-clockwise"></i> 重新生图</button>
                         <button type="button" class="cv-img-viewer-btn" onclick="StoryChatModule.downloadImage()"><i class="ph ph-download-simple"></i> Download</button>
                     </div>
                 </div>
@@ -23062,7 +24020,35 @@ await DB.settings.del(`offline-memory-${_realCharId}`);
             document.getElementById('story-chat-screen').appendChild(viewer);
         }
         document.getElementById('sc-img-viewer-img').src = el.src;
+        _storyViewerCtx = { assetKey: el.dataset.assetKey || '' };
         viewer.classList.add('active');
+    }
+
+    async function regenerateStoryImage() {
+        const { assetKey } = _storyViewerCtx || {};
+        if (!assetKey) { Toast.show('无法重 roll'); return; }
+        let prompt = '';
+        try { prompt = await DB.settings.get(_storyImgPromptKey(assetKey)) || ''; } catch (e) { /* ignore */ }
+        if (!prompt.trim()) { Toast.show('旧图无提示词，无法重 roll'); return; }
+        const btn = document.getElementById('sc-img-viewer-regen');
+        if (btn) btn.disabled = true;
+        try {
+            const blob = await NovelModule.generateImageBlob(prompt, await _storyNovelMergedCfg());
+            if (!blob) return;
+            Assets.clearCache(assetKey);
+            await Assets.saveBlob(assetKey, blob, 1200, 0.85);
+            const url = await Assets.getUrl(assetKey);
+            if (url) {
+                document.getElementById('sc-img-viewer-img').src = url;
+                document.querySelectorAll(`.sc-cinematic-img[data-asset-key="${assetKey}"]`).forEach(img => { img.src = url; });
+            }
+            Toast.show('已重 roll');
+        } catch (e) {
+            console.error('[StoryChat] regen image', e);
+            Toast.show('重 roll 失败');
+        } finally {
+            if (btn) btn.disabled = false;
+        }
     }
 
     function downloadImage() {
@@ -24517,7 +25503,7 @@ ${newMessagesLog}
    return { 
         open, loadMore, reroll, deleteMsg, 
         openSettings, closeSettings, saveSettings, toggleWBMount, clearArchive,
-        editMsg, confirmEditMsg, closeEditModal, swipeMsg, openColorModal, closeColorModal, changeColor, archiveStory,createSnapshot, openSnapshotModal, closeSnapshotModal, loadSnapshot, deleteSnapshot, startNewTimeline, confirmCreateSnapshot, closeSnapNameModal, wrapStory, openCssModal, closeCssModal, copyDefaultCss, applyAndSaveCss, clearCss, saveCssPreset, confirmSaveCssPreset, applyCssPreset, deleteCssPreset,openImgViewer, downloadImage, openContextConsole
+        editMsg, confirmEditMsg, closeEditModal, swipeMsg, openColorModal, closeColorModal, changeColor, archiveStory,createSnapshot, openSnapshotModal, closeSnapshotModal, loadSnapshot, deleteSnapshot, startNewTimeline, confirmCreateSnapshot, closeSnapNameModal, wrapStory, openCssModal, closeCssModal, copyDefaultCss, applyAndSaveCss, clearCss, saveCssPreset, confirmSaveCssPreset, applyCssPreset, deleteCssPreset,openImgViewer, downloadImage, regenerateStoryImage, openContextConsole
     };
 })();
 
@@ -25239,6 +26225,7 @@ async function initApp() {
 { console.warn('codex init failed', e); }
 try { EditorialModule.init(); } catch(e) { console.warn('editorial init failed', e); }
 try { await CoupleModule.init(); } catch(e) { console.warn('couple init failed', e); }
+try { await GroupStoryModule.init(); } catch(e) { console.warn('groupstory init failed', e); }
 
 // 主题
   try {
