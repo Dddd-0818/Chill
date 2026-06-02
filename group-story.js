@@ -150,12 +150,12 @@ const GroupStoryModule = (() => {
   }
 
   function _switchTab(tab) {
-  document.querySelectorAll('.gs-tab').forEach(t => t.classList.toggle('on', t.dataset.tab === tab));
-  document.getElementById('gs-tab-groups').style.display = (tab === 'groups') ? 'flex' : 'none';
-  document.getElementById('gs-tab-cast').style.display   = (tab === 'cast')   ? 'flex' : 'none';
-  if (tab === 'groups') _renderMyGroups();
-  if (tab === 'cast')   _renderCast();
-}
+    document.querySelectorAll('.gs-tab').forEach(t => t.classList.toggle('on', t.dataset.tab === tab));
+    document.getElementById('gs-tab-groups').style.display = (tab === 'groups') ? 'flex' : 'none';
+    document.getElementById('gs-tab-cast').style.display   = (tab === 'cast')   ? 'flex' : 'none';
+    if (tab === 'groups') _renderMyGroups();
+    if (tab === 'cast')   _renderCast();
+  }
 
   // ── Tab1：我的群像 ──
   async function _renderMyGroups() {
