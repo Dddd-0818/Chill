@@ -2441,7 +2441,7 @@ ${log}
 .gs-grp-act+.gs-grp-act{border-top:0.5px solid rgba(0,0,0,.06);}
 
 /* ── 选角网格（复用 ct-card 视觉，命名空间化） ── */
-#gs-cast-grid{display:grid;grid-template-columns:1fr 1fr;align-content:start;gap:14px;padding:6px 16px 110px;overflow-y:auto;flex:1;scrollbar-width:none;}
+#gs-cast-grid{display:grid;grid-template-columns:1fr 1fr;grid-auto-rows:max-content;align-content:start;gap:14px;padding:6px 16px 110px;overflow-y:auto;flex:1;scrollbar-width:none;-webkit-overflow-scrolling:touch;}
 #gs-cast-grid::-webkit-scrollbar{display:none;}
 .gs-ct-card{position:relative;background:rgba(255,255,255,.82);border:1px solid rgba(0,0,0,.15);border-radius:14px;overflow:hidden;cursor:pointer;transition:transform .3s cubic-bezier(.16,1,.3,1);-webkit-tap-highlight-color:transparent;box-shadow:0 0 0 4px rgba(0,0,0,.06);outline:1px solid rgba(0,0,0,.35);}
 .gs-ct-card:active{transform:scale(.97);}
