@@ -3914,6 +3914,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
   z-index: 8499;
   display: none;
   flex-direction: column;
+  max-height: calc(100vh - 90px);
   box-shadow: 0 12px 40px rgba(0,0,0,.14);
   overflow: hidden;
   transform-origin: bottom right;
@@ -4023,7 +4024,12 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
   overflow: hidden;
   transition: max-height .28s cubic-bezier(.4,0,.2,1);
 }
-.gf-api-wrapper.gf-api-open { max-height: 400px; }
+.gf-api-wrapper.gf-api-open {
+  max-height: 320px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
 
 /* ── model picker inside API item ── */
 .gf-api-item-row {
@@ -4155,6 +4161,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
   margin-top: 2px;
   letter-spacing: .06em;
 }
+
 </style>
 <body>
 <div class="device">
@@ -20440,6 +20447,12 @@ ${rawText}`;
       _totalMsgs = 0;
       _offset    = 0;
 
+      // 清空心声（state + history），随对话一起消散
+      try {
+        await DB.settings.del('monologue-state-'   + _charId);
+        await DB.settings.del('monologue-history-' + _charId);
+      } catch(e) {}
+
      // 处理潜意识（群聊没有潜意识，直接跳过）
       if (!_isGroup) {
         const mem = await MemoryModule.load(_charId);
@@ -20777,7 +20790,9 @@ ${rawText}`;
         `alias-mode-${_charId}`,
         `char-css-${_charId}`,
        `css-presets-${_charId}`,
-       `conv-blur-${_charId}`
+       `conv-blur-${_charId}`,
+       `monologue-state-${_charId}`,
+       `monologue-history-${_charId}`
       ];
       for (const k of keysToDel) {
         await DB.settings.del(k).catch(()=>{});
@@ -25651,8 +25666,12 @@ function _bindDrag() {
     wrapper?.classList.toggle('gf-api-open', _apiSectionOpen);
     label?.classList.toggle('gf-sec-open', _apiSectionOpen);
     if (_apiSectionOpen) await _loadApiList();
-    _positionPanel();
+    // 折叠/展开只重算高度约束，不重新翻转方向，避免面板跳动
+    _clampPanelHeight();
   }
+
+  // 翻转方向只在打开面板时决定一次
+  let _panelFlipped = false;
 
   function _positionPanel() {
     const fab   = document.getElementById('g-fab');
@@ -25660,16 +25679,39 @@ function _bindDrag() {
     if (!fab || !panel) return;
     const fr = fab.getBoundingClientRect();
     const pw = 218;
-    const ph = panel.offsetHeight || 240;
-    let top  = fr.top  - ph - 10;
     let left = fr.left + fr.width / 2 - pw / 2;
-    if (top  < 8) top  = fr.bottom + 10;
     if (left < 8) left = 8;
     if (left + pw > window.innerWidth - 8) left = window.innerWidth - pw - 8;
-    panel.style.top    = top  + 'px';
-    panel.style.left   = left + 'px';
-    panel.style.right  = 'auto';
-    panel.style.bottom = 'auto';
+
+    // 默认面板在 FAB 上方：锚定底边到 FAB 上沿，向上生长
+    // 若上方空间不足则翻转到下方，锚定顶边到 FAB 下沿
+    const spaceAbove = fr.top - 10;
+    _panelFlipped = spaceAbove < 240; // 上方放不下最小高度就翻到下面
+
+    panel.style.left  = left + 'px';
+    panel.style.right = 'auto';
+    if (_panelFlipped) {
+      panel.style.top    = (fr.bottom + 10) + 'px';
+      panel.style.bottom = 'auto';
+      panel.style.transformOrigin = 'top right';
+    } else {
+      panel.style.bottom = (window.innerHeight - fr.top + 10) + 'px';
+      panel.style.top    = 'auto';
+      panel.style.transformOrigin = 'bottom right';
+    }
+    _clampPanelHeight();
+  }
+
+  // 根据当前锚点方向约束面板最大高度，让它始终留在视口内
+  function _clampPanelHeight() {
+    const fab   = document.getElementById('g-fab');
+    const panel = document.getElementById('g-fab-panel');
+    if (!fab || !panel) return;
+    const fr = fab.getBoundingClientRect();
+    const avail = _panelFlipped
+      ? window.innerHeight - (fr.bottom + 10) - 8   // 向下：底部到屏幕底
+      : (fr.top - 10) - 8;                          // 向上：顶部到屏幕顶
+    panel.style.maxHeight = Math.max(160, avail) + 'px';
   }
 
   /* ── API 列表渲染 ── */

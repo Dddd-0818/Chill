@@ -747,7 +747,57 @@ ${chatLog}`;
             const start = cleaned.indexOf('{');
             const end = cleaned.lastIndexOf('}');
             if (start === -1 || end === -1) throw new Error('AI 返回 JSON 解析失败');
-            const data = JSON.parse(cleaned.substring(start, end + 1));
+            const rawJson = cleaned.substring(start, end + 1);
+
+            // 🌟 仅转义【字符串字面量内部】的裸控制字符（修 "Bad control character"）
+            const sanitizeCtrl = (s) => {
+                let out = '', inStr = false, escaped = false;
+                const map = { '\n': '\\n', '\r': '\\r', '\t': '\\t', '\b': '\\b', '\f': '\\f' };
+                for (const ch of s) {
+                    if (escaped) { out += ch; escaped = false; continue; }
+                    if (ch === '\\') { out += ch; escaped = true; continue; }
+                    if (ch === '"') { inStr = !inStr; out += ch; continue; }
+                    if (inStr && ch <= '\u001F') { out += (map[ch] || ''); continue; }
+                    out += ch;
+                }
+                return out;
+            };
+
+            // 🌟 提取单个字符串字段的值，容忍内部未转义的引号/换行（修 "Unrecognized token"）
+            // 思路：定位 "key": "  之后，一直取到【该字段的结束引号】——
+            // 结束引号判定为：后面紧跟 , 或 } （允许中间有空白/换行）。
+            const extractField = (src, key) => {
+                const m = src.match(new RegExp(`"${key}"\\s*:\\s*"`));
+                if (!m) return null;
+                const from = m.index + m[0].length;
+                const tail = src.slice(from);
+                // 找“引号 + 可选空白 + (, 或 })”作为真正的字段结尾
+                const endM = tail.match(/"\s*(,|\})/);
+                const val = endM ? tail.slice(0, endM.index) : tail;
+                return val
+                    .replace(/\\n/g, '\n').replace(/\\r/g, '\r').replace(/\\t/g, '\t')
+                    .replace(/\\"/g, '"').replace(/\\\\/g, '\\')
+                    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '');
+            };
+
+            let data;
+            try {
+                // 第一层：清洗控制字符后常规解析
+                data = JSON.parse(sanitizeCtrl(rawJson));
+            } catch (parseErr) {
+                console.warn('[Diary] 标准解析失败，启用字段兜底提取：', parseErr.message);
+                // 第二层：逐字段正则抠值，绕开整个 JSON 解析
+                data = {
+                    titleEn: extractField(rawJson, 'titleEn'),
+                    titleCn: extractField(rawJson, 'titleCn'),
+                    locationEn: extractField(rawJson, 'locationEn'),
+                    locationCoords: extractField(rawJson, 'locationCoords'),
+                    weatherIcon: extractField(rawJson, 'weatherIcon'),
+                    weatherText: extractField(rawJson, 'weatherText'),
+                    content: extractField(rawJson, 'content'),
+                };
+                if (!data.content) throw new Error('AI 返回格式异常，无法提取正文');
+            }
 
             // 生成随机排版符号和条形码
             const symbols =['*', '¶', '†', '§', '‡', '¥', '∆', '∞'];

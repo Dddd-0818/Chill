@@ -4,6 +4,65 @@
 // LifestyleModule — 角色行程与生活系统 (动态时空推演版 - 修复)
 // ============================================================
 const LifestyleModule = (() => {
+    // ─────────────────────────────────────────────
+    // 🌟 通用容错 JSON 解析：修复 AI 返回的几类常见非法格式
+    //    1) 字符串内裸控制字符 (Bad control character)
+    //    2) 键名缺双引号 / 用单引号 (Expected double-quoted property name)
+    //    3) 末尾多余逗号 (trailing comma)
+    // ─────────────────────────────────────────────
+    function _safeParseJSON(raw) {
+        const cleaned = String(raw).replace(/```json|```/g, '').trim();
+        const start = cleaned.indexOf('{');
+        const end = cleaned.lastIndexOf('}');
+        if (start === -1 || end === -1) throw new Error('AI返回数据异常');
+        let s = cleaned.substring(start, end + 1);
+
+        // (1) 仅转义【字符串字面量内部】的裸控制字符
+        const sanitizeCtrl = (str) => {
+            let out = '', inStr = false, escaped = false;
+            const map = { '\n': '\\n', '\r': '\\r', '\t': '\\t', '\b': '\\b', '\f': '\\f' };
+            for (const ch of str) {
+                if (escaped) { out += ch; escaped = false; continue; }
+                if (ch === '\\') { out += ch; escaped = true; continue; }
+                if (ch === '"') { inStr = !inStr; out += ch; continue; }
+                if (inStr && ch <= '\u001F') { out += (map[ch] || ''); continue; }
+                out += ch;
+            }
+            return out;
+        };
+
+        try {
+            return JSON.parse(sanitizeCtrl(s));
+        } catch (e1) {
+            console.warn('[Lifestyle] 标准解析失败，启用格式修复：', e1.message);
+            // (2)(3) 仅在【字符串外部】修结构问题，避免误伤正文内容
+            let out = '', inStr = false, escaped = false;
+            s = sanitizeCtrl(s);
+            for (let i = 0; i < s.length; i++) {
+                const ch = s[i];
+                if (escaped) { out += ch; escaped = false; continue; }
+                if (ch === '\\') { out += ch; escaped = true; continue; }
+                if (ch === '"') { inStr = !inStr; out += ch; continue; }
+                if (inStr) { out += ch; continue; }
+                // —— 以下都在字符串外部 ——
+                // 单引号包裹的键/值 → 双引号
+                if (ch === "'") {
+                    let j = i + 1, inner = '';
+                    while (j < s.length && s[j] !== "'") { inner += s[j]; j++; }
+                    out += '"' + inner.replace(/"/g, '\\"') + '"';
+                    i = j;
+                    continue;
+                }
+                out += ch;
+            }
+            // 给裸键名补双引号： {key:  或  ,key:  →  "key":
+            out = out.replace(/([{,]\s*)([A-Za-z_$][\w$]*)(\s*:)/g, '$1"$2"$3');
+            // 去掉末尾多余逗号： ,}  ,]
+            out = out.replace(/,(\s*[}\]])/g, '$1');
+            return JSON.parse(out);
+        }
+    }
+
     let _initialized = false;
     let _chars =[];
     let _currentDetailCharId = null;
@@ -939,12 +998,7 @@ ${historyText || '（暂无记录）'}
                 const response = await ApiHelper.chatCompletion(activeApi,[{ role: 'user', content: prompt }]);
                 console.log("%c【AI 决策输出】", "color:#2d6a4a; font-weight:bold;", "\n" + response);
 
-                const cleaned = response.replace(/```json|```/g, '').trim();
-                const start = cleaned.indexOf('{');
-                const end = cleaned.lastIndexOf('}');
-                if (start === -1 || end === -1) throw new Error('AI返回数据异常');
-                
-                const aiData = JSON.parse(cleaned.substring(start, end + 1));
+                const aiData = _safeParseJSON(response);
                 console.log("%c【解析结果】", "color:#1976d2; font-weight:bold;", `行动: ${aiData.action} | 独白: ${aiData.reason}`);
                 console.groupEnd();
                 
@@ -1431,12 +1485,7 @@ ${char.mbti ? 'MBTI：' + char.mbti : ''}
             
             console.log("%c【AI 原始输出】", "color:#2d6a4a; font-weight:bold;", "\n" + response);
 
-            const cleaned = response.replace(/```json|```/g, '').trim();
-            const start = cleaned.indexOf('{');
-            const end = cleaned.lastIndexOf('}');
-            if (start === -1 || end === -1) throw new Error('AI返回数据异常');
-            
-            const routineData = JSON.parse(cleaned.substring(start, end + 1));
+            const routineData = _safeParseJSON(response);
             
             console.log("%c【解析成功】", "color:#1976d2; font-weight:bold;", routineData);
             console.groupEnd();

@@ -16,6 +16,10 @@ const GroupStoryModule = (() => {
   let _activeStory  = null;                        // 当前打开的群组档案
   let _userAvatarUrl = '';                         // 当前面具的真实头像URL（聊天页用户卡片用）
   let _aiBusy        = false;                       // AI 续写中标志，防重复触发
+  let _sessionApiId  = null;                         // 群像会话级 API 覆盖（不写 DB、不同步设置页）
+  let _sessionModel  = null;                         // 群像会话级模型覆盖
+  let _gsFetchedModels = {};                          // { [apiId]: string[] } 模型列表缓存
+  let _gsExpandedApi = null;                          // 当前展开模型选择器的 API id
   let _offset        = 0;                            // 分页：已加载条数
   let _totalMsgs     = 0;                            // 分页：消息总数
   let _nameMap       = {};                           // 缓存：角色 id→名字（loadMore 复用）
@@ -47,6 +51,164 @@ const GroupStoryModule = (() => {
     try { await DB.settings.set(STORE_KEY, _stories); } catch (e) { console.error('[GroupStory] persist', e); }
   }
 
+  // ───────────────────────── 🎵 网易云配乐 ─────────────────────────
+  let _gsAudio = null;   // 群像全局单一播放实例，避免多 <audio> 抢声道
+
+  async function _getNeteaseConfig() {
+    try {
+      const c = await DB.settings.get('gs-netease-config');
+      return c && typeof c === 'object' ? c : { enabled: false, base: '', cookie: '' };
+    } catch (e) { return { enabled: false, base: '', cookie: '' }; }
+  }
+  async function _neteaseReady() {
+    const c = await _getNeteaseConfig();
+    return !!(c.enabled && c.base && c.base.trim() && c.cookie && c.cookie.trim());
+  }
+  function _slimCookie(raw) {
+    if (!raw) return '';
+    const m = String(raw).match(/MUSIC_U=[^;]+/);
+    return m ? m[0] : String(raw).trim();
+  }
+
+  // 抓取：关键词 → { id, title, artist, audioUrl, coverUrl } | null
+  async function _fetchNeteaseMusic(keyword) {
+    if (!keyword || keyword === 'null') return null;
+    const cfg = await _getNeteaseConfig();
+    if (!cfg.enabled || !cfg.base || !cfg.cookie) return null;
+    const base = cfg.base.trim().replace(/\/+$/, '');
+    const cookieParam = `&cookie=${encodeURIComponent(_slimCookie(cfg.cookie))}`;
+    const ts = `timerstamp=${Date.now()}`;
+    try {
+      const sRes = await fetch(`${base}/search?keywords=${encodeURIComponent(keyword)}&limit=5&${ts}${cookieParam}`);
+      const sData = await sRes.json();
+      const songs = sData.result?.songs;
+      if (!songs || !songs.length) return null;
+      const ids = songs.map(s => s.id).join(',');
+      const uRes = await fetch(`${base}/song/url/v1?id=${ids}&level=exhigh&${ts}${cookieParam}`);
+      const uData = await uRes.json();
+      const valid = uData.data?.find(it => it.url && it.url.trim());
+      if (!valid) return null;
+      const meta = songs.find(s => s.id === valid.id) || songs[0];
+      let coverUrl = '';
+      try {
+        const dRes = await fetch(`${base}/song/detail?ids=${valid.id}&${ts}${cookieParam}`);
+        const dData = await dRes.json();
+        coverUrl = dData.songs?.[0]?.al?.picUrl || '';
+      } catch (e) {}
+      return { id: valid.id, title: meta.name || keyword, artist: meta.artists?.[0]?.name || 'Unknown', audioUrl: valid.url, coverUrl };
+    } catch (e) {
+      console.warn('[GroupStory] 网易云抓取失败', e);
+      return null;
+    }
+  }
+
+  // 播放/暂停（单实例 + 实时重换链 + 互斥）
+  async function toggleMusic(playerEl) {
+    const songId = playerEl.dataset.id;
+    let src = playerEl.dataset.src;
+    if (!songId && !src) return;
+    if (!_gsAudio) { _gsAudio = new Audio(); _gsAudio.loop = true; }
+    const btn = playerEl.querySelector('.gs-music-btn');
+
+    if (_gsAudio.dataset.songId === songId && _gsAudio.src) {
+      if (_gsAudio.paused) { try { await _gsAudio.play(); } catch(e){} _setMusicUI(playerEl, true); }
+      else { _gsAudio.pause(); _setMusicUI(playerEl, false); }
+      return;
+    }
+    if (songId) {
+      if (btn) btn.textContent = '⋯';
+      const cfg = await _getNeteaseConfig();
+      if (cfg.base && cfg.cookie) {
+        try {
+          const base = cfg.base.trim().replace(/\/+$/, '');
+          const cookieParam = `&cookie=${encodeURIComponent(_slimCookie(cfg.cookie))}`;
+          const r = await fetch(`${base}/song/url/v1?id=${songId}&level=exhigh&timerstamp=${Date.now()}${cookieParam}`);
+          const d = await r.json();
+          const v = d.data?.find(it => it.url && it.url.trim());
+          if (v) { src = v.url; playerEl.dataset.src = src; }
+        } catch (e) {}
+      }
+    }
+    if (!src) { Toast.show('暂无可用音源'); if (btn) btn.textContent = '▶'; return; }
+    document.querySelectorAll('.gs-music-player').forEach(p => _setMusicUI(p, false));
+    _gsAudio.src = src;
+    _gsAudio.dataset.songId = songId || '';
+    try { await _gsAudio.play(); _setMusicUI(playerEl, true); }
+    catch (e) { if (btn) btn.textContent = '▶'; }
+  }
+  function _setMusicUI(playerEl, playing) {
+    const btn = playerEl.querySelector('.gs-music-btn');
+    const wave = playerEl.querySelector('.gs-music-wave');
+    if (btn) btn.textContent = playing ? '❚❚' : '▶';
+    if (wave) wave.classList.toggle('playing', playing);
+  }
+
+  // 渲染一张票根风播放条；status==='pending' 时为待抓取占位
+  function _musicCardHtml(seg, msgId, segIdx) {
+    if (seg.status === 'pending') {
+      return `<div class="gs-music-player gs-music-pending" data-msg="${msgId}" data-seg="${segIdx}" data-q="${_esc(seg.query||'')}">
+        <div class="gs-music-cover gs-music-cover-empty"><span class="gs-music-note">♪</span></div>
+        <div class="gs-music-perf">
+          <div class="gs-music-meta"><span class="gs-music-title">检索配乐…</span><span class="gs-music-artist">${_esc(seg.query||'')}</span></div>
+          <div class="gs-music-foot"><span class="gs-music-code">NETEASE · BGM</span><span class="gs-music-wave"><i></i><i></i><i></i><i></i></span></div>
+        </div>
+        <div class="gs-music-stub"><span class="gs-music-btn">⋯</span></div>
+      </div>`;
+    }
+    if (!seg.songId) return '';
+    const cover = seg.cover
+      ? `<div class="gs-music-cover" style="background-image:url('${_esc(seg.cover)}')"></div>`
+      : `<div class="gs-music-cover gs-music-cover-empty"><span class="gs-music-note">♪</span></div>`;
+    return `<div class="gs-music-player" data-id="${seg.songId}" data-src="${_esc(seg.url||'')}" onclick="GroupStoryModule.toggleMusic(this)">
+      ${cover}
+      <div class="gs-music-perf">
+        <div class="gs-music-meta"><span class="gs-music-title">${_esc(seg.title||'')}</span><span class="gs-music-artist">${_esc(seg.artist||'')}</span></div>
+        <div class="gs-music-foot"><span class="gs-music-code">NETEASE · BGM</span><span class="gs-music-wave"><i></i><i></i><i></i><i></i></span></div>
+      </div>
+      <div class="gs-music-stub"><span class="gs-music-btn">▶</span></div>
+    </div>`;
+  }
+
+  // 扫描页面 pending 音乐条 → 抓取 → 写回 segment → 持久化 → 替换 DOM
+  async function _resolvePendingMusic() {
+    const nodes = Array.from(document.querySelectorAll('.gs-music-pending'));
+    for (const node of nodes) {
+      const q = node.dataset.q;
+      const msgId = node.dataset.msg;
+      const segIdx = Number(node.dataset.seg);
+      node.classList.remove('gs-music-pending');
+      const data = await _fetchNeteaseMusic(q);
+      try {
+        const msg = await DB.messages.get(Number(msgId)).catch(() => null);
+        if (msg) {
+          const av = _activeVerOf(msg);
+          const seg = av.segments && av.segments[segIdx];
+          if (seg && seg.type === 'music') {
+            if (data) { seg.status = 'ok'; seg.songId = data.id; seg.url = data.audioUrl; seg.title = data.title; seg.artist = data.artist; seg.cover = data.coverUrl; }
+            else { seg.status = 'fail'; }
+            if (Array.isArray(msg.versions) && msg.versions.length) {
+              const vi = Math.max(0, Math.min(msg.activeVer || 0, msg.versions.length - 1));
+              if (msg.versions[vi]) msg.versions[vi].segments = av.segments;
+            }
+            msg.segments = av.segments;
+            await DB.messages.put(msg).catch(() => {});
+          }
+        }
+      } catch (e) {}
+      if (data) {
+        node.dataset.id = data.id;
+        node.dataset.src = data.audioUrl;
+        node.setAttribute('onclick', 'GroupStoryModule.toggleMusic(this)');
+        const cover = data.coverUrl
+          ? `<div class="gs-music-cover" style="background-image:url('${_esc(data.coverUrl)}')"></div>`
+          : `<div class="gs-music-cover gs-music-cover-empty"><span class="gs-music-note">♪</span></div>`;
+        node.innerHTML = `${cover}<div class="gs-music-perf"><div class="gs-music-meta"><span class="gs-music-title">${_esc(data.title)}</span><span class="gs-music-artist">${_esc(data.artist)}</span></div><div class="gs-music-foot"><span class="gs-music-code">NETEASE · BGM</span><span class="gs-music-wave"><i></i><i></i><i></i><i></i></span></div></div><div class="gs-music-stub"><span class="gs-music-btn">▶</span></div>`;
+      } else {
+        node.remove();
+      }
+    }
+  }
+
   // 桌面图标入口 —— 打开整个群像 screen，落在面具墙
   function open() {
     if (!_mounted) { Toast.show('群像模块未就绪'); return; }
@@ -60,6 +222,18 @@ const GroupStoryModule = (() => {
   function close() {
     const screen = document.getElementById(SCREEN_ID);
     if (screen) screen.classList.remove('active');
+  }
+
+  // 取当前生效的 API：群像会话级覆盖优先，否则回退设置页激活的 API。
+  // 只在群像内生效，不写 DB、不碰全局 DB.api.getActive。
+  async function _getStoryApi() {
+    if (_sessionApiId != null) {
+      try {
+        const api = await DB.api.get(Number(_sessionApiId));
+        if (api) return _sessionModel ? { ...api, model: _sessionModel } : { ...api };
+      } catch (e) {}
+    }
+    try { return await DB.api.getActive(); } catch (e) { return null; }
   }
 
   // 三层 layer 切换（persona / workspace / chat / settings 都在同一 screen 内用 layer 管理）
@@ -530,6 +704,7 @@ const GroupStoryModule = (() => {
       cont.insertAdjacentHTML('beforeend', _renderMsgCard(m, floor++, _nameMap, _avatarMap, wrapped));
     }
     _scrollBottom();
+    requestAnimationFrame(() => _resolvePendingMusic());
   }
 
   // 加载更早一页：取 offset 处的更旧消息，倒序插到顶部，保持滚动位置
@@ -558,6 +733,7 @@ const GroupStoryModule = (() => {
 
     if (_offset >= _totalMsgs && moreEl) moreEl.remove();
     cont.scrollTop = cont.scrollHeight - savedHeight;   // 保持视觉位置不跳
+    requestAnimationFrame(() => _resolvePendingMusic());
   }
 
   // 把 HTML 字符串转成单个元素（insertBefore 用）
@@ -655,7 +831,8 @@ const GroupStoryModule = (() => {
     const _av = _activeVerOf(m);
     const segs = Array.isArray(_av.segments) && _av.segments.length ? _av.segments : [{ type: 'act', content: _av.content || '' }];
     let inner = '';
-    for (const seg of segs) {
+    for (let si = 0; si < segs.length; si++) {
+      const seg = segs[si];
       if (seg.type === 'speak') {
         const nm = _esc(nameMap[String(seg.charId)] || seg.name || '?');
         const av = avatarMap[String(seg.charId)];
@@ -664,6 +841,8 @@ const GroupStoryModule = (() => {
 inner += `<div class="gs-ms"><div class="gs-av-wrap"><div class="gs-av${hasSt ? ' gs-av-st' : ''}" style="background:${_bgOf(seg.charId)};"${avClick}>${av ? `<img src="${av}" alt="">` : _letterOf(nm)}</div></div><div class="gs-bd"><div class="gs-snm">${nm}</div><div class="gs-stx">${_parseGroupStoryRichText(seg.content)}</div></div></div>`;
       } else if (seg.type === 'tens') {
         inner += `<div class="gs-tens">${_esc(seg.content)}</div>`;
+      } else if (seg.type === 'music') {
+        inner += _musicCardHtml(seg, m.id, si);
       } else {
         inner += `<div class="gs-act">${_parseGroupStoryRichText(seg.content)}</div>`;
       }
@@ -814,7 +993,7 @@ inner += `<div class="gs-ms"><div class="gs-av-wrap"><div class="gs-av${hasSt ? 
   // opts.avoidText：作为「上一个写法，请换一种」追加给 AI 的文本
   async function _generateOnce(opts) {
     opts = opts || {};
-    const activeApi = await DB.api.getActive();
+    const activeApi = await _getStoryApi();
     if (!activeApi) { Toast.show('请先在设置中配置并激活 API'); return null; }
 
     // 1. 参演角色档案
@@ -837,7 +1016,8 @@ inner += `<div class="gs-ms"><div class="gs-av-wrap"><div class="gs-av${hasSt ? 
     const wbBlock = await _buildWorldBookBlock();
     const statusOn = await _isStatusOn();
     const statusNames = chars.map(c => c.name);
-    const sysPrompt = _buildGroupSystemPrompt(chars, pov, maxTk, { timeStr, aware, wbBlock, statusOn, statusNames });
+    const musicOn = await _neteaseReady();
+    const sysPrompt = _buildGroupSystemPrompt(chars, pov, maxTk, { timeStr, aware, wbBlock, statusOn, statusNames, musicOn });
 
     // 4. 历史：跳过已杀青楼层（AI 不读），改用剧情档案作为前情提要
     const wrapCursor = await _getWrapCursor();
@@ -1043,6 +1223,23 @@ ${wrapSummary.trim()}`;
   function _buildGroupSystemPrompt(chars, pov, maxTk, timeOpts) {
     timeOpts = timeOpts || {};
     const wbBlock = timeOpts.wbBlock || '';
+    const musicBlock = timeOpts.musicOn ? `
+# 🎵 BGM 选曲指令（重要）
+当某一幕出现强烈的情绪节点（重逢、离别、深夜独处、情绪爆发、暧昧升温、并肩沉默等），你必须为这一幕配一首**网易云音乐**里的歌，单独起一行插入标记，格式严格为：
+【BGM】歌手名 - 歌名
+（例：【BGM】The Weeknd - Starboy）
+
+**⚠️ 选曲铁律：**
+1. **拒绝千篇一律**：严禁总是选《Merry Christmas Mr. Lawrence》《Cornfield Chase》这类烂大街的纯音乐！
+2. **风格多样化**：根据此刻情绪，大胆选择**带人声/歌词**的歌：
+   - 都市情感 → R&B / Soul / City Pop（如 The Weeknd、落日飞车）
+   - 情绪宣泄 → Indie Rock / Alternative（如 Radiohead、告五人）
+   - 怀旧 → 经典华语 / 欧美老歌（如 王菲、Lana Del Rey）
+   - **不要只局限于纯音乐/古典乐！要"像电影插曲"一样有词的歌。**
+3. **精准格式**：关键词必须是 \`歌手名 - 歌名\`，这样搜索才准。
+4. **节制**：一幕之内最多 1 首，普通段落不必配乐，确保每次选的歌是新的、风格独特、契合当下情绪。
+5. 直接写这一行标记，不要解释、不要加书名号、不要写"配乐："之类前缀。
+` : '';
     const statusOn = timeOpts.statusOn;
     const statusNames = timeOpts.statusNames || [];
     const uname = (_activePersona && _activePersona.name) || '我';
@@ -1084,6 +1281,7 @@ ${timeBlock}
 # 🎭 在场的人（${charNames}）
 ${castBlock}
 ${wbBlock}
+${musicBlock}
 # 👤 用户扮演（主角）
 姓名：${uname}${udesc ? `\n【完整人设与背景】：${udesc}` : ''}
  
@@ -1199,6 +1397,13 @@ ${statusNames.map(n => `@${n}|英文名或拼音|身份头衔|当前一句话状
     for (let part of parts) {
       part = part.trim();
       if (!part) continue;
+      // —— 优先拦截 BGM 配乐标记（也是【】开头，须先于角色名解析）——
+      const bgm = part.match(/^【BGM】\s*([^\n\r]+)/i);
+      if (bgm) {
+        const q = bgm[1].trim().replace(/\s+/g, ' ').replace(/[《》""]/g, '');
+        if (q) segments.push({ type: 'music', query: q, status: 'pending' });
+        continue;
+      }
       const m = part.match(/^【([^】]+)】\s*([\s\S]*)$/);
       if (m) {
         const name = m[1].trim();
@@ -1457,6 +1662,20 @@ ${statusNames.map(n => `@${n}|英文名或拼音|身份头衔|当前一句话状
         onTap: () => openStatusEditor(),
       },
       // 👉 以后新增类目往这里加：{ key, title, sub, icon, onTap }
+      {
+        key: 'api',
+        title: '模型切换',
+        sub: 'API · SESSION',
+        icon: '<rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/>',
+        onTap: () => openApiPanel(),
+      },
+      {
+        key: 'music',
+        title: '网易云配乐',
+        sub: 'NETEASE BGM',
+        icon: '<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>',
+        onTap: () => openMusicPanel(),
+      },
     ];
     const root = _ensureDialogRoot();
     root.innerHTML = `
@@ -1745,7 +1964,7 @@ ${statusNames.map(n => `@${n}|英文名或拼音|身份头衔|当前一句话状
   // 执行一次增量杀青：取「断点后的前 N 条」→ 带现有档案增量提炼 → 更新档案与断点
   async function _runWrap(n) {
     try {
-      const activeApi = await DB.api.getActive();
+      const activeApi = await _getStoryApi();
       if (!activeApi) { Toast.show('请先配置并激活 API'); return false; }
       const stats = await _wrapStats();
       // 未杀青的消息（id > cursor），按时间正序取前 N 条
@@ -2140,8 +2359,185 @@ ${log}
     requestAnimationFrame(() => root.classList.add('active'));
   }
 
-  // ───────────────────────── 自定义 CSS ─────────────────────────
-  // 默认 CSS 模板：列全顶栏 / 卡片 / 底栏可改元素，供用户照着改
+  // +菜单：网易云配乐设置（开关 + API 地址 + cookie）
+  async function openMusicPanel() {
+    if (!_activeStory) return;
+    const cfg = await _getNeteaseConfig();
+    const root = _ensureDialogRoot();
+    root.classList.remove('gs-sheet-mode');
+    root.innerHTML = `
+      <div class="gs-dlg-box">
+        <div class="gs-dlg-head"><div class="gs-dlg-title">网易云配乐</div><div class="gs-dlg-sub">NETEASE · BGM</div></div>
+        <div class="gs-dlg-body">
+          <div class="gs-st-toggle-row">
+            <div><div class="gs-st-tg-main">启用配乐</div><div class="gs-st-tg-sub">开启后 AI 会随剧情情绪自动点歌</div></div>
+            <div class="gs-time-switch${cfg.enabled ? ' on' : ''}" id="gs-mu-switch"><div class="gs-time-switch-knob"></div></div>
+          </div>
+          <div class="gs-st-pv-label">网易云 API 地址</div>
+          <input type="text" class="gs-dlg-input" id="gs-mu-base" placeholder="https://你的网易云api地址" value="${_esc(cfg.base||'')}" spellcheck="false">
+          <div class="gs-st-pv-label">Cookie（MUSIC_U）</div>
+          <textarea class="gs-dlg-input gs-css-input" id="gs-mu-cookie" rows="4" placeholder="粘贴你的 MUSIC_U=... cookie" spellcheck="false">${_esc(cfg.cookie||'')}</textarea>
+          <div class="gs-css-tip">需自行部署网易云 API 并填入自己的 cookie。开关关闭、或地址/cookie 任一留空时，不会触发配乐。</div>
+          <div class="gs-css-tip" style="border-top:.5px solid rgba(0,0,0,.08);padding-top:8px;">
+            <b style="display:block;margin-bottom:4px;">怎么获取 cookie？</b>
+            1. 电脑浏览器打开 <b>music.163.com</b> 并登录（建议 VIP 账号）<br>
+            2. 按 <b>F12</b> 打开开发者工具 → 顶部切到 <b>Application</b>（应用）<br>
+            3. 左侧 <b>Storage → Cookies</b> → 点 <b>https://music.163.com</b><br>
+            4. 找到名为 <b>MUSIC_U</b> 的那一行，复制它的 <b>Value</b><br>
+            5. 这里粘贴成 <b>MUSIC_U=刚复制的值</b> 即可（前面的 MUSIC_U= 要带上）
+          </div>
+        </div>
+        <div class="gs-dlg-foot">
+          <button class="gs-dlg-btn ghost" data-act="close">关闭</button>
+          <button class="gs-dlg-btn primary" data-act="save">保存</button>
+        </div>
+      </div>`;
+    const close = () => root.classList.remove('active');
+    const sw = root.querySelector('#gs-mu-switch');
+    sw.onclick = () => sw.classList.toggle('on');
+    root.querySelector('[data-act="close"]').onclick = close;
+    root.querySelector('[data-act="save"]').onclick = async () => {
+      try {
+        await DB.settings.set('gs-netease-config', {
+          enabled: sw.classList.contains('on'),
+          base: (root.querySelector('#gs-mu-base').value || '').trim(),
+          cookie: (root.querySelector('#gs-mu-cookie').value || '').trim(),
+        });
+        Toast.show('配乐设置已保存 ✦');
+      } catch (e) { Toast.show('保存失败'); }
+      close();
+    };
+    root.onclick = (e) => { if (e.target === root) close(); };
+    requestAnimationFrame(() => root.classList.add('active'));
+  }
+
+  // +菜单：模型切换（会话级，仅群像内生效，不写 DB / 不同步设置页）
+  async function openApiPanel() {
+    if (!_activeStory) return;
+    const root = _ensureDialogRoot();
+    root.classList.remove('gs-sheet-mode');
+    await _renderApiPanel(root);
+    requestAnimationFrame(() => root.classList.add('active'));
+  }
+
+  async function _renderApiPanel(root) {
+    let apis = [];
+    try { apis = await DB.api.getAll(); } catch (e) { apis = [] }
+    let activeId = null;
+    try { const act = await DB.api.getActive(); activeId = act ? act.id : null; } catch (e) {}
+
+    // 当前生效：会话覆盖优先，否则设置页激活
+    const effId    = _sessionApiId != null ? Number(_sessionApiId) : activeId;
+    const effModel = _sessionApiId != null ? _sessionModel : (apis.find(a => a.id === activeId)?.model || '');
+
+    let list = '';
+    if (!apis.length) {
+      list = `<div class="gs-css-tip" style="padding:8px 0;">尚无 API，请先到设置页添加并激活。</div>`;
+    } else {
+      for (const api of apis) {
+        const isEff   = String(api.id) === String(effId);
+        const expanded = String(_gsExpandedApi) === String(api.id);
+        const curModel = isEff ? (effModel || api.model || '') : (api.model || '');
+        const models  = _gsFetchedModels[api.id] || (api.savedModels && api.savedModels.length ? api.savedModels : null);
+        let modelsHtml = '';
+        if (expanded) {
+          if (!models) {
+            modelsHtml = `<div class="gs-api-models"><div class="gs-api-model-loading">拉取模型中…</div></div>`;
+          } else {
+            modelsHtml = `<div class="gs-api-models">` + models.map(m =>
+              `<div class="gs-api-model${String(m) === String(curModel) ? ' on' : ''}" onclick="event.stopPropagation();GroupStoryModule.gsSelectModel(${api.id},'${_esc(String(m)).replace(/'/g, "\\'")}')">${_esc(String(m))}</div>`
+            ).join('') + `</div>`;
+          }
+        }
+        list += `
+          <div class="gs-api-item${isEff ? ' on' : ''}">
+            <div class="gs-api-row" onclick="GroupStoryModule.gsSelectApi(${api.id})">
+              <div class="gs-api-info">
+                <div class="gs-api-name">${_esc(api.name || 'API')}${isEff ? ' <span class="gs-api-badge">当前</span>' : ''}</div>
+                <div class="gs-api-model-cur">${_esc(curModel || '默认模型')}</div>
+              </div>
+              <div class="gs-api-model-toggle" onclick="event.stopPropagation();GroupStoryModule.gsToggleModels(${api.id})">MODEL ▾</div>
+            </div>
+            ${modelsHtml}
+          </div>`;
+      }
+    }
+
+    const overriding = _sessionApiId != null;
+    root.innerHTML = `
+      <div class="gs-dlg-box gs-api-box">
+        <div class="gs-dlg-head"><div class="gs-dlg-title">模型切换</div><div class="gs-dlg-sub">API · SESSION ONLY</div></div>
+        <div class="gs-dlg-body">
+          <div class="gs-css-tip">仅在群像内临时生效，<b>不会改动设置页</b>。可让聊天与总结用不同模型。</div>
+          <div class="gs-api-list">${list}</div>
+          ${overriding ? `<div class="gs-css-btns"><button class="gs-css-mini" onclick="GroupStoryModule.gsClearApi()">恢复设置页默认</button></div>` : ''}
+        </div>
+        <div class="gs-dlg-foot">
+          <button class="gs-dlg-btn primary" data-act="close">完成</button>
+        </div>
+      </div>`;
+    root.querySelector('[data-act="close"]').onclick = () => root.classList.remove('active');
+    root.onclick = (e) => { if (e.target === root) root.classList.remove('active'); };
+  }
+
+  // 选 API（会话级）
+  async function gsSelectApi(id) {
+    _sessionApiId = id;
+    _sessionModel = null;   // 切 API 时模型回到该 API 默认，让用户再选
+    const root = _ensureDialogRoot();
+    await _renderApiPanel(root);
+    try { const a = await DB.api.get(Number(id)); Toast.show(`已切到 ${a?.name || 'API'}`); } catch (e) {}
+  }
+
+  // 选模型（会话级）
+  async function gsSelectModel(apiId, model) {
+    _sessionApiId = apiId;
+    _sessionModel = model;
+    const root = _ensureDialogRoot();
+    await _renderApiPanel(root);
+    Toast.show(`模型：${model}`);
+  }
+
+  // 展开/收起某 API 的模型列表，首次展开自动拉取
+  async function gsToggleModels(apiId) {
+    if (String(_gsExpandedApi) === String(apiId)) {
+      _gsExpandedApi = null;
+      const root = _ensureDialogRoot();
+      await _renderApiPanel(root);
+      return;
+    }
+    _gsExpandedApi = apiId;
+    const root = _ensureDialogRoot();
+    await _renderApiPanel(root);   // 先展示 loading
+    if (!_gsFetchedModels[apiId]) {
+      try {
+        const api = await DB.api.get(Number(apiId));
+        if (api) {
+          if (api.savedModels && api.savedModels.length) {
+            _gsFetchedModels[apiId] = api.savedModels;
+          } else {
+            const models = await ApiHelper.fetchModels(api.url, api.key);
+            _gsFetchedModels[apiId] = models;
+            try { await DB.api.put({ ...api, savedModels: models }); } catch (e) {}
+          }
+        }
+      } catch (e) {
+        _gsFetchedModels[apiId] = ['(拉取失败，可手动在设置页保存模型)'];
+      }
+      if (String(_gsExpandedApi) === String(apiId)) await _renderApiPanel(root);
+    }
+  }
+
+  // 清除会话覆盖，回到设置页默认
+  async function gsClearApi() {
+    _sessionApiId = null;
+    _sessionModel = null;
+    _gsExpandedApi = null;
+    const root = _ensureDialogRoot();
+    await _renderApiPanel(root);
+    Toast.show('已恢复设置页默认 API');
+  }
+
   const _CSS_TEMPLATE = `/* ========== 群像剧情 · 自定义样式模板 ==========
    所有规则必须以 #${SCREEN_ID} 开头。改完点「应用」实时预览。 */
 
@@ -2384,6 +2780,8 @@ ${log}
     openStory, sendUserLine, editMsg, delMsg, loadMore,
     rerollMsg, swipeVer, openAddMenu, openTimePanel, openWorldBook, openWrapPanel,
     openColorPanel, changeRcColor, openCssPanel, openStatusEditor, openStatusPanel,
+    openMusicPanel, toggleMusic,
+    openApiPanel, gsSelectApi, gsSelectModel, gsToggleModels, gsClearApi,
     openSettings, closeSettings, saveSettings, wrapUp, clearHistory,
     backToWall: () => { _showLayer('persona'); _renderPersonaWall(); },
     backToWorkspace: () => { _showLayer('workspace'); _switchTab('groups'); },
@@ -2802,6 +3200,9 @@ ${log}
 /* ── 自定义 CSS 编辑器 ── */
 #${SCREEN_ID} .gs-css-box{max-width:360px;max-height:82vh;display:flex;flex-direction:column;}
 #${SCREEN_ID} .gs-css-box .gs-dlg-body{overflow-y:auto;flex:1;min-height:0;scrollbar-width:none;}
+#${SCREEN_ID} .gs-api-box{display:flex;flex-direction:column;max-height:78vh;}
+#${SCREEN_ID} .gs-api-box .gs-dlg-body{overflow-y:auto;flex:1;min-height:0;scrollbar-width:none;}
+#${SCREEN_ID} .gs-api-box .gs-dlg-body::-webkit-scrollbar{display:none;}
 #${SCREEN_ID} .gs-css-box .gs-dlg-body::-webkit-scrollbar{display:none;}
 #${SCREEN_ID} .gs-css-pv{margin-bottom:14px;}
 #${SCREEN_ID} .gs-css-pv{margin-bottom:14px;margin-top:2px;}
@@ -2890,6 +3291,50 @@ ${log}
 #gs-settings-panel .gs-set-danger:active{background:rgba(180,40,30,.03);}
 #gs-settings-panel .gs-set-danger svg{width:11px;height:11px;stroke:rgba(180,40,30,.35);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
 #gs-settings-panel .gs-set-danger span{font-size:9px;font-weight:700;color:rgba(180,40,30,.4);letter-spacing:1px;}
+
+/* ── 🎵 网易云配乐 · 票根风播放条 ── */
+.gs-music-player{position:relative;display:flex;align-items:stretch;gap:0;margin:12px 0;background:transparent;border:1px solid var(--gs-bar,rgba(0,0,0,.22));cursor:pointer;font-family:'Space Mono','SFMono-Regular',monospace;overflow:hidden;-webkit-tap-highlight-color:transparent;transition:opacity .2s;}
+.gs-music-player::before{content:"";position:absolute;left:0;right:0;top:0;height:3px;background-image:repeating-linear-gradient(90deg,var(--gs-bar,rgba(0,0,0,.22)) 0 5px,transparent 5px 10px);opacity:.5;}
+.gs-music-player:active{opacity:.72;}
+.gs-music-cover{flex:0 0 auto;width:52px;height:52px;margin:9px 0 9px 9px;background-size:cover;background-position:center;background-color:#e8e6e1;filter:grayscale(.35) contrast(1.02);border:.5px solid var(--gs-bar,rgba(0,0,0,.18));}
+.gs-music-cover-empty{display:flex;align-items:center;justify-content:center;}
+.gs-music-note{font-size:18px;color:var(--gs-act,#999);opacity:.6;}
+.gs-music-perf{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;justify-content:center;gap:5px;padding:9px 4px 9px 12px;}
+.gs-music-meta{display:flex;flex-direction:column;gap:2px;min-width:0;}
+.gs-music-title{font-size:12.5px;font-weight:700;letter-spacing:.01em;color:var(--gs-text,#1a1a1a);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.gs-music-artist{font-size:10px;letter-spacing:.05em;color:var(--gs-act,#888);text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.gs-music-foot{display:flex;align-items:center;gap:8px;}
+.gs-music-code{font-size:8px;letter-spacing:.16em;color:var(--gs-act,#aaa);text-transform:uppercase;white-space:nowrap;}
+.gs-music-wave{flex:0 0 auto;display:flex;align-items:flex-end;gap:2px;height:11px;}
+.gs-music-wave i{width:2px;height:3px;background:var(--gs-act,#999);}
+.gs-music-wave.playing i{animation:gsWave .85s ease-in-out infinite;}
+.gs-music-wave.playing i:nth-child(2){animation-delay:.22s;}
+.gs-music-wave.playing i:nth-child(3){animation-delay:.44s;}
+.gs-music-wave.playing i:nth-child(4){animation-delay:.13s;}
+@keyframes gsWave{0%,100%{height:3px;}50%{height:11px;}}
+.gs-music-stub{flex:0 0 auto;display:flex;align-items:center;justify-content:center;width:42px;border-left:1px dashed var(--gs-bar,rgba(0,0,0,.28));}
+.gs-music-btn{width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-size:9px;color:var(--gs-text,#1a1a1a);border:1px solid var(--gs-bar,rgba(0,0,0,.34));border-radius:50%;}
+.gs-music-pending{opacity:.6;cursor:default;}
+.gs-music-pending .gs-music-stub{border-left-color:var(--gs-bar,rgba(0,0,0,.18));}
+
+/* ── 模型切换面板 ── */
+.gs-api-list{display:flex;flex-direction:column;gap:8px;margin:4px 0 6px;}
+.gs-api-item{border:1px solid rgba(0,0,0,.14);border-radius:2px;overflow:hidden;transition:border-color .2s;}
+.gs-api-item.on{border-color:rgba(0,0,0,.5);}
+.gs-api-row{display:flex;align-items:center;gap:10px;padding:11px 12px;cursor:pointer;-webkit-tap-highlight-color:transparent;}
+.gs-api-row:active{background:rgba(0,0,0,.03);}
+.gs-api-info{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:3px;}
+.gs-api-name{font-size:13px;font-weight:700;color:#1a1a1a;font-family:'Space Mono',monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.gs-api-badge{font-size:8px;letter-spacing:.1em;background:#1a1a1a;color:#fff;padding:1px 5px;border-radius:2px;vertical-align:1px;font-weight:700;}
+.gs-api-model-cur{font-size:10px;color:#888;font-family:'Space Mono',monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.gs-api-model-toggle{flex:0 0 auto;font-size:9px;letter-spacing:.08em;color:#666;font-family:'Space Mono',monospace;border:1px solid rgba(0,0,0,.2);padding:4px 7px;border-radius:2px;}
+.gs-api-model-toggle:active{background:rgba(0,0,0,.05);}
+.gs-api-models{border-top:1px dashed rgba(0,0,0,.14);max-height:150px;overflow-y:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
+.gs-api-models::-webkit-scrollbar{display:none;}
+.gs-api-model{padding:9px 14px;font-size:11px;color:#444;font-family:'Space Mono',monospace;cursor:pointer;border-bottom:.5px solid rgba(0,0,0,.05);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.gs-api-model:active{background:rgba(0,0,0,.04);}
+.gs-api-model.on{color:#1a1a1a;font-weight:700;background:rgba(0,0,0,.04);}
+.gs-api-model-loading{padding:12px 14px;font-size:10px;color:#999;font-family:'Space Mono',monospace;text-align:center;}
 `;
     const tag = document.createElement('style');
     tag.id = 'gs-style';
