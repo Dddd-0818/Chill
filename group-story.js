@@ -1140,8 +1140,8 @@ ${wrapSummary.trim()}`;
           nameEn: (p[1] || '').trim(),
           role:   (p[2] || '').trim(),
           status: _cleanField(p[3] || '', 40),
-          godNote: _cleanField(p[4] || '', 20),
-          thought: _cleanField(p[5] || '', 30),
+          godNote: _cleanField(p[4] || '', 30),
+          thought: _cleanField(p[5] || '', 50),
         });
       }
     }
@@ -2015,7 +2015,35 @@ ${log}
 · 角色当前的处境、心境与彼此关系的最新状态
 （若本次新增带来了新的锚点，务必补进清单；已有锚点也要保留，形成一份持续累积的完整清单。）`;
 
-      const raw = await ApiHelper.chatCompletion(activeApi, [{ role: 'system', content: prompt }]);
+      // 杀青独立请求：不走全局 chatCompletion，自带 max_tokens、temperature 兜底与详细报错，
+      // 并用 system+user 两条消息（部分中转站拒绝纯 system 请求 → 400）。
+      const _wrapChat = async (api, messages) => {
+        let root = (api.url || '').trim().replace(/\/+$/, '');
+        for (const sfx of ['/chat/completions', '/v1/chat/completions', '/v4/chat/completions', '/chat', '/v1', '/v4']) {
+          if (root.endsWith(sfx)) { root = root.slice(0, -sfx.length); break; }
+        }
+        const ver = root.includes('open.bigmodel.cn') ? '/v4' : '/v1';
+        const url = root + ver + '/chat/completions';
+        let temp = parseFloat(api.temp);
+        if (isNaN(temp)) temp = 0.7;
+        const body = { model: api.model, messages, temperature: temp, max_tokens: 8000 };
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${api.key}` },
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) {
+          let detail = '';
+          try { detail = (await res.text() || '').slice(0, 300); } catch (e) {}
+          throw new Error(`HTTP ${res.status}${detail ? ' · ' + detail : ''}`);
+        }
+        const data = await res.json();
+        return data.choices?.[0]?.message?.content ?? '';
+      };
+      const raw = await _wrapChat(activeApi, [
+        { role: 'system', content: '你是一位顶级的电影剧本场记与档案管理员，擅长把零散的剧情场记整理成时间连贯、细节完整的剧情档案。' },
+        { role: 'user', content: prompt },
+      ]);
       const newSummary = (raw || '').trim();
       if (!newSummary) { Toast.show('提炼失败：返回为空'); return false; }
 
@@ -2032,8 +2060,8 @@ ${log}
       await _loadMessages();   // 刷新印戳
       return true;
     } catch (e) {
-      console.error('[GroupStory] wrap error', e);
-      Toast.show('杀青失败：' + (e.message || '请检查 API'));
+      console.error('[GroupStory] wrap error（完整）:', e.message || e);
+      Toast.show('杀青失败：' + (e.message || '请检查 API').slice(0, 60));
       return false;
     }
   }
