@@ -1016,8 +1016,9 @@ inner += `<div class="gs-ms"><div class="gs-av-wrap"><div class="gs-av${hasSt ? 
     const wbBlock = await _buildWorldBookBlock();
     const statusOn = await _isStatusOn();
     const statusNames = chars.map(c => c.name);
+    const statusFields = statusOn ? await _getStatusFields() : null;
     const musicOn = await _neteaseReady();
-    const sysPrompt = _buildGroupSystemPrompt(chars, pov, maxTk, { timeStr, aware, wbBlock, statusOn, statusNames, musicOn });
+    const sysPrompt = _buildGroupSystemPrompt(chars, pov, maxTk, { timeStr, aware, wbBlock, statusOn, statusNames, statusFields, musicOn });
 
     // 4. 历史：跳过已杀青楼层（AI 不读），改用剧情档案作为前情提要
     const wrapCursor = await _getWrapCursor();
@@ -1091,7 +1092,7 @@ ${wrapSummary.trim()}`;
     const charNameToId = {};
     chars.forEach(c => { charNameToId[c.name] = String(c.id); });
     // 抽取状态块，从正文剔除标记
-    const statusData = _extractStatus(raw, chars);
+    const statusData = _extractStatus(raw, chars, statusFields);
     // 剥离：先把字面量 \n 还原；有 [/STATUS] 则删配对块，否则从 [STATUS] 删到文末（约定块在最后）
     let cleanRaw = raw.replace(/\[STATUS\][\s\S]*?\[\/STATUS\]/i, '');   // 配对优先
     cleanRaw = cleanRaw.replace(/\[STATUS\][\s\S]*$/i, '');             // 无结尾兜底：删到文末
@@ -1114,9 +1115,12 @@ ${wrapSummary.trim()}`;
     return { raw: cleanRaw, segments, model: activeApi.model || '', status: statusData };
   }
 
-  // 从 AI 原文抽取 [STATUS] 块 → { scene:{locCn,locEn,time}, chars:[{name,initial,nameCn,nameEn,role,status,godNote,thought}] }
-  function _extractStatus(raw, chars) {
+  // 从 AI 原文抽取 [STATUS] 块。
+  // fields 为自定义字段表 [{key,desc,max}]；@行的竖线列按字段表顺序映射到 ch.fields[key]。
+  // 不传 fields（旧调用）则退回默认 5 字段，结果同时回填旧属性名(role/status/godNote/thought)保证兼容。
+  function _extractStatus(raw, chars, fields) {
     if (!raw) return null;
+    const fieldList = (Array.isArray(fields) && fields.length) ? fields : _STATUS_FIELDS_DEFAULT;
     // 先把字面量 \n 还原成真换行（Claude 有时输出字面 \n）
     let txt = raw.replace(/\\n/g, '\n');
     // 抓 [STATUS] 块：优先配对 [/STATUS]，否则从 [STATUS] 到文末
@@ -1134,15 +1138,23 @@ ${wrapSummary.trim()}`;
       } else if (line.startsWith('@')) {
         const p = line.slice(1).split('|');
         const nameCn = (p[0] || '').trim();
-        data.chars.push({
+        const fieldVals = {};
+        fieldList.forEach((f, i) => {
+          // p[0] 是中文名，自定义字段从 p[1] 起逐列对应
+          fieldVals[f.key] = _cleanField(p[i + 1] || '', f.max || 0);
+        });
+        const ch = {
           nameCn,
           initial: _initialOf(nameCn),
-          nameEn: (p[1] || '').trim(),
-          role:   (p[2] || '').trim(),
-          status: _cleanField(p[3] || '', 40),
-          godNote: _cleanField(p[4] || '', 30),
-          thought: _cleanField(p[5] || '', 50),
-        });
+          nameEn: fieldVals.name_en || '',     // 兼容：若字段表含 name_en 则填，供旧模板 {{char_name_en}}
+          fields: fieldVals,                    // 新：全部自定义字段
+          // 旧属性别名（默认字段表时与历史完全一致，旧存档/旧模板照常）
+          role: fieldVals.role || '',
+          status: fieldVals.status || '',
+          godNote: fieldVals.god_note || '',
+          thought: fieldVals.thought || '',
+        };
+        data.chars.push(ch);
       }
     }
     return data.chars.length ? data : null;
@@ -1365,24 +1377,35 @@ ${musicBlock}
 5. **无主语旁白**：不属于任何角色的全局场景，用 \`*...*\` 单独成段。
 6. **叙事人称**：${povRule}
 7. **篇幅**：控制在 ${maxTk} tokens 左右；绝不出现"系统、预设"等出戏词。
-${statusOn ? `
+${statusOn ? (() => {
+  const fl = (timeOpts.statusFields && timeOpts.statusFields.length) ? timeOpts.statusFields : _STATUS_FIELDS_DEFAULT;
+  // 按字段表拼出 @行模板：@角色名|<字段1说明>|<字段2说明>|...
+  const colTpl = fl.map(f => `<${f.desc || f.key}>`).join('|');
+  // 逐字段的规则说明（含软上限）
+  const fieldRules = fl.map((f, i) => {
+    const lim = f.max ? `（≤${f.max}字）` : '';
+    return `  第${i + 1}列「${f.desc || f.key}」${lim}`;
+  }).join('\n');
+  return `
 # 📊 状态面板数据（强制附加）
 在正文**全部结束之后**，另起一段，输出状态数据块，格式严格如下（驱动前端面板，用户看不到原始标记）：
  
 [STATUS]
 SCENE|当前地点中文名|当前地点英文或拼音|当前时间(如 23:45 PM)
-${statusNames.map(n => `@${n}|英文名或拼音|身份头衔|当前一句话状态|上帝视角吐槽(犀利幽默的旁观点评)|该角色此刻的内心独白`).join('\n')}
+${(timeOpts.statusNames || []).map(n => `@${n}|${colTpl}`).join('\n')}
 [/STATUS]
  
 规则：
-- 为每个在场角色各输出一行，以 \`@角色名\` 开头，字段用竖线 \`|\` 分隔，顺序不可乱。
+- 为每个在场角色各输出一行，以 \`@角色名\` 开头，字段用竖线 \`|\` 分隔，**顺序严格按下列定义，不可乱、不可缺列**（没有内容也要留空占位，即连续两个 \`||\`）。
 - SCENE 行只有一行，放全局场景信息。
-- 吐槽（Observer's Log）必须是**上帝视角/第三人称的旁观毒舌点评**，像躲在暗处看戏的解说员调侃这个角色（例：说是镇定，手指却把杯子转了第八圈），**绝不能写成角色第一人称的心声**；内心独白才是角色第一人称的真实想法。
-- **字数（严格）**：吐槽 ≤ 30 字，内心独白 ≤ 50 字。
-- **不要任何括号或引号包裹**：吐槽和内心都直接写文字，首尾不要 ()（）「」"" 等符号。
-- 不要输出角色中文名和首字母（前端自动处理），从英文名字段开始填。
+- 每行 \`@角色名\` 之后的各列依次为：
+${fieldRules}
+- 若某列要求是数字（如体力、好感度之类 0-100 的值），**只填纯数字**，不要带单位或文字。
+- **不要任何括号或引号包裹**：各列直接写内容，首尾不要 ()（）「」"" 等符号。
+- 角色中文名首字母由前端自动处理，\`@\` 后直接写中文名即可。
 - 这个块必须放在正文最后，[STATUS] 和 [/STATUS] 单独成行。
-` : ''}
+`;
+})() : ''}
 现在，别"生成回复"——让这群人继续活下去。承接前文，自然地往下演。`;
   }
 
@@ -2280,17 +2303,272 @@ ${log}
     try { return (await DB.settings.get(`gstory-status-tpl-${_activeStory.id}`)) || _STATUS_TEMPLATE; } catch (e) { return _STATUS_TEMPLATE; }
   }
 
-  // 用一份角色状态数据填充模板占位符
-  function _fillStatusTpl(tpl, scene, ch) {
-    const map = {
-      loc_cn: scene.locCn || '—', loc_en: scene.locEn || '', time: scene.time || '',
-      char_initial: ch.initial || '?', char_name_cn: ch.nameCn || '', char_name_en: ch.nameEn || ch.nameCn || '',
-      char_role: ch.role || '', char_status: ch.status || '', god_note: ch.godNote || '', thought: ch.thought || '',
-    };
-    return tpl.replace(/\{\{(\w+)\}\}/g, (m, k) => (k === 'nav' ? m : (k in map ? _esc(map[k]) : m)));
+  // ── 自定义字段表──────────────────────────────
+  // 每个字段：{ key, desc, max }。key 给模板取值 {{key}}，desc 是给 AI 的人话说明，max 是软上限（截断用，0=不限）。
+  // 默认字段表完全等价于旧的 6 字段，存量群组无字段表时自动套用，照常跑不炸。
+  const _STATUS_FIELDS_DEFAULT = [
+    { key: 'name_en', desc: '英文名或拼音',                       max: 0  },
+    { key: 'role',    desc: '身份头衔',                           max: 0  },
+    { key: 'status',  desc: '当前一句话状态',                     max: 40 },
+    { key: 'god_note',desc: '上帝视角吐槽（第三人称犀利毒舌点评，绝非角色心声）', max: 30 },
+    { key: 'thought', desc: '该角色此刻的内心独白（第一人称真实想法）',        max: 50 },
+  ];
+  async function _getStatusFields() {
+    try {
+      const v = await DB.settings.get(`gstory-status-fields-${_activeStory.id}`);
+      if (Array.isArray(v) && v.length) return v.map(f => ({ key: String(f.key||'').trim(), desc: f.desc||'', max: Number(f.max)||0 })).filter(f => f.key);
+    } catch (e) {}
+    return _STATUS_FIELDS_DEFAULT.slice();
   }
 
-  // 点头像 → 打开状态面板（居中遮罩，顶部圆点切角色）
+  // ── 我的预设（全局，跨群像共用）──────────────────────────
+  // 存储键 gstory-status-presets = [{ id, name, fields:[...], tpl }]
+  async function _getStatusPresets() {
+    try {
+      const v = await DB.settings.get('gstory-status-presets');
+      if (Array.isArray(v)) return v;
+    } catch (e) {}
+    return [];
+  }
+  async function _saveStatusPresets(arr) {
+    try { await DB.settings.set('gstory-status-presets', arr); return true; } catch (e) { return false; }
+  }
+
+  // 系统内置占位符（场景/名字/首字母由系统自动填，扫描时跳过、不建成 AI 字段）
+  const _STATUS_BUILTIN_KEYS = ['nav', 'loc_cn', 'loc_en', 'time', 'char_initial', 'char_name_cn',
+                                'char_name_en', 'char_role', 'char_status'];
+  // 注意：god_note / thought 虽是默认字段，但需要 AI 填，所以不在跳过列表里，扫描时会建进字段表
+  // 已知字段的预填说明 + 软上限（智能识别时给个合理默认，用户可改）
+  const _STATUS_KEY_HINTS = {
+    name_en:  { desc: '英文名或拼音', max: 0 },
+    role:     { desc: '身份头衔', max: 0 },
+    status:   { desc: '当前一句话状态', max: 40 },
+    mood:     { desc: '此刻心情，两个字的词', max: 4 },
+    god_note: { desc: '上帝视角吐槽（第三人称犀利毒舌点评，绝非角色心声）', max: 30 },
+    thought:  { desc: '该角色此刻的内心独白（第一人称真实想法）', max: 50 },
+    paper:    { desc: '这份小报的报名（按场景气质起，如「街角晨报」）', max: 8 },
+    issue:    { desc: '本期刊号，两位数字（如 07、23）', max: 2 },
+    memo:     { desc: '剧情备忘/启事，多条用竖线 | 分隔（如：欠 Joy 一瓶酒|后门没锁）', max: 0 },
+    hp:       { desc: '体力 0-100 的数字', max: 0 },
+    favor:    { desc: '好感度 0-100 的数字', max: 0 },
+    location: { desc: '该角色此刻所在的具体位置', max: 0 },
+    weapon:   { desc: '随身携带的武器或物品', max: 0 },
+    obsession:{ desc: '心魔/执念，一句话', max: 0 },
+    note:     { desc: '上帝视角吐槽（第三人称犀利点评，绝非角色心声）', max: 45 },
+    want:     { desc: '此刻最想做的事', max: 0 },
+  };
+
+  // 扫描模板里所有 {{xxx}} 和 $n → 自动生成字段表。已存在的字段保留用户原说明；新字段套用 hints；内置占位符跳过。
+  function _fieldsFromTemplate(tpl, existing) {
+    const found = [];
+    const seen = {};
+    const re = /\{\{([\w.]+)\}\}/g;
+    let m;
+    while ((m = re.exec(tpl)) !== null) {
+      let key = m[1];
+      // {{key.bar}} / {{key.num}} 归并到 key 本身
+      const dot = key.match(/^(\w+)\.(bar|num)$/);
+      if (dot) key = dot[1];
+      if (_STATUS_BUILTIN_KEYS.indexOf(key) !== -1) continue;  // 内置，跳过
+      if (seen[key]) continue;
+      seen[key] = true;
+      const prev = (existing || []).find(f => f.key === key);
+      if (prev) { found.push({ ...prev }); continue; }          // 已有字段，保留用户说明
+      const hint = _STATUS_KEY_HINTS[key];
+      found.push({ key, desc: hint ? hint.desc : '', max: hint ? hint.max : 0 });
+    }
+    // 扫描 JS 自定义切换卡里的 .fields 取值：c.fields['status'] / c.fields.status / .fields["status"]
+    // 这些字段藏在脚本里、不是占位符，但同样需要 AI 填，所以也建进字段表
+    const fre = /\.fields\s*(?:\[\s*['"]([\w]+)['"]\s*\]|\.([\w]+))/g;
+    let fm;
+    while ((fm = fre.exec(tpl)) !== null) {
+      const key = fm[1] || fm[2];
+      if (!key) continue;
+      if (_STATUS_BUILTIN_KEYS.indexOf(key) !== -1) continue;
+      if (seen[key]) continue;
+      seen[key] = true;
+      const prev = (existing || []).find(f => f.key === key);
+      if (prev) { found.push({ ...prev }); continue; }
+      const hint = _STATUS_KEY_HINTS[key];
+      found.push({ key, desc: hint ? hint.desc : '', max: hint ? hint.max : 0 });
+    }
+    // 扫描辅助函数取值：形如 f(c, 'status') / get(char, "weapon") —— 第二个参数是字段名字符串
+    const hre = /\b\w+\s*\(\s*\w+\s*,\s*['"]([\w]+)['"]\s*\)/g;
+    let hm;
+    while ((hm = hre.exec(tpl)) !== null) {
+      const key = hm[1];
+      if (!key) continue;
+      if (_STATUS_BUILTIN_KEYS.indexOf(key) !== -1) continue;
+      if (seen[key]) continue;
+      seen[key] = true;
+      const prev = (existing || []).find(f => f.key === key);
+      if (prev) { found.push({ ...prev }); continue; }
+      const hint = _STATUS_KEY_HINTS[key];
+      found.push({ key, desc: hint ? hint.desc : '', max: hint ? hint.max : 0 });
+    }
+    // 风 $n：找出最大序号，按位置补足字段（$1→第1个…）。已有 {{}} 字段时，$n 落到对应位置上不重复建。
+    let maxN = 0;
+    let dm; const dre = /\$(\d{1,2})\b/g;
+    while ((dm = dre.exec(tpl)) !== null) { const n = parseInt(dm[1], 10); if (n > maxN) maxN = n; }
+    while (found.length < maxN) {
+      const idx = found.length + 1;
+      const key = 'field' + idx;
+      // 若用户之前给这个位置的字段填过说明，沿用
+      const prev = (existing || [])[idx - 1];
+      if (prev && !found.find(f => f.key === prev.key)) found.push({ ...prev });
+      else found.push({ key, desc: '', max: 0 });
+    }
+    return found;
+  }
+
+  // 内置预设：报纸风（字段表 + 模板一体）
+  const _STATUS_PRESET_NEWSPAPER = {
+    fields: [
+      { key: 'paper',        desc: '这份小报的报名（按场景气质起，如「街角晨报」「码头夜讯」）', max: 8 },
+      { key: 'issue',        desc: '本期刊号，两位数字（如 07、23）', max: 2 },
+      { key: 'char_name_en', desc: '角色英文名或拼音', max: 0 },
+      { key: 'role',         desc: '身份头衔', max: 0 },
+      { key: 'status',       desc: '一句话状态（做头条用，简短有力）', max: 20 },
+      { key: 'mood',         desc: '此刻心情，两个字的词', max: 4 },
+      { key: 'god_note',     desc: '上帝视角吐槽（第三人称犀利毒舌，像记者现场点评，绝非角色心声）', max: 45 },
+      { key: 'thought',      desc: '内心独白（第一人称真实想法，放进黑底心声专栏）', max: 40 },
+      { key: 'memo',         desc: '分类启事，多条用竖线 | 分隔（剧情备忘/伏笔，如：寻：欠债的Joy|注意：后门未锁）', max: 0 },
+    ],
+    tpl: `<div class="np-wrap"><div class="np-paper">
+  <div class="np-masthead">
+    <div class="np-eyebrow"><span>Vol.III · No.{{issue}}</span><span>★ ★ ★</span><span>Late Edition</span></div>
+    <h1 class="np-title">{{paper}}</h1>
+    <div class="np-dateline"><span>{{loc_cn}}</span><span>{{time}}</span><span>定价 一枚硬币</span></div>
+  </div>
+  <div class="np-headblock">
+    <div class="np-kicker">⸻ Headline ⸻</div>
+    <h2 class="np-headline">{{char_name_en}}，{{status}}</h2>
+    <div class="np-byline">本报记者 · {{role}} · 现场报道</div>
+  </div>
+  <div class="np-cols">
+    <div class="np-col-log"><div class="np-coltag">观察手记 / Log</div><p class="np-logtext">{{god_note}}</p></div>
+    <div class="np-col-aside"><div class="np-coltag light">心声 / Aside</div><p class="np-asidetext">"{{thought}}"</p></div>
+  </div>
+  <div class="np-footrow">
+    <div class="np-mood"><div class="np-moodtag">Mood</div><div class="np-moodval">{{mood}}</div></div>
+    <div class="np-notices"><div class="np-coltag">分类启事 / Notices</div><div class="np-notice-list" id="np-notices"></div></div>
+  </div>
+  <div class="np-footer">— Printed at the edge of the night —</div>
+</div></div>
+<style>
+  .np-wrap{width:100%;display:flex;justify-content:center;padding:4px;box-sizing:border-box;}
+  .np-paper{width:100%;max-width:400px;background:#F4F1EA;border:1px solid #1A1A1A;color:#1A1A1A;}
+  .np-paper *{box-sizing:border-box;}
+  .np-masthead{text-align:center;padding:10px 14px 7px;border-bottom:1px solid #1A1A1A;}
+  .np-eyebrow{display:flex;justify-content:space-between;font-family:'Space Mono',monospace;font-size:8px;letter-spacing:.1em;text-transform:uppercase;color:#444;}
+  .np-title{font-family:'Playfair Display',Georgia,serif;font-weight:900;font-size:34px;line-height:1.05;margin:6px 0 3px;letter-spacing:-.01em;}
+  .np-dateline{display:flex;justify-content:space-between;align-items:center;border-top:1px solid #1A1A1A;border-bottom:3px double #1A1A1A;padding:3px 0;font-family:'Space Mono',monospace;font-size:8px;letter-spacing:.12em;text-transform:uppercase;}
+  .np-headblock{padding:13px 15px 11px;border-bottom:1px solid #1A1A1A;}
+  .np-kicker{font-family:'Space Mono',monospace;font-size:8px;letter-spacing:.2em;text-transform:uppercase;color:#8a2c2c;margin-bottom:5px;}
+  .np-headline{font-family:'Playfair Display','Noto Serif SC',Georgia,serif;font-weight:700;font-size:27px;line-height:1.12;letter-spacing:-.01em;margin:0;}
+  .np-byline{font-family:'Space Mono',monospace;font-size:9px;letter-spacing:.06em;color:#444;margin-top:7px;border-top:1px solid rgba(0,0,0,.25);padding-top:5px;}
+  .np-cols{display:flex;border-bottom:1px solid #1A1A1A;}
+  .np-col-log{flex:1.35;padding:11px 12px;border-right:1px solid #1A1A1A;}
+  .np-col-aside{flex:1;padding:11px 12px;background:#1A1A1A;color:#F4F1EA;}
+  .np-coltag{font-family:'Space Mono',monospace;font-size:8px;letter-spacing:.16em;text-transform:uppercase;color:#8a2c2c;margin-bottom:6px;}
+  .np-coltag.light{color:#C9C4BA;}
+  .np-logtext{font-family:'Noto Serif SC',serif;font-size:12px;line-height:1.7;margin:0;text-align:justify;}
+  .np-logtext::first-letter{float:left;font-family:'Playfair Display',serif;font-weight:900;font-size:34px;line-height:.72;padding:4px 7px 0 0;}
+  .np-asidetext{font-family:'Noto Serif SC',serif;font-size:12px;line-height:1.75;margin:0;font-style:italic;}
+  .np-footrow{display:flex;align-items:stretch;border-bottom:3px double #1A1A1A;}
+  .np-mood{padding:9px 13px;border-right:1px solid #1A1A1A;display:flex;flex-direction:column;justify-content:center;min-width:64px;}
+  .np-moodtag{font-family:'Space Mono',monospace;font-size:7px;letter-spacing:.15em;text-transform:uppercase;color:#444;}
+  .np-moodval{font-family:'Playfair Display','Noto Serif SC',serif;font-weight:700;font-size:18px;line-height:1.1;margin-top:2px;}
+  .np-notices{flex:1;padding:9px 12px;}
+  .np-notice-list{display:flex;flex-wrap:wrap;gap:5px;}
+  .np-notice{font-family:'Space Mono',monospace;font-size:9px;border:1px solid #1A1A1A;padding:2px 7px;letter-spacing:.02em;}
+  .np-footer{text-align:center;padding:6px;font-family:'Space Mono',monospace;font-size:7px;letter-spacing:.25em;text-transform:uppercase;color:#666;}
+</style>
+<script>
+  (function(){
+    var raw = "{{memo}}";
+    var box = document.getElementById('np-notices');
+    if(!box) return;
+    if(!raw || raw.indexOf('{'+'{')===0){ box.innerHTML='<span class="np-notice">暂无启事</span>'; return; }
+    var items = raw.split(/[|｜]/).map(function(s){return s.trim();}).filter(Boolean);
+    box.innerHTML = items.length ? items.map(function(t){ return '<span class="np-notice">'+t.replace(/</g,'&lt;')+'</span>'; }).join('') : '<span class="np-notice">暂无启事</span>';
+  })();
+<\/script>`
+  };
+
+  // 用一份角色状态数据填充模板占位符。
+  // scene 三件套（loc_cn/loc_en/time）保留为系统内置占位符；其余一律走自定义字段表的 ch.fields[key]。
+  // 兼容旧占位符：char_name_cn / char_initial / char_name_en / char_role / char_status / god_note / thought 仍可用。
+  // 兼容占位符：$1 $2 $3... 按 fieldOrder（字段表顺序）依次填，省去翻译成 {{}} 的步骤。
+  function _fillStatusTpl(tpl, scene, ch, fieldOrder) {
+    const fields = ch.fields || {};
+    // 先处理风 $n：$1=字段表第1个，$2=第2个……（用 fieldOrder 定序，没传则退回对象键序）
+    const order = (Array.isArray(fieldOrder) && fieldOrder.length) ? fieldOrder : Object.keys(fields);
+    let out = tpl.replace(/\$(\d{1,2})\b/g, (m, n) => {
+      const i = parseInt(n, 10) - 1;
+      if (i < 0 || i >= order.length) return m;          // 越界原样保留
+      const key = order[i];
+      return _esc(fields[key] != null ? fields[key] : '');
+    });
+    const builtin = {
+      loc_cn: scene.locCn || '—', loc_en: scene.locEn || '', time: scene.time || '',
+      char_initial: ch.initial || '?', char_name_cn: ch.nameCn || '',
+      // 旧别名 → 映射到字段表对应 key（若用户改了字段表，这些别名指向其首个同义字段）
+      char_name_en: fields.name_en || ch.nameEn || ch.nameCn || '',
+      char_role: fields.role || '', char_status: fields.status || '',
+      god_note: fields.god_note || '', thought: fields.thought || '',
+    };
+    return out.replace(/\{\{([\w.]+)\}\}/g, (m, k) => {
+      if (k === 'nav') return m;                       // nav 占位符留给渲染层处理
+      if (k in builtin) return _esc(builtin[k]);       // 系统内置 + 旧别名
+      if (k in fields) return _esc(fields[k]);         // 自定义字段原值
+      // 进度条快捷渲染：{{key.bar}} → 取数字当百分比的一根条
+      const bm = k.match(/^(\w+)\.bar$/);
+      if (bm && bm[1] in fields) {
+        const pct = Math.max(0, Math.min(100, parseFloat(fields[bm[1]]) || 0));
+        return `<span class="gsbar" style="display:inline-block;height:6px;width:100%;background:rgba(0,0,0,.1);border-radius:3px;overflow:hidden;vertical-align:middle"><span style="display:block;height:100%;width:${pct}%;background:#9A8C7A"></span></span>`;
+      }
+      // 进度条数值：{{key.num}} → 纯数字
+      const nm = k.match(/^(\w+)\.num$/);
+      if (nm && nm[1] in fields) return _esc(String(parseFloat(fields[nm[1]]) || 0));
+      return m;                                         // 未知占位符原样保留（方便排错）
+    });
+  }
+
+  // 把填充好的模板包成可独立运行的沙箱文档，并注入高度上报脚本（跨域无法读 contentDocument，改用 postMessage）
+  // allData（可选）：{ chars:[{name,initial,fields,$:[...]}], scene:{...}, cur } → 注入 window.GS_CHARS 供模板自定义切换
+  function _wrapStatusDoc(innerHtml, token, allData) {
+    const reporter = `<script>(function(){
+      function post(){ try{ var h=document.documentElement.scrollHeight||document.body.scrollHeight; parent.postMessage({__gsHeight:true,token:${JSON.stringify(token)},h:h},'*'); }catch(e){} }
+      window.addEventListener('load',post);
+      setTimeout(post,80); setTimeout(post,300); setTimeout(post,800);
+      try{ new ResizeObserver(post).observe(document.documentElement); }catch(e){}
+    })();<\/script>`;
+    // 把全部角色数据塞进沙箱：模板可用 window.GS_CHARS（数组）、GS_SCENE、GS_CUR 自己做切换
+    const dataScript = allData ? `<script>window.GS_CHARS=${JSON.stringify(allData.chars)};window.GS_SCENE=${JSON.stringify(allData.scene)};window.GS_CUR=${allData.cur || 0};<\/script>` : '';
+    return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">`
+      + `<style>html,body{margin:0;padding:0;background:transparent;}</style></head><body>${dataScript}${innerHtml}${reporter}</body></html>`;
+  }
+
+
+  // 构建"全部角色"数据数组，供自定义切换模板用（window.GS_CHARS）
+  // 每个元素：{ name, initial, role, fields:{key:val}, $:[按字段表顺序的值数组,1-based可用 $[0]=$1] }
+  function _buildAllCharsData(data, fieldOrder) {
+    const order = (Array.isArray(fieldOrder) && fieldOrder.length) ? fieldOrder : [];
+    return (data.chars || []).map(ch => {
+      const fields = ch.fields || {};
+      const dollar = order.map(k => (fields[k] != null ? fields[k] : ''));
+      return {
+        name: ch.nameCn || '',
+        initial: ch.initial || '?',
+        name_en: fields.name_en || ch.nameEn || '',
+        role: fields.role || '',
+        fields: fields,
+        $: dollar,            // $[0] 对应 $1，模板里 GS_CHARS[i].$[n-1]
+      };
+    });
+  }
+  
   let _stCur = 0;
   async function openStatusPanel(msgId) {
     let m = null;
@@ -2301,89 +2579,290 @@ ${log}
     const data = av.status;
     if (!data || !data.chars || !data.chars.length) { Toast.show('这条消息没有状态数据'); return; }
     const tpl = await _getStatusTpl();
+    const _fieldOrder = (await _getStatusFields()).map(f => f.key);   // 给 $n 定序
     _stCur = 0;
     const root = _ensureDialogRoot();
     root.classList.remove('gs-sheet-mode');
 
+    // 模板是否自带切换：引用了 GS_CHARS 就让模板自己管全部角色，系统不出圆点
+    const _selfSwitch = /GS_CHARS/.test(tpl) && data.chars.length > 1;
+    const _allData = _selfSwitch ? { chars: _buildAllCharsData(data, _fieldOrder), scene: data.scene, cur: 0 } : null;
+
+    const _frameToken = 'gsst-panel-' + Date.now();
+    // 自定义切换：模板渲染一次（用第0个角色填 $n/{{}} 占位，JS 再用 GS_CHARS 自己切）
+    // 普通模板：每次切换重渲染当前角色
+    const buildDoc = (ch) => {
+      const filled = _fillStatusTpl(tpl, data.scene, ch, _fieldOrder).replace(/\{\{nav\}\}/g, '');
+      return _wrapStatusDoc(filled, _frameToken, _allData);
+    };
+    // 监听沙箱上报的高度（跨域 iframe 读不到 contentDocument，靠 postMessage）
+    const onMsg = (e) => {
+      const d = e.data;
+      if (d && d.__gsHeight && d.token === _frameToken) {
+        const f = root.querySelector('#gs-st-frame');
+        if (f && d.h) f.style.height = (d.h + 4) + 'px';
+      }
+    };
+    window.addEventListener('message', onMsg);
+
     const render = () => {
       const ch = data.chars[_stCur] || data.chars[0];
-      const dots = data.chars.length > 1 ? data.chars.map((c, i) =>
+      // 自定义切换模板：不出系统圆点（模板自己有导航）
+      const dots = (!_selfSwitch && data.chars.length > 1) ? data.chars.map((c, i) =>
         `<div class="gs-st-dot${i === _stCur ? ' on' : ''}" data-i="${i}">${_esc(c.initial || '?')}</div>`
       ).join('') : '';
       const navHtml = dots ? `<div class="gs-st-nav">${dots}</div>` : '';
-      let filled = _fillStatusTpl(tpl, data.scene, ch);
-      // 模板含 {{nav}} → 填进去；不含（旧模板）→ 兜底放卡片上方，保证圆点一定出现
-      const hasNavSlot = /\{\{nav\}\}/.test(filled);
-      filled = filled.replace(/\{\{nav\}\}/g, navHtml);
-      const fallbackNav = (!hasNavSlot && navHtml) ? navHtml : '';
-      root.innerHTML = `
-        <div class="gs-st-wrap">
-          ${fallbackNav}
-          <div class="gs-st-stage">${filled}</div>
-          <div class="gs-st-close" data-act="close">关闭</div>
-        </div>`;
+      // 只重建 iframe 内容；外壳（圆点/关闭）首次建，之后切角色只更新 srcdoc 与高亮
+      let frame = root.querySelector('#gs-st-frame');
+      if (!frame) {
+        root.innerHTML = `
+          <div class="gs-st-wrap">
+            ${navHtml}
+            <div class="gs-st-stage">
+              <iframe id="gs-st-frame" sandbox="allow-scripts" style="width:100%;min-height:120px;border:0;display:block;background:transparent;" scrolling="no"></iframe>
+            </div>
+            <div class="gs-st-close" data-act="close">关闭</div>
+          </div>`;
+        frame = root.querySelector('#gs-st-frame');
+        const close = () => { window.removeEventListener('message', onMsg); root.classList.remove('active'); };
+        root.querySelector('[data-act="close"]').onclick = close;
+        root.onclick = (e) => { if (e.target === root) close(); };
+      } else {
+        // 更新圆点高亮
+        root.querySelectorAll('.gs-st-dot').forEach(d => d.classList.toggle('on', Number(d.dataset.i) === _stCur));
+      }
+      frame.srcdoc = buildDoc(ch);
+      // 绑定圆点切角色（每次重绑，简单稳妥）
       root.querySelectorAll('.gs-st-dot').forEach(d => {
         d.onclick = () => { _stCur = Number(d.dataset.i); render(); };
       });
-      root.querySelector('[data-act="close"]').onclick = () => root.classList.remove('active');
-      root.onclick = (e) => { if (e.target === root) root.classList.remove('active'); };
     };
     render();
     requestAnimationFrame(() => root.classList.add('active'));
   }
 
-  // +菜单：状态面板设置（开关 + 自定义模板编辑器 + 预览）
+  // +菜单：状态面板设置（开关 + 自定义字段表 + 模板编辑器 + 沙箱预览）
   async function openStatusEditor() {
     if (!_activeStory) return;
     const on = await _isStatusOn();
     const tpl = await _getStatusTpl();
+    let fields = await _getStatusFields();   // 工作副本，保存时落库
     const root = _ensureDialogRoot();
     root.classList.remove('gs-sheet-mode');
-    // 预览用的示例数据
+
+    // 预览示例：场景固定，角色字段按当前字段表造一份合理 demo 值
     const demoScene = { locCn: '塞壬酒馆', locEn: 'THE SIREN TAVERN', time: '23:45 PM' };
-    const demoChar = { initial: 'E', nameCn: '伊丽莎', nameEn: 'Elysia.', role: '酒馆老板娘', status: '表面从容，暗中观察', godNote: '说是暗中观察，但她擦同一个杯子已经十分钟了。', thought: '今晚的客人真多啊……希望别又惹出什么乱子才好。' };
-    const draw = () => {
+    const _demoValForField = (f) => {
+      const d = (f.desc || '') + f.key;
+      if (/0-?100|百分|进度|好感|体力|血|hp|favor|mood?bar/i.test(d) && /\d|0-?100|进度|百分|体力|血|hp|好感/i.test(d)) return '72';
+      if (/英文|拼音|name_?en/i.test(d)) return 'Elysia.';
+      if (/身份|头衔|role/i.test(d)) return '酒馆老板娘';
+      if (/状态|status/i.test(d)) return '表面从容，暗中观察';
+      if (/吐槽|上帝|note/i.test(d)) return '说是观察，杯子却擦了十分钟。';
+      if (/独白|心声|thought|内心/i.test(d)) return '今晚客人真多……别又惹出乱子。';
+      if (/心情|情绪|mood/i.test(d)) return '警惕';
+      if (/金币|钱|gold|coin|数值|数字/i.test(d)) return '128';
+      return '示例';
+    };
+    const buildDemoChar = () => {
+      const fv = {};
+      fields.forEach(f => { if (f.key) fv[f.key] = _demoValForField(f); });
+      return { initial: 'E', nameCn: '伊丽莎', nameEn: fv.name_en || 'Elysia.', fields: fv,
+               role: fv.role || '', status: fv.status || '', godNote: fv.god_note || '', thought: fv.thought || '' };
+    };
+
+    const _pvToken = 'gsst-pv-' + Date.now();
+    const drawPreview = () => {
       const t = root.querySelector('#gs-st-tpl-input');
       const v = t ? t.value : tpl;
-      const pv = root.querySelector('#gs-st-preview');
-      if (pv) pv.innerHTML = _fillStatusTpl(v, demoScene, demoChar);
+      const frame = root.querySelector('#gs-st-pv-frame');
+      if (!frame) return;
+      const filled = _fillStatusTpl(v, demoScene, buildDemoChar(), fields.map(f => f.key)).replace(/\{\{nav\}\}/g, '');
+      frame.srcdoc = _wrapStatusDoc(filled, _pvToken);
     };
+    const onPvMsg = (e) => {
+      const d = e.data;
+      if (d && d.__gsHeight && d.token === _pvToken) {
+        const f = root.querySelector('#gs-st-pv-frame');
+        if (f && d.h) f.style.height = Math.max(120, d.h + 4) + 'px';
+      }
+    };
+    window.addEventListener('message', onPvMsg);
+
+    // 字段表行渲染（key / 说明 / 软上限 / 删除）
+    const renderFieldRows = () => {
+      const box = root.querySelector('#gs-st-fields');
+      if (!box) return;
+      box.innerHTML = fields.map((f, i) => `
+        <div class="gs-st-frow" data-i="${i}">
+          <input class="gs-st-fkey" data-f="key" value="${_esc(f.key)}" placeholder="key" spellcheck="false">
+          <input class="gs-st-fdesc" data-f="desc" value="${_esc(f.desc)}" placeholder="给 AI 的说明（这列填什么）" spellcheck="false">
+          <input class="gs-st-fmax" data-f="max" value="${f.max || ''}" placeholder="字数" type="number" min="0" title="软上限，留空不限">
+          <button class="gs-st-fdel" title="删除">✕</button>
+        </div>`).join('');
+      box.querySelectorAll('.gs-st-frow').forEach(rowEl => {
+        const idx = Number(rowEl.dataset.i);
+        rowEl.querySelectorAll('input').forEach(inp => {
+          inp.addEventListener('input', () => {
+            const fld = inp.dataset.f;
+            fields[idx][fld] = fld === 'max' ? (parseInt(inp.value, 10) || 0) : inp.value;
+            renderChips(); drawPreview();
+          });
+        });
+        rowEl.querySelector('.gs-st-fdel').onclick = () => { fields.splice(idx, 1); renderFieldRows(); renderChips(); drawPreview(); };
+      });
+    };
+
+    // 占位符药丸：系统内置 + 字段表 key（含 .bar 快捷）
+    const renderChips = () => {
+      const box = root.querySelector('#gs-st-chips');
+      if (!box) return;
+      const builtin = ['loc_cn', 'loc_en', 'time', 'char_name_cn', 'char_initial'];
+      const fieldKeys = fields.filter(f => f.key).map(f => f.key);
+      const all = builtin.concat(fieldKeys);
+      box.innerHTML = all.map(k => `<button class="gs-st-chip" data-k="{{${k}}}">{{${k}}}</button>`).join('')
+        + fieldKeys.map(k => `<button class="gs-st-chip ghost" data-k="{{${k}.bar}}">{{${k}.bar}}</button>`).join('');
+      box.querySelectorAll('.gs-st-chip').forEach(c => {
+        c.onclick = () => {
+          const ta = root.querySelector('#gs-st-tpl-input');
+          const s = ta.selectionStart, val = ta.value, ins = c.dataset.k;
+          ta.value = val.slice(0, s) + ins + val.slice(ta.selectionEnd);
+          ta.focus(); const p = s + ins.length; ta.setSelectionRange(p, p);
+          drawPreview();
+        };
+      });
+    };
+
     root.innerHTML = `
       <div class="gs-dlg-box gs-st-ed-box">
-        <div class="gs-dlg-head"><div class="gs-dlg-title">状态面板</div><div class="gs-dlg-sub">STATUS · CUSTOM</div></div>
+        <div class="gs-dlg-head"><div class="gs-dlg-title">状态面板</div><div class="gs-dlg-sub">STATUS · FULLY CUSTOM</div></div>
         <div class="gs-dlg-body">
           <div class="gs-st-toggle-row">
-            <div><div class="gs-st-tg-main">启用状态面板</div><div class="gs-st-tg-sub">开启后 AI 会为每个角色生成状态，点头像查看</div></div>
+            <div><div class="gs-st-tg-main">启用状态面板</div><div class="gs-st-tg-sub">开启后 AI 按字段表为每个角色生成数据，点头像查看</div></div>
             <div class="gs-time-switch${on ? ' on' : ''}" id="gs-st-switch"><div class="gs-time-switch-knob"></div></div>
           </div>
-          <div class="gs-st-pv-label">预览</div>
-          <div class="gs-st-pv" id="gs-st-preview"></div>
-          <div class="gs-css-tip">可用占位符：<b>{{loc_cn}} {{loc_en}} {{time}} {{char_initial}} {{char_name_cn}} {{char_name_en}} {{char_role}} {{char_status}} {{god_note}} {{thought}}</b>。首字母与中文名由系统自动填充。</div>
+
+          <div class="gs-st-sec-h">① 字段 / DATA <span>你定数据 · AI 照填</span></div>
+          <div class="gs-css-tip" style="margin-bottom:8px;">key 给模板取值 <b>{{key}}</b> 用；说明是给 AI 看的人话；字数是软上限（留空不限）。0-100 的数字字段可在模板里用 <b>{{key.bar}}</b> 渲染进度条。</div>
+          <div id="gs-st-fields"></div>
+          <div class="gs-css-btns"><button class="gs-css-mini" id="gs-st-fadd">+ 加字段</button><button class="gs-css-mini" id="gs-st-fdefault">默认字段</button></div>
+
+          <div class="gs-st-sec-h">② 模板 / TEMPLATE <span>HTML · CSS · JS 全放开</span></div>
+          <div id="gs-st-chips" class="gs-st-chips"></div>
           <textarea class="gs-dlg-input gs-css-input" id="gs-st-tpl-input" rows="8" spellcheck="false">${_esc(tpl)}</textarea>
-          <div class="gs-css-btns"><button class="gs-css-mini" id="gs-st-default">默认模板</button></div>
+          <div class="gs-css-btns">
+            <button class="gs-css-mini" id="gs-st-scan" style="flex:2;border-color:rgba(138,44,44,.4);color:#8a2c2c;">✦ 从模板生成字段</button>
+            <button class="gs-css-mini" id="gs-st-default">默认模板</button>
+          </div>
+          <div class="gs-css-tip">在外面搓好状态栏（你的 {{字段}} 或格式 $1 $2 都认）直接贴进来，点 <b>从模板生成字段</b> 自动建好字段表，你只需补一句"给 AI 的说明"。脚本在 iframe 沙箱内运行，和聊天里玩 HTML 一个隔离机制。</div>
+          <div class="gs-css-btns" style="margin-top:6px;"><button class="gs-css-mini" id="gs-st-preset-np">📰 一键套用报纸风</button></div>
+
+          <div class="gs-st-sec-h">★ 我的预设 / PRESETS <span>跨群像共用</span></div>
+          <div class="gs-css-tip" style="margin-bottom:8px;">把当前字段表 + 模板存成预设，下次任何群像点一下就套用。点预设套用，点右上角 ✕ 删除。</div>
+          <div id="gs-st-presets" class="gs-st-preset-list"></div>
+          <div class="gs-css-btns" style="margin-top:6px;"><button class="gs-css-mini" id="gs-st-preset-save" style="border-color:rgba(138,44,44,.4);color:#8a2c2c;">＋ 存为预设</button></div>
+
+          <div class="gs-st-sec-h">③ 预览 / LIVE <span>沙箱 · 示例数据</span></div>
+          <div class="gs-st-pv"><iframe id="gs-st-pv-frame" sandbox="allow-scripts" scrolling="no" style="width:100%;height:300px;min-height:120px;border:0;display:block;background:transparent;"></iframe></div>
         </div>
         <div class="gs-dlg-foot">
           <button class="gs-dlg-btn ghost" data-act="close">关闭</button>
           <button class="gs-dlg-btn primary" data-act="save">保存</button>
         </div>
       </div>`;
-    const close = () => root.classList.remove('active');
+
+    const close = () => { window.removeEventListener('message', onPvMsg); root.classList.remove('active'); };
     const sw = root.querySelector('#gs-st-switch');
     sw.onclick = () => sw.classList.toggle('on');
     const ta = root.querySelector('#gs-st-tpl-input');
-    ta.addEventListener('input', draw);
-    root.querySelector('#gs-st-default').onclick = () => { ta.value = _STATUS_TEMPLATE; draw(); };
+    ta.addEventListener('input', drawPreview);
+    root.querySelector('#gs-st-default').onclick = () => { ta.value = _STATUS_TEMPLATE; drawPreview(); };
+    root.querySelector('#gs-st-fadd').onclick = () => { fields.push({ key: 'field' + (fields.length + 1), desc: '', max: 0 }); renderFieldRows(); renderChips(); drawPreview(); };
+    root.querySelector('#gs-st-fdefault').onclick = () => { fields = _STATUS_FIELDS_DEFAULT.map(f => ({ ...f })); renderFieldRows(); renderChips(); drawPreview(); };
+    // ✦ 从模板扫描 {{字段}} 自动建表（保留已填说明）
+    root.querySelector('#gs-st-scan').onclick = () => {
+      const scanned = _fieldsFromTemplate(ta.value, fields);
+      if (!scanned.length) { Toast.show('没扫到字段，确认模板里有 {{字段}}、$n 或 .fields 取值'); return; }
+      fields = scanned;
+      renderFieldRows(); renderChips(); drawPreview();
+      const blanks = fields.filter(f => !f.desc).length;
+      Toast.show(blanks ? `已生成 ${fields.length} 个字段，还有 ${blanks} 个待补说明` : `已生成 ${fields.length} 个字段 ✦`);
+    };
+    // 📰 一键套用报纸风（字段 + 模板 + 自动开启）
+    root.querySelector('#gs-st-preset-np').onclick = () => {
+      fields = _STATUS_PRESET_NEWSPAPER.fields.map(f => ({ ...f }));
+      ta.value = _STATUS_PRESET_NEWSPAPER.tpl;
+      if (!sw.classList.contains('on')) sw.classList.add('on');
+      renderFieldRows(); renderChips(); drawPreview();
+      Toast.show('报纸风已套用，保存即可 📰');
+    };
+    // ★ 我的预设：渲染列表
+    let _presets = [];
+    const renderPresets = () => {
+      const box = root.querySelector('#gs-st-presets');
+      if (!box) return;
+      if (!_presets.length) {
+        box.innerHTML = `<div class="gs-css-tip" style="opacity:.6;padding:2px 0;">还没有预设，点下面「＋ 存为预设」把当前这套存起来。</div>`;
+        return;
+      }
+      box.innerHTML = _presets.map((p, i) =>
+        `<span class="gs-st-preset-chip" data-i="${i}">${_esc(p.name || '未命名')}<b class="gs-st-preset-del" data-del="${i}">✕</b></span>`
+      ).join('');
+      box.querySelectorAll('.gs-st-preset-chip').forEach(c => {
+        c.onclick = (e) => {
+          if (e.target.classList.contains('gs-st-preset-del')) return;
+          const p = _presets[Number(c.dataset.i)];
+          if (!p) return;
+          fields = (p.fields || []).map(f => ({ ...f }));
+          ta.value = p.tpl || '';
+          if (!sw.classList.contains('on')) sw.classList.add('on');
+          renderFieldRows(); renderChips(); drawPreview();
+          Toast.show(`已套用「${p.name}」，保存即可 ✦`);
+        };
+      });
+      box.querySelectorAll('.gs-st-preset-del').forEach(b => {
+        b.onclick = async (e) => {
+          e.stopPropagation();
+          const i = Number(b.dataset.del);
+          const p = _presets[i];
+          if (!p) return;
+          if (!(await _gsConfirm('删除预设', `删除预设「${_esc(p.name)}」？`))) return;
+          _presets.splice(i, 1);
+          await _saveStatusPresets(_presets);
+          renderPresets();
+          Toast.show('已删除');
+        };
+      });
+    };
+    // 存为预设
+    root.querySelector('#gs-st-preset-save').onclick = async () => {
+      const clean = fields.map(f => ({ key: String(f.key || '').trim(), desc: f.desc || '', max: Number(f.max) || 0 })).filter(f => f.key);
+      if (!clean.length) { Toast.show('先建至少一个字段再存'); return; }
+      const name = (await _gsPrompt('存为预设', '给这个预设起个名字')) ;
+      if (!name) return;
+      const existIdx = _presets.findIndex(p => p.name === name);
+      const entry = { id: 'p' + Date.now(), name, fields: clean, tpl: ta.value };
+      if (existIdx >= 0) { if (!(await _gsConfirm('覆盖预设', `已有同名预设「${_esc(name)}」，覆盖它？`))) return; _presets[existIdx] = entry; }
+      else _presets.push(entry);
+      await _saveStatusPresets(_presets);
+      renderPresets();
+      Toast.show(`已存为预设「${name}」★`);
+    };
     root.querySelector('[data-act="close"]').onclick = close;
     root.querySelector('[data-act="save"]').onclick = async () => {
+      const clean = fields.map(f => ({ key: String(f.key || '').trim(), desc: f.desc || '', max: Number(f.max) || 0 })).filter(f => f.key);
+      if (!clean.length) { Toast.show('至少保留一个字段'); return; }
       try {
         await DB.settings.set(`gstory-status-on-${_activeStory.id}`, sw.classList.contains('on'));
         await DB.settings.set(`gstory-status-tpl-${_activeStory.id}`, ta.value);
+        await DB.settings.set(`gstory-status-fields-${_activeStory.id}`, clean);
         Toast.show('状态面板已保存 ✦');
       } catch (e) { Toast.show('保存失败'); }
       close();
     };
     root.onclick = (e) => { if (e.target === root) close(); };
-    draw();
+    renderFieldRows(); renderChips(); drawPreview();
+    _getStatusPresets().then(arr => { _presets = arr || []; renderPresets(); });
     requestAnimationFrame(() => root.classList.add('active'));
   }
 
@@ -2768,6 +3247,62 @@ ${log}
       screen.appendChild(root);
     }
     return root;
+  }
+
+  // 第二层弹窗容器（叠在状态编辑器等一级弹窗之上，用于输入/确认，替代被 file:// 禁用的 prompt/confirm）
+  function _ensureDialogRoot2() {
+    let root = document.getElementById('gs-dialog-root-2');
+    if (!root) {
+      root = document.createElement('div');
+      root.id = 'gs-dialog-root-2';
+      root.className = 'gs-dlg';
+      root.style.zIndex = '99999';
+      const screen = document.getElementById(SCREEN_ID) || document.body;
+      screen.appendChild(root);
+    }
+    return root;
+  }
+  // 自定义输入框，返回 Promise<string|null>（取消为 null）
+  function _gsPrompt(title, placeholder = '', defVal = '') {
+    return new Promise(resolve => {
+      const root = _ensureDialogRoot2();
+      root.innerHTML = `
+        <div class="gs-dlg-box">
+          <div class="gs-dlg-head"><div class="gs-dlg-title">${_esc(title)}</div></div>
+          <div class="gs-dlg-body"><input type="text" class="gs-dlg-input" id="gs-prompt-input" placeholder="${_esc(placeholder)}" value="${_esc(defVal)}" style="width:100%;"></div>
+          <div class="gs-dlg-foot">
+            <button class="gs-dlg-btn ghost" data-act="cancel">取消</button>
+            <button class="gs-dlg-btn primary" data-act="ok">确定</button>
+          </div>
+        </div>`;
+      const inp = root.querySelector('#gs-prompt-input');
+      const done = (val) => { root.classList.remove('active'); resolve(val); };
+      root.querySelector('[data-act="cancel"]').onclick = () => done(null);
+      root.querySelector('[data-act="ok"]').onclick = () => done((inp.value || '').trim());
+      root.onclick = (e) => { if (e.target === root) done(null); };
+      inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') done((inp.value || '').trim()); });
+      requestAnimationFrame(() => { root.classList.add('active'); inp.focus(); });
+    });
+  }
+  // 自定义确认框，返回 Promise<boolean>
+  function _gsConfirm(title, msg = '') {
+    return new Promise(resolve => {
+      const root = _ensureDialogRoot2();
+      root.innerHTML = `
+        <div class="gs-dlg-box">
+          <div class="gs-dlg-head"><div class="gs-dlg-title">${_esc(title)}</div></div>
+          ${msg ? `<div class="gs-dlg-body"><div class="gs-dlg-text">${msg}</div></div>` : ''}
+          <div class="gs-dlg-foot">
+            <button class="gs-dlg-btn ghost" data-act="cancel">取消</button>
+            <button class="gs-dlg-btn primary" data-act="ok">确定</button>
+          </div>
+        </div>`;
+      const done = (val) => { root.classList.remove('active'); resolve(val); };
+      root.querySelector('[data-act="cancel"]').onclick = () => done(false);
+      root.querySelector('[data-act="ok"]').onclick = () => done(true);
+      root.onclick = (e) => { if (e.target === root) done(false); };
+      requestAnimationFrame(() => root.classList.add('active'));
+    });
   }
 
   function _fmtTime(ts) {
@@ -3264,6 +3799,28 @@ ${log}
 #${SCREEN_ID} .gs-st-tg-sub{font-size:9px;color:rgba(0,0,0,.3);margin-top:3px;line-height:1.4;}
 #${SCREEN_ID} .gs-st-pv-label{font-family:"Space Mono",monospace;font-size:8px;color:rgba(0,0,0,.3);letter-spacing:1px;margin-bottom:8px;}
 #${SCREEN_ID} .gs-st-pv{background:#EAE7E0;border-radius:12px;padding:10px;margin-bottom:12px;overflow:hidden;}
+/* —— 状态编辑器新增 —— */
+#${SCREEN_ID} .gs-st-sec-h{display:flex;align-items:baseline;justify-content:space-between;font-family:"Space Mono",monospace;font-size:11px;font-weight:700;letter-spacing:1px;color:#1a1a1a;margin:18px 0 8px;padding-top:14px;border-top:.5px solid rgba(0,0,0,.08);}
+#${SCREEN_ID} .gs-st-sec-h:first-of-type{border-top:0;padding-top:0;}
+#${SCREEN_ID} .gs-st-sec-h span{font-size:8px;font-weight:400;letter-spacing:.5px;color:rgba(0,0,0,.28);}
+#${SCREEN_ID} .gs-st-frow{display:flex;align-items:center;gap:6px;margin-bottom:7px;}
+#${SCREEN_ID} .gs-st-frow input{height:32px;border-radius:7px;border:.5px solid rgba(0,0,0,.12);background:rgba(0,0,0,.015);font-family:"Space Mono",monospace;font-size:11px;color:#1a1a1a;padding:0 8px;-webkit-appearance:none;outline:none;}
+#${SCREEN_ID} .gs-st-frow input:focus{border-color:rgba(0,0,0,.3);background:#fff;}
+#${SCREEN_ID} .gs-st-fkey{width:72px;flex:none;font-weight:700;}
+#${SCREEN_ID} .gs-st-fdesc{flex:1;min-width:0;}
+#${SCREEN_ID} .gs-st-fmax{width:46px;flex:none;text-align:center;padding:0 4px;}
+#${SCREEN_ID} .gs-st-fmax::-webkit-inner-spin-button{display:none;}
+#${SCREEN_ID} .gs-st-fdel{width:30px;height:32px;flex:none;border:0;background:transparent;color:rgba(0,0,0,.3);font-size:13px;cursor:pointer;border-radius:7px;-webkit-tap-highlight-color:transparent;}
+#${SCREEN_ID} .gs-st-fdel:active{background:rgba(0,0,0,.05);color:#1a1a1a;}
+#${SCREEN_ID} .gs-st-chips{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px;}
+#${SCREEN_ID} .gs-st-chip{font-family:"Space Mono",monospace;font-size:9px;font-weight:700;letter-spacing:.3px;color:#1a1a1a;background:rgba(0,0,0,.05);border:.5px solid rgba(0,0,0,.1);border-radius:6px;padding:3px 7px;cursor:pointer;-webkit-tap-highlight-color:transparent;}
+#${SCREEN_ID} .gs-st-chip:active{background:rgba(0,0,0,.12);}
+#${SCREEN_ID} .gs-st-chip.ghost{background:transparent;color:rgba(0,0,0,.4);border-style:dashed;}
+#${SCREEN_ID} .gs-st-preset-list{display:flex;flex-wrap:wrap;gap:6px;}
+#${SCREEN_ID} .gs-st-preset-chip{display:inline-flex;align-items:center;gap:6px;font-family:"Space Mono",monospace;font-size:11px;font-weight:700;letter-spacing:.3px;color:#1a1a1a;background:rgba(138,44,44,.06);border:.5px solid rgba(138,44,44,.25);border-radius:8px;padding:5px 9px;cursor:pointer;-webkit-tap-highlight-color:transparent;}
+#${SCREEN_ID} .gs-st-preset-chip:active{background:rgba(138,44,44,.14);}
+#${SCREEN_ID} .gs-st-preset-del{font-size:9px;color:rgba(138,44,44,.55);font-weight:700;padding:0 1px;cursor:pointer;}
+#${SCREEN_ID} .gs-st-preset-del:active{color:#8a2c2c;}
 
 /* ════════ 设置面板（完全独立的 gs-set-* 命名空间，不依赖主文件） ════════ */
 #gs-settings-panel.gs-set-panel-root{position:absolute;inset:0;z-index:40;background:linear-gradient(180deg,#edecea,#f3f2f0 30%,#f6f5f3);display:flex;flex-direction:column;overflow:hidden;transform:translateX(100%);transition:transform .4s cubic-bezier(.16,1,.3,1);}
