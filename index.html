@@ -28,6 +28,7 @@
 <script src="editorial.js"></script>
 <script src="couple.js"></script>
 <script src="group-story.js"></script>
+<script src="story-status.js"></script>
 <script src="updater.js"></script>
 <script src="fab-style.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -7202,6 +7203,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
                          <div class="action-popover" id="sc-dock-popover">
     <button class="popover-item" onclick="StoryChatModule.openColorModal()"><i class="ph-light ph-palette"></i> 调色 (PALETTE)</button>
     <button class="popover-item" onclick="StoryChatModule.openCssModal()"><i class="ph-light ph-code"></i> 样式 (CSS)</button>
+    <button class="popover-item" onclick="StoryChatModule.openStatusEditor()"><i class="ph-light ph-identification-card"></i> 状态面板 (STATUS)</button>
     <button class="popover-item" onclick="StoryChatModule.openSnapshotModal()"><i class="ph-light ph-camera"></i> 快照 (SNAPSHOT)</button>
     <button class="popover-item" onclick="StoryChatModule.openContextConsole()"><i class="ph-light ph-terminal-window"></i> 观测台 (CONSOLE)</button>
     <button class="popover-item" onclick="StoryChatModule.archiveStory()"><i class="ph-light ph-archive"></i> 封存 (ARCHIVE)</button>
@@ -15012,6 +15014,7 @@ const ConvModule = (() => {
         }
         avatarEl.style.cursor = 'pointer'; // 提示可点击
         avatarEl.title = '点击更换群头像';
+        avatarEl.onclick = null; // 🌟 群聊清掉私聊残留的"窥探心声"点击
       }
       // 🌟 如果是群聊，固定显示群频道
       if (statusEl) {
@@ -24148,7 +24151,10 @@ await DB.settings.del(`offline-memory-${_realCharId}`);
                     <div class="barcode"></div>
                 </div>`;
         } else {
-            const avatarImg = _charImgUrl ? `<img src="${_charImgUrl}" alt="" class="avatar">` : `<div class="avatar" style="display:flex;align-items:center;justify-content:center;font-size:14px;">${(_char?.name || 'C')[0]}</div>`;
+            const _stClickable = (!isUser && window.StoryStatus);
+            const _stAttr = _stClickable ? ` onclick="StoryChatModule.openStatus(${msg.id})" style="cursor:pointer;"` : '';
+            const _avInner = _charImgUrl ? `<img src="${_charImgUrl}" alt="" class="avatar">` : `<div class="avatar" style="display:flex;align-items:center;justify-content:center;font-size:14px;">${(_char?.name || 'C')[0]}</div>`;
+            const avatarImg = _stClickable ? `<span${_stAttr}>${_avInner}</span>` : _avInner;
             sidebarHtml = `
                 <div class="card-sidebar">
                     ${avatarImg}
@@ -24402,7 +24408,7 @@ await DB.settings.del(`offline-memory-${_realCharId}`);
             }
         }
 
-        return `
+        let _storyPrompt = `
 # 核心使命：担任电影导演与首席编剧 (Mission: Film Director & Lead Writer)
 你不再是一个简单的对话机器人，你是这部沉浸式互动电影的**全能导演**。
 你的任务是：接管叙事，根据主角（用户）的行动，通过细腻的文学描写、镜头语言和心理刻画，推动剧情发展。
@@ -24483,6 +24489,16 @@ ${scriptHistory || '（电影开场，暂无前文）'}
 - *示例：* *就在这时，一个神色匆忙的侍者撞到了桌角，打断了你们的对视...*
 
 现在，请接手剧本，开始你的演出。`;
+
+        // 自定义状态栏：附加 [STATUS] 填写指令
+        try {
+            if (window.StoryStatus && await StoryStatus.isOn(_storyCharId)) {
+                const _stP = await StoryStatus.buildPrompt(_storyCharId, _char?.name || '');
+                if (_stP) _storyPrompt += '\n' + _stP;
+            }
+        } catch (e) {}
+
+        return _storyPrompt;
     }
 
     // ── 🌟 新增：后台自动检查封存逻辑 ──
@@ -24572,8 +24588,21 @@ const storyMsgs = rawStoryMsgs;
             msg.id = id;
             _totalMsgs++;
             _offset++;
-            
-            _tempSwipes[msg.id] = { texts: [finalContent], activeIndex: 0 };
+
+            // 自定义状态栏：抽取 [STATUS] 落库，正文用剥离后的干净版
+            let _shownContent = finalContent;
+            try {
+                if (window.StoryStatus && await StoryStatus.isOn(_storyCharId)) {
+                    const r = await StoryStatus.extract(_storyCharId, msg.id, finalContent);
+                    if (r && r.status) {
+                        _shownContent = r.clean;
+                        msg.content = r.clean;
+                        await DB.messages.put(msg);
+                    }
+                }
+            } catch (e) {}
+
+            _tempSwipes[msg.id] = { texts: [_shownContent], activeIndex: 0 };
             
             loader.remove();
             _appendCard(msg, _totalMsgs);
@@ -24682,6 +24711,14 @@ const storyMsgs = rawStoryMsgs;
                 return '';
             }).trim();
             
+            // 自定义状态栏：reroll 新版本抽取 [STATUS] 落库，正文剥干净
+            try {
+                if (window.StoryStatus && await StoryStatus.isOn(_storyCharId)) {
+                    const r = await StoryStatus.extract(_storyCharId, msgId, newContent);
+                    if (r && r.status) newContent = r.clean;
+                }
+            } catch (e) {}
+
             if (!_tempSwipes[msgId]) {
                 _tempSwipes[msgId] = { texts: [msg.content], activeIndex: 0 };
             }
@@ -25514,6 +25551,12 @@ ${newMessagesLog}
 
    return { 
         open, loadMore, reroll, deleteMsg, 
+        openStatus: (msgId) => { if (window.StoryStatus) StoryStatus.openPanel(_storyCharId, msgId); },
+        openStatusEditor: () => {
+            const pop = document.getElementById('sc-dock-popover'); if (pop) pop.classList.remove('active');
+            const plus = document.getElementById('sc-dock-plus-btn'); if (plus) plus.classList.remove('active');
+            if (window.StoryStatus) StoryStatus.openEditor(_storyCharId);
+        },
         openSettings, closeSettings, saveSettings, toggleWBMount, clearArchive,
         editMsg, confirmEditMsg, closeEditModal, swipeMsg, openColorModal, closeColorModal, changeColor, archiveStory,createSnapshot, openSnapshotModal, closeSnapshotModal, loadSnapshot, deleteSnapshot, startNewTimeline, confirmCreateSnapshot, closeSnapNameModal, wrapStory, openCssModal, closeCssModal, copyDefaultCss, applyAndSaveCss, clearCss, saveCssPreset, confirmSaveCssPreset, applyCssPreset, deleteCssPreset,openImgViewer, downloadImage, regenerateStoryImage, openContextConsole
     };
