@@ -1127,7 +1127,7 @@ ${contextComments}
                 castContext += `ID:${c.id} | 名字:${c.name} | 设定:${c.persona} | ${userMask}\n`;
             }
 
-            // 🎯 核心逻辑：找出用户刚才回复的那个 ANON 是哪个角色！
+           // 🎯 核心逻辑：找出用户刚才回复的那个 ANON 是哪个角色！
             let targetCharInstruction = '';
             if (targetName) {
                 const targetAns = intv.answers.find(a => a.id === targetName);
@@ -1137,15 +1137,15 @@ ${contextComments}
                         targetCharInstruction = `
 🔥🔥🔥【绝对指令】：系统监测到用户刚刚点击回复了 ${targetName}。
 而 ${targetName} 的真实身份其实是【${targetChar.name}】！
-所以，本次生成的回复中，【${targetChar.name}】必须亲自下场回复用户的挑衅！ta必须维持 ${targetName} 这个匿名代号，但语气必须彻底暴露 ta 对绑定用户面具的态度（比如吃醋、傲娇、或者是被戳穿伪装后的恼羞成怒）。`;
+所以，本次生成的回复中，【${targetChar.name}】必须亲自下场回复用户的发言！ta必须维持 ${targetName} 这个匿名代号，但语气必须彻底暴露 ta 对绑定用户面具的态度（比如吃醋、傲娇、或者是被戳穿伪装后的嘴硬）。`;
                     }
                 }
             }
 
             const contextAnswers = intv.answers.map(a => `[${a.id}]: ${a.text}`).join('\n');
 
-            const prompt = `你是一个深网匿名论坛的主理人。用户（代号 YOU. XXXX）刚刚提交了回答。
-请生成 5-8 条后续互动，制造评论区的“修罗场群聊”效果。
+            const prompt = `你是一个匿名论坛的主理人。用户（代号 YOU. XXXX）刚刚提交了回答。
+请生成 5-8 条后续互动，制造评论区的“修罗场”或“熟人掉马”效果。
 
 【当前所有角色的真实设定字典】：
 ${castContext}
@@ -1156,9 +1156,10 @@ ${targetCharInstruction}
 
 【任务要求】：
 1. 参演的角色如果有回应，依然必须使用他们原本抽到的 ANON 代号。
-2. 其他在线的角色如果看到了用户的发言，也可以下场“拱火”、“阴阳怪气”或“拆台”。
+2. 其他在线的角色如果看到了用户的发言，可以下场“吃瓜”、“调侃”或“暗示”。
 3. 也可以加入路人NPC（如：ANON. 99X，真实身份设为 npc）在旁边吃瓜看戏。
-4. 语气极度活人感，拒绝AI的客套！就是在群里吵架/对线的感觉！
+4. 语气极度活人感，拒绝AI的客套！营造在群里熟人互损、高段位拉扯的氛围。
+5. ⚠️【安全与礼貌警告】：绝对禁止使用脏话、恶俗词汇、辱骂或真正恶毒的人身攻击。任何“破防”、“吃醋”或“拆台”都必须是有分寸、带点傲娇或幽默感的，绝不能让用户感到被网暴或恶臭攻击！
 
 严格返回 JSON 数组（必须附带真实身份 realCharId，如果是NPC填 "npc"）：[{"id":"代号", "text":"评论内容", "realCharId": "角色真实ID或npc"}]`;
 
@@ -1954,20 +1955,23 @@ ${userMaskStr}
 -----------------`;
             }
 
-            const prompt = `你是一个深网匿名论坛的毒舌版主。本次提问，系统内所有的角色都潜伏在观众席里。
+            const prompt = `你是一个匿名论坛的版主。本次提问，系统内所有的角色都潜伏在观众席里。
 
 【参演角色名单与底层设定】：
 ${castContext}
 
 【任务流程】：
-1. 抛出一个极其尖锐、关于人性或情感的盲采拷问（不要任何标题、前缀或标号，直接发问！语气像玩真心话大冒险一样刁钻）。
+1. 抛出一个关于人性、情感或日常趣事的盲采发问（不要任何标题、前缀或标号，直接发问！语气像玩真心话大冒险一样）。
 2. 生成 10-15 条匿名回答（代号统一为 ANON. XXXX 格式）。
 
 【🔥 极度重要的高阶修罗场玩法】：
 - 参演名单中的【所有角色】都必须下场回答！但必须隐藏在 ANON 代号背后。
-- 【伪装法则】：角色作答时，可以正常发挥，也可以【故意模仿绑定的用户语气】来混淆视听，或者【模仿其他角色的口头禅】来互相阴阳怪气。
-- 【路人掺水】：可以混入几个真正的路人NPC（胡言乱语或拱火），NPC的真实角色ID填 "npc"。
-- 路人与角色之间可以互相回复（如："回复 ANON. 1B22：少装蒜"）。
+- 【伪装法则】：角色作答时，可以正常发挥，也可以【故意模仿绑定的用户语气】来混淆视听，或者互相【调侃拆台】。
+- 【路人掺水】：可以混入几个真正的路人NPC（吐槽或吃瓜），NPC的真实角色ID填 "npc"。
+- 路人与角色之间可以互相回复（如："回复 ANON. 1B22：你这也太明显了吧"）。
+
+【⚠️ 安全与底线警告】：
+绝对禁止使用脏话、恶毒谩骂、人身攻击或低俗恶臭词汇。即使是角色之间的“互损”或对用户的“吃醋”，也必须是高段位的、幽默的或带有暧昧张力的拉扯，绝对不能让用户感到被冒犯或遭到网络暴力。
 
 【底层格式严格要求】：
 严格输出 JSON，绝对不能暴露角色的真名在页面上！必须附带 realCharId 以供底层追踪：
@@ -2024,6 +2028,111 @@ ${castContext}
         }
     }
     
+    // --- 新增：刷新单篇盲采 (重新生成问题+回答，原地覆写) ---
+    async function refreshInterview(interviewId, btn) {
+        if (_isGeneratingInterview) {
+            showMessage('请等待当前盲采生成完成');
+            return;
+        }
+        const intv = _interviews.find(i => i.id === interviewId);
+        if (!intv) return;
+
+        _isGeneratingInterview = true;
+        const originalHtml = btn ? btn.innerHTML : '';
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = `<i class="ph-thin ph-circle-notch" style="animation: ed-spin 1s linear infinite;"></i>`;
+        }
+
+        try {
+            const activeApi = await ApiModule.getSecondaryApi();
+            if (!activeApi) throw new Error('API未配置');
+
+            const allChars = await DB.characters.getAll().catch(()=>[]);
+            if (allChars.length === 0) throw new Error('没有可用角色');
+
+            // 抓取全员的设定、面具和最近的聊天情绪
+            let castContext = '';
+            for (const c of allChars) {
+                const binding = await DB.bindings.get(String(c.id)).catch(()=>null);
+                const personaId = binding ? binding.personaId : (typeof PersonaModule !== 'undefined' ? PersonaModule.getActiveId() : null);
+                const allPersonas = typeof PersonaModule !== 'undefined' ? PersonaModule.getAll() :[];
+                const userObj = allPersonas.find(p => String(p.id) === String(personaId)) || allPersonas[0];
+                let userMaskStr = userObj ? `面对的用户面具是【${userObj.name}】：${userObj.bio}` : '无特定绑定';
+
+                const msgs = await DB.messages.getPage(String(c.id), 0, 5).catch(()=>[]);
+                const moodText = msgs.filter(m => m.role === 'assistant').map(m => m.content).join(' | ');
+
+                castContext += `
+【真实角色 ID: ${c.id} | 名字: ${c.name}】
+性格设定: ${c.persona}
+${userMaskStr}
+最近语气参考: ${moodText || '暂无'}
+-----------------`;
+            }
+
+            const prompt = `你是一个匿名论坛的版主。本次提问，系统内所有的角色都潜伏在观众席里。
+
+【参演角色名单与底层设定】：
+${castContext}
+
+【任务流程】：
+1. 抛出一个关于人性、情感或日常趣事的盲采发问（不要任何标题、前缀或标号，直接发问！语气像玩真心话大冒险一样）。换一个全新的角度，不要和老问题雷同。
+2. 生成 10-15 条匿名回答（代号统一为 ANON. XXXX 格式）。
+
+【🔥 极度重要的高阶修罗场玩法】：
+- 参演名单中的【所有角色】都必须下场回答！但必须隐藏在 ANON 代号背后。
+- 【伪装法则】：角色作答时，可以正常发挥，也可以【故意模仿绑定的用户语气】来混淆视听，或者互相【调侃拆台】。
+- 【路人掺水】：可以混入几个真正的路人NPC（吐槽或吃瓜），NPC的真实角色ID填 "npc"。
+- 路人与角色之间可以互相回复（如："回复 ANON. 1B22：你这也太明显了吧"）。
+
+【⚠️ 安全与底线警告】：
+绝对禁止使用脏话、恶毒谩骂、人身攻击或低俗恶臭词汇。即使是角色之间的“互损”或对用户的“吃醋”，也必须是高段位的、幽默的或带有暧昧张力的拉扯，绝对不能让用户感到被冒犯或遭到网络暴力。
+
+【底层格式严格要求】：
+严格输出 JSON，绝对不能暴露角色的真名在页面上！必须附带 realCharId 以供底层追踪：
+{
+  "question": "盲采问题正文...",
+  "answers":[
+    {"id": "ANON. 7A9F", "text": "回答内容...", "realCharId": "1"}, 
+    {"id": "ANON. B211", "text": "回复 ANON. 7A9F：你这是在自欺欺人。", "realCharId": "npc"}
+  ]
+}`;
+
+            const response = await ApiHelper.chatCompletion(activeApi,[{ role: 'user', content: prompt }]);
+            const cleaned = response.replace(/```json|```/g, '').trim();
+            const start = cleaned.indexOf('{');
+            const end = cleaned.lastIndexOf('}');
+            const data = JSON.parse(cleaned.substring(start, end + 1));
+
+            let baseTime = Date.now() - 3600000;
+            const finalAnswers = data.answers.map(a => {
+                baseTime += Math.floor(Math.random() * 60000) + 10000;
+                const d = new Date(baseTime);
+                return {
+                    id: a.id,
+                    realCharId: a.realCharId,
+                    text: a.text,
+                    time: `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`
+                };
+            });
+
+            // 原地覆写：只换问题和回答，保留 id / issue 编号 / 时间戳排序
+            intv.question = data.question;
+            intv.answers = finalAnswers;
+            await _saveInterviews();
+            _renderInterviews();
+            showMessage('盲采已重新连线 ✦');
+
+        } catch(e) {
+            console.error('[Refresh Interview Error]', e);
+            showMessage('连线失败，频道受干扰');
+            if (btn) { btn.disabled = false; btn.innerHTML = originalHtml; }
+        } finally {
+            _isGeneratingInterview = false;
+        }
+    }
+
     // --- 检查盲采页面状态 ---
     async function _checkInterviewState() {
         await _loadInterviews();
@@ -2069,7 +2178,10 @@ ${castContext}
             <div class="editorial-card">
                 <div class="edit-meta">
                     <span class="issue">${intv.issue}</span>
-                    <span class="timestamp">${dateStr}</span>
+                    <span style="display:flex; align-items:center; gap:10px;">
+                        <span class="timestamp">${dateStr}</span>
+                        <button onclick="EditorialModule.refreshInterview('${intv.id}', this)" title="重新生成这篇盲采" style="background:transparent; border:none; cursor:pointer; color:var(--text-muted); padding:2px; display:flex; align-items:center; font-size:0.9rem;" onmouseover="this.style.color='var(--text-dark)'" onmouseout="this.style.color='var(--text-muted)'"><i class="ph-bold ph-arrows-clockwise"></i></button>
+                    </span>
                 </div>
                 <div class="edit-body">
                     <div class="edit-q-mark">Q.</div>
@@ -2300,6 +2412,7 @@ ${historyText}
         publishReceiptComment,
         toggleAnswers, 
         submitAnonAnswer, 
+        refreshInterview,
         selectWeeklyRole,
         generateWeekly,
         _checkHomeState,
