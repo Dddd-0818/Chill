@@ -4935,13 +4935,17 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
           <button class="btn-primary" onclick="DataModule.exportData()" style="margin-bottom:12px;">
             <i class="ph ph-export"></i> 导出完整备份包 (.zip)
           </button>
+          <button class="btn-outline" onclick="DataModule.exportPartial()" style="margin-bottom:12px;">
+            <i class="ph ph-user-focus"></i> 仅导出角色+面具+聊天记录 (.zip)
+          </button>
           <button class="btn-outline" onclick="document.getElementById('import-file').click()" style="margin-bottom:12px;">
             <i class="ph ph-download-simple"></i> 从压缩包恢复 (.zip)
           </button>
           <input type="file" id="import-file" accept=".zip" style="display:none" onchange="DataModule.importData(event)">
           <div style="font-size:0.6rem; color:var(--s-text-secondary); line-height:1.5;">
-            * 导出时包含所有聊天记录、角色档案及所有子系统的数据。<br>
-            * 采用原生二进制打包，保护内存防崩溃。
+            * 完整包：包含聊天记录、角色档案及所有子系统数据。<br>
+            * 精简包：仅角色、用户面具、聊天记录（含相关头像图片）。<br>
+            * 两种包均可用上方「恢复」按钮导入；精简包只覆盖对应数据，不动其他子系统。
           </div>
         </div>
 
@@ -7204,6 +7208,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
     <button class="popover-item" onclick="StoryChatModule.openColorModal()"><i class="ph-light ph-palette"></i> 调色 (PALETTE)</button>
     <button class="popover-item" onclick="StoryChatModule.openCssModal()"><i class="ph-light ph-code"></i> 样式 (CSS)</button>
     <button class="popover-item" onclick="StoryChatModule.openStatusEditor()"><i class="ph-light ph-identification-card"></i> 状态面板 (STATUS)</button>
+    <button class="popover-item" onclick="StoryChatModule.openMusicPanel()"><i class="ph-light ph-music-notes"></i> 配乐 (BGM)</button>
     <button class="popover-item" onclick="StoryChatModule.openSnapshotModal()"><i class="ph-light ph-camera"></i> 快照 (SNAPSHOT)</button>
     <button class="popover-item" onclick="StoryChatModule.openContextConsole()"><i class="ph-light ph-terminal-window"></i> 观测台 (CONSOLE)</button>
     <button class="popover-item" onclick="StoryChatModule.archiveStory()"><i class="ph-light ph-archive"></i> 封存 (ARCHIVE)</button>
@@ -9351,45 +9356,157 @@ const DataModule = (() => {
     }
   }
 
+  // ── 精简导出：仅角色 + 用户面具 + 聊天记录（含相关头像图片）──
+  async function exportPartial() {
+    Toast.show('正在打包数据，请勿关闭页面...', 3000);
+    try {
+      const db = await _getRawDB();
+      const existing = Array.from(db.objectStoreNames);
+
+      // 角色 + 聊天记录 + 绑定关系（这几个是整 store 导出）
+      const fullStores = ['characters', 'messages', 'chat_bindings'].filter(s => existing.includes(s));
+      // 用户面具：存在 settings 里的这两个 key
+      const personaKeys = ['user-personas', 'user-active-persona'];
+
+      const backupData = { _meta: { version: db.version, timestamp: Date.now(), partial: true } };
+
+      for (const storeName of fullStores) {
+        const records = await new Promise(res => {
+          const req = db.transaction(storeName, 'readonly').objectStore(storeName).getAll();
+          req.onsuccess = e => res(e.target.result);
+        });
+        backupData[storeName] = records;
+      }
+
+      // settings 只挑面具相关的 key
+      if (existing.includes('settings')) {
+        const allSettings = await new Promise(res => {
+          const req = db.transaction('settings', 'readonly').objectStore('settings').getAll();
+          req.onsuccess = e => res(e.target.result);
+        });
+        backupData['settings'] = allSettings.filter(s => personaKeys.includes(s.key));
+      }
+
+      // 扫描以上数据里引用到的所有 asset key，把对应图片一并打包
+      const referenced = new Set();
+      if (existing.includes('assets')) {
+        const allAssetKeys = await new Promise(res => {
+          const req = db.transaction('assets', 'readonly').objectStore('assets').getAllKeys();
+          req.onsuccess = e => res(e.target.result.map(String));
+        });
+        const blob = JSON.stringify({
+          characters: backupData['characters'] || [],
+          messages: backupData['messages'] || [],
+          chat_bindings: backupData['chat_bindings'] || [],
+          settings: backupData['settings'] || []
+        });
+        for (const k of allAssetKeys) {
+          if (k && blob.includes(k)) referenced.add(k);
+        }
+      }
+
+      const zipObj = {};
+      backupData['assets_meta'] = [];
+      if (referenced.size > 0) {
+        for (const key of referenced) {
+          const record = await new Promise(res => {
+            const req = db.transaction('assets', 'readonly').objectStore('assets').get(key);
+            req.onsuccess = e => res(e.target.result);
+          });
+          if (record && record.blob) {
+            backupData['assets_meta'].push({
+              key: record.key, mimeType: record.mimeType, size: record.size, updatedAt: record.updatedAt
+            });
+            const buffer = await record.blob.arrayBuffer();
+            zipObj[`assets/${record.key}`] = new Uint8Array(buffer);
+          }
+        }
+      }
+
+      const fflateAPI = typeof fflate !== 'undefined' ? fflate : window.fflate;
+      zipObj['database.json'] = fflateAPI.strToU8(JSON.stringify(backupData));
+
+      fflateAPI.zip(zipObj, { level: 0 }, (err, zipped) => {
+        if (err) throw err;
+        const blob = new Blob([zipped], { type: 'application/zip' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        const dateStr = new Date().toISOString().slice(0,10).replace(/-/g, '');
+        a.href = url;
+        a.download = `ChillOS_CharBackup_${dateStr}.zip`;
+        a.click();
+        URL.revokeObjectURL(url);
+        Toast.show('精简备份导出成功！');
+      });
+    } catch (err) {
+      console.error(err);
+      Toast.show('导出失败: ' + err.message);
+    }
+  }
+
   // ── 从 ZIP 导入并全量覆盖 ──
   async function importData(e) {
     const file = e.target.files[0];
     if (!file) return;
     e.target.value = ''; 
-    
-    // 🌟 使用自定义弹窗
+
+    Toast.show('正在读取备份包...', 5000);
+    const fflateAPI = typeof fflate !== 'undefined' ? fflate : window.fflate;
+    let unzipped, backupData;
+    try {
+      const buffer = await file.arrayBuffer();
+      unzipped = await new Promise((res, rej) => {
+        fflateAPI.unzip(new Uint8Array(buffer), (err, data) => err ? rej(err) : res(data));
+      });
+      const dbKey = Object.keys(unzipped).find(k => k.endsWith('database.json'));
+      if (!dbKey) { Toast.show('无效的备份文件：缺失 database.json'); return; }
+      backupData = JSON.parse(fflateAPI.strFromU8(unzipped[dbKey]));
+    } catch (err) {
+      console.error(err);
+      Toast.show('解压失败，文件可能已损坏');
+      return;
+    }
+
+    const isPartial = !!(backupData._meta && backupData._meta.partial);
+
+    // 🌟 使用自定义弹窗（按包类型区分文案）
     const confirmed = await _showDangerConfirm(
-      'Restore Backup', 
-      '警告：导入将完全覆盖当前设备上的【所有数据】！<br>确定要继续吗？', 
+      'Restore Backup',
+      isPartial
+        ? '检测到【精简包】。导入将覆盖当前的「角色 / 用户面具 / 聊天记录」，其他子系统数据保持不变。<br>确定要继续吗？'
+        : '警告：导入【完整包】将完全覆盖当前设备上的【所有数据】！<br>确定要继续吗？',
       '确认覆盖'
     );
     if (!confirmed) return;
 
-    Toast.show('正在解压与恢复，请稍候...', 10000);
+    Toast.show('正在恢复，请稍候...', 10000);
     try {
-      const buffer = await file.arrayBuffer();
-      const fflateAPI = typeof fflate !== 'undefined' ? fflate : window.fflate;
-      
-      fflateAPI.unzip(new Uint8Array(buffer), async (err, unzipped) => {
-        if (err) { Toast.show('解压失败，文件可能已损坏'); return; }
+        // 完整包：清空全部；精简包：只清空包内实际包含的 store
+        const partialStores = ['characters', 'messages', 'chat_bindings'];
+        if (isPartial) {
+          const db0 = await _getRawDB();
+          for (const s of partialStores) {
+            if (!db0.objectStoreNames.contains(s)) continue;
+            if (!backupData[s]) continue; // 包里没有就不动
+            const tx = db0.transaction(s, 'readwrite');
+            tx.objectStore(s).clear();
+            await new Promise((res, rej) => { tx.oncomplete = res; tx.onerror = rej; });
+          }
+        } else {
+          await DB.clearAll();
+        }
 
-        const dbKey = Object.keys(unzipped).find(k => k.endsWith('database.json'));
-        if (!dbKey) { Toast.show('无效的备份文件：缺失 database.json'); return; }
-
-        const backupData = JSON.parse(fflateAPI.strFromU8(unzipped[dbKey]));
-        
-        await DB.clearAll();
         const db = await _getRawDB();
         const stores = Array.from(db.objectStoreNames);
 
         for (const storeName of stores) {
-          if (storeName === 'assets') continue; 
-          if (backupData[storeName] && backupData[storeName].length > 0) {
-            const tx = db.transaction(storeName, 'readwrite');
-            const store = tx.objectStore(storeName);
-            for (const item of backupData[storeName]) store.put(item);
-            await new Promise((res, rej) => { tx.oncomplete = res; tx.onerror = rej; });
-          }
+          if (storeName === 'assets') continue;
+          if (!backupData[storeName] || backupData[storeName].length === 0) continue;
+          // 精简包的 settings 用合并写入（不清表），避免覆盖其他设置
+          const tx = db.transaction(storeName, 'readwrite');
+          const store = tx.objectStore(storeName);
+          for (const item of backupData[storeName]) store.put(item);
+          await new Promise((res, rej) => { tx.oncomplete = res; tx.onerror = rej; });
         }
 
         if (backupData['assets_meta'] && backupData['assets_meta'].length > 0) {
@@ -9409,16 +9526,15 @@ const DataModule = (() => {
           await new Promise((res, rej) => { tx.oncomplete = res; tx.onerror = rej; });
         }
 
-        Toast.show('数据恢复成功！系统即将重载...');
+        Toast.show(isPartial ? '角色 / 面具 / 聊天记录已恢复！系统即将重载...' : '数据恢复成功！系统即将重载...');
         setTimeout(() => location.reload(), 1500);
-      });
     } catch (err) {
       console.error(err);
       Toast.show('导入失败: ' + err.message);
     }
   }
 
-  return { refresh, clearAll, exportData, importData, _showDangerConfirm };
+  return { refresh, clearAll, exportData, exportPartial, importData, _showDangerConfirm };
 })();
 
 // ============================================================
@@ -23919,6 +24035,12 @@ await DB.settings.del(`offline-memory-${_realCharId}`);
         const paragraphs = rawText.split(/\n+/).filter(p => p.trim());
         let html = '';
         for (let p of paragraphs) {
+            // 配乐：拦截 【BGM】歌手 - 歌名 行，替换成 pending 播放条（渲染后由 resolvePending 抓歌）
+            const bgm = String(p).trim().match(/^【BGM】\s*(.+)$/i);
+            if (bgm && window.StoryMusic) {
+                const q = bgm[1].trim().replace(/\s+/g, ' ').replace(/[《》""]/g, '');
+                if (q) { html += StoryMusic.playerHtml(q); continue; }
+            }
             let pHTML = String(p).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
             pHTML = pHTML.replace(/(&quot;.*?&quot;|“.*?”|「.*?」)/g, '<span class="dialogue-text">$1</span>');
             pHTML = pHTML.replace(/\*([^*]+)\*/g, '<span class="action-text">$1</span>');
@@ -24091,6 +24213,10 @@ await DB.settings.del(`offline-memory-${_realCharId}`);
         
         const mainText = card.querySelector('.main-text');
         if (mainText) mainText.innerHTML = _parseStoryText(msg.content);
+        // 配乐：reroll/swipe 重渲染后若含 pending 播放条，触发抓歌（否则一直卡在"检索配乐…"）
+        if (window.StoryMusic && card.querySelector('.sm-music-pending')) {
+            StoryMusic.resolvePending();
+        }
 
         const tokenCount = Math.round(msg.content.length * 0.8);
         const tknB = card.querySelectorAll('.side-data b');
@@ -24206,6 +24332,10 @@ await DB.settings.del(`offline-memory-${_realCharId}`);
             </div>
         `;
         container.appendChild(card);
+        // 配乐：本卡若含 pending 播放条，渲染后异步抓歌填充
+        if (window.StoryMusic && card.querySelector('.sm-music-pending')) {
+            StoryMusic.resolvePending();
+        }
     }
 
    async function _sendUserMsg(text) {
@@ -24495,6 +24625,14 @@ ${scriptHistory || '（电影开场，暂无前文）'}
             if (window.StoryStatus && await StoryStatus.isOn(_storyCharId)) {
                 const _stP = await StoryStatus.buildPrompt(_storyCharId, _char?.name || '');
                 if (_stP) _storyPrompt += '\n' + _stP;
+            }
+        } catch (e) {}
+
+        // 网易云配乐：附加 BGM 选曲铁律
+        try {
+            if (window.StoryMusic && await StoryMusic.isReady()) {
+                const _muP = await StoryMusic.buildPrompt();
+                if (_muP) _storyPrompt += '\n' + _muP;
             }
         } catch (e) {}
 
@@ -25556,6 +25694,11 @@ ${newMessagesLog}
             const pop = document.getElementById('sc-dock-popover'); if (pop) pop.classList.remove('active');
             const plus = document.getElementById('sc-dock-plus-btn'); if (plus) plus.classList.remove('active');
             if (window.StoryStatus) StoryStatus.openEditor(_storyCharId);
+        },
+        openMusicPanel: () => {
+            const pop = document.getElementById('sc-dock-popover'); if (pop) pop.classList.remove('active');
+            const plus = document.getElementById('sc-dock-plus-btn'); if (plus) plus.classList.remove('active');
+            if (window.StoryMusic) StoryMusic.openPanel();
         },
         openSettings, closeSettings, saveSettings, toggleWBMount, clearArchive,
         editMsg, confirmEditMsg, closeEditModal, swipeMsg, openColorModal, closeColorModal, changeColor, archiveStory,createSnapshot, openSnapshotModal, closeSnapshotModal, loadSnapshot, deleteSnapshot, startNewTimeline, confirmCreateSnapshot, closeSnapNameModal, wrapStory, openCssModal, closeCssModal, copyDefaultCss, applyAndSaveCss, clearCss, saveCssPreset, confirmSaveCssPreset, applyCssPreset, deleteCssPreset,openImgViewer, downloadImage, regenerateStoryImage, openContextConsole

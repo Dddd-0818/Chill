@@ -930,3 +930,290 @@ ${fieldRules}
   };
 })();
 if (typeof window !== 'undefined') window.StoryStatus = StoryStatus;
+
+/* ============================================================================
+ * StoryMusic — 单人剧情【网易云配乐】（复刻群像，渲染适配单人 _parseStoryText）
+ * ----------------------------------------------------------------------------
+ * 物理上与 StoryStatus 同处一个文件，但逻辑完全独立、各自 IIFE / window 导出。
+ * 机制：AI 在剧情回复里吐 `【BGM】歌手 - 歌名` 标记 → _parseStoryText 把该行替
+ *       换成 pending 播放条 → 渲染后 resolvePending() 扫描抓歌填充 → 点击播放。
+ * 配置：全局 sc-netease-config（与群像 gs-netease-config 各自独立，互不影响）。
+ * 面板：居中弹窗（不是底部抽屉）。
+ * 暴露：window.StoryMusic = { isReady, openPanel, buildPrompt, playerHtml,
+ *                            resolvePending, toggle }
+ * 主文件 wiring（详见末尾 README）：
+ *   1) story-status.js 已引入，无需再加 script
+ *   2) _parseStoryText 里把【BGM】行替换成 StoryMusic.playerHtml(关键词)
+ *   3) _appendCard 之后调 StoryMusic.resolvePending()
+ *   4) 系统提示词拼 await StoryMusic.buildPrompt()
+ *   5) ＋菜单加按钮 → StoryMusic.openPanel()
+ * ========================================================================== */
+const StoryMusic = (() => {
+  'use strict';
+
+  const _DB = () => (typeof DB !== 'undefined' ? DB : null);
+  const _toast = (m) => { try { if (typeof Toast !== 'undefined' && Toast.show) Toast.show(m); } catch (e) {} };
+  const _esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+  const K_CFG = 'sc-netease-config';   // 与群像 gs-netease-config 独立
+  let _audio = null;                   // 单人全局单一播放实例
+
+  async function _getConfig() {
+    const db = _DB();
+    try {
+      const c = await db.settings.get(K_CFG);
+      return c && typeof c === 'object' ? c : { enabled: false, base: '', cookie: '' };
+    } catch (e) { return { enabled: false, base: '', cookie: '' }; }
+  }
+  async function isReady() {
+    const c = await _getConfig();
+    return !!(c.enabled && c.base && c.base.trim() && c.cookie && c.cookie.trim());
+  }
+  function _slimCookie(raw) {
+    if (!raw) return '';
+    const m = String(raw).match(/MUSIC_U=[^;]+/);
+    return m ? m[0] : String(raw).trim();
+  }
+
+  // 抓取：关键词 → { id, title, artist, audioUrl, coverUrl } | null
+  async function _fetch(keyword) {
+    if (!keyword || keyword === 'null') return null;
+    const cfg = await _getConfig();
+    if (!cfg.enabled || !cfg.base || !cfg.cookie) return null;
+    const base = cfg.base.trim().replace(/\/+$/, '');
+    const cookieParam = `&cookie=${encodeURIComponent(_slimCookie(cfg.cookie))}`;
+    const ts = `timerstamp=${Date.now()}`;
+    try {
+      const sRes = await fetch(`${base}/search?keywords=${encodeURIComponent(keyword)}&limit=5&${ts}${cookieParam}`);
+      const sData = await sRes.json();
+      const songs = sData.result && sData.result.songs;
+      if (!songs || !songs.length) return null;
+      const ids = songs.map(s => s.id).join(',');
+      const uRes = await fetch(`${base}/song/url/v1?id=${ids}&level=exhigh&${ts}${cookieParam}`);
+      const uData = await uRes.json();
+      const valid = uData.data && uData.data.find(it => it.url && it.url.trim());
+      if (!valid) return null;
+      const meta = songs.find(s => s.id === valid.id) || songs[0];
+      let coverUrl = '';
+      try {
+        const dRes = await fetch(`${base}/song/detail?ids=${valid.id}&${ts}${cookieParam}`);
+        const dData = await dRes.json();
+        coverUrl = (dData.songs && dData.songs[0] && dData.songs[0].al && dData.songs[0].al.picUrl) || '';
+      } catch (e) {}
+      return { id: valid.id, title: meta.name || keyword, artist: (meta.artists && meta.artists[0] && meta.artists[0].name) || 'Unknown', audioUrl: valid.url, coverUrl };
+    } catch (e) {
+      console.warn('[StoryMusic] 网易云抓取失败', e);
+      return null;
+    }
+  }
+
+  // 提示词：选曲铁律（拼进系统提示词）
+  async function buildPrompt() {
+    if (!(await isReady())) return '';
+    return `
+# 🎵 BGM 选曲指令（重要）
+当某一幕出现强烈的情绪节点（重逢、离别、深夜独处、情绪爆发、暧昧升温、并肩沉默等），你必须为这一幕配一首**网易云音乐**里的歌，单独起一行插入标记，格式严格为：
+【BGM】歌手名 - 歌名
+（例：【BGM】The Weeknd - Starboy）
+
+**⚠️ 选曲铁律：**
+1. **拒绝千篇一律**：严禁总是选《Merry Christmas Mr. Lawrence》《Cornfield Chase》这类烂大街的纯音乐！
+2. **风格多样化**：根据此刻情绪，大胆选择**带人声/歌词**的歌：
+   - 都市情感 → R&B / Soul / City Pop（如 The Weeknd、落日飞车）
+   - 情绪宣泄 → Indie Rock / Alternative（如 Radiohead、告五人）
+   - 怀旧 → 经典华语 / 欧美老歌（如 王菲、Lana Del Rey）
+   - **不要只局限于纯音乐/古典乐！要"像电影插曲"一样有词的歌。**
+3. **精准格式**：关键词必须是 \`歌手名 - 歌名\`，这样搜索才准。
+4. **节制**：一幕之内最多 1 首，普通段落不必配乐，确保每次选的歌是新的、风格独特、契合当下情绪。
+5. 直接写这一行标记，不要解释、不要加书名号、不要写"配乐："之类前缀。
+`;
+  }
+
+  // 播放/暂停（单实例 + 实时重换链 + 互斥）
+  async function toggle(playerEl) {
+    const songId = playerEl.dataset.id;
+    let src = playerEl.dataset.src;
+    if (!songId && !src) return;
+    if (!_audio) { _audio = new Audio(); _audio.loop = true; }
+    const btn = playerEl.querySelector('.sm-music-btn');
+
+    if (_audio.dataset.songId === songId && _audio.src) {
+      if (_audio.paused) { try { await _audio.play(); } catch (e) {} _setUI(playerEl, true); }
+      else { _audio.pause(); _setUI(playerEl, false); }
+      return;
+    }
+    if (songId) {
+      if (btn) btn.textContent = '⋯';
+      const cfg = await _getConfig();
+      if (cfg.base && cfg.cookie) {
+        try {
+          const base = cfg.base.trim().replace(/\/+$/, '');
+          const cookieParam = `&cookie=${encodeURIComponent(_slimCookie(cfg.cookie))}`;
+          const r = await fetch(`${base}/song/url/v1?id=${songId}&level=exhigh&timerstamp=${Date.now()}${cookieParam}`);
+          const d = await r.json();
+          const v = d.data && d.data.find(it => it.url && it.url.trim());
+          if (v) { src = v.url; playerEl.dataset.src = src; }
+        } catch (e) {}
+      }
+    }
+    if (!src) { _toast('暂无可用音源'); if (btn) btn.textContent = '▶'; return; }
+    document.querySelectorAll('.sm-music-player').forEach(p => _setUI(p, false));
+    _audio.src = src;
+    _audio.dataset.songId = songId || '';
+    try { await _audio.play(); _setUI(playerEl, true); }
+    catch (e) { if (btn) btn.textContent = '▶'; }
+  }
+  function _setUI(playerEl, playing) {
+    const btn = playerEl.querySelector('.sm-music-btn');
+    const wave = playerEl.querySelector('.sm-music-wave');
+    if (btn) btn.textContent = playing ? '❚❚' : '▶';
+    if (wave) wave.classList.toggle('playing', playing);
+  }
+
+  // 【BGM】关键词 → pending 播放条 HTML（_parseStoryText 调用）
+  function playerHtml(query) {
+    const q = String(query || '').trim();
+    return `<div class="sm-music-player sm-music-pending" data-q="${_esc(q)}">`
+      + `<div class="sm-music-cover sm-music-cover-empty"><span class="sm-music-note">♪</span></div>`
+      + `<div class="sm-music-perf"><div class="sm-music-meta"><span class="sm-music-title">检索配乐…</span><span class="sm-music-artist">${_esc(q)}</span></div>`
+      + `<div class="sm-music-foot"><span class="sm-music-code">NETEASE · BGM</span><span class="sm-music-wave"><i></i><i></i><i></i><i></i></span></div></div>`
+      + `<div class="sm-music-stub"><span class="sm-music-btn">⋯</span></div></div>`;
+  }
+
+  // 渲染后扫描所有 pending 播放条，抓歌填充（抓不到则移除）
+  async function resolvePending() {
+    const nodes = Array.from(document.querySelectorAll('.sm-music-pending'));
+    for (const node of nodes) {
+      const q = node.dataset.q;
+      node.classList.remove('sm-music-pending');
+      const data = await _fetch(q);
+      if (data) {
+        node.dataset.id = data.id;
+        node.dataset.src = data.audioUrl;
+        node.setAttribute('onclick', 'StoryMusic.toggle(this)');
+        node.style.cursor = 'pointer';
+        const cover = data.coverUrl
+          ? `<div class="sm-music-cover" style="background-image:url('${_esc(data.coverUrl)}')"></div>`
+          : `<div class="sm-music-cover sm-music-cover-empty"><span class="sm-music-note">♪</span></div>`;
+        node.innerHTML = `${cover}<div class="sm-music-perf"><div class="sm-music-meta"><span class="sm-music-title">${_esc(data.title)}</span><span class="sm-music-artist">${_esc(data.artist)}</span></div><div class="sm-music-foot"><span class="sm-music-code">NETEASE · BGM</span><span class="sm-music-wave"><i></i><i></i><i></i><i></i></span></div></div><div class="sm-music-stub"><span class="sm-music-btn">▶</span></div>`;
+      } else {
+        node.remove();
+      }
+    }
+  }
+
+  /* ── 配置面板（居中弹窗，复用 ss-dlg + ss-centered 那套已修好滑动的居中层）── */
+  function _ensureRoot() {
+    let root = document.getElementById('sm-dialog-root');
+    if (!root) {
+      root = document.createElement('div');
+      root.id = 'sm-dialog-root';
+      root.className = 'ss-dlg ss-centered';   // 借用 story-status 注入的居中弹层样式
+      root.style.zIndex = '2147482500';
+      document.body.appendChild(root);
+    }
+    root.className = 'ss-dlg ss-centered';
+    return root;
+  }
+
+  async function openPanel() {
+    const cfg = await _getConfig();
+    const root = _ensureRoot();
+    root.innerHTML = `
+      <div class="ss-dlg-box sm-box">
+        <div class="ss-dlg-head"><div class="ss-dlg-title">网易云配乐</div><div class="ss-dlg-sub">NETEASE · BGM</div></div>
+        <div class="ss-dlg-body">
+          <div class="ss-toggle-row">
+            <div><div class="ss-tg-main">启用配乐</div><div class="ss-tg-sub">开启后 AI 会随剧情情绪自动点歌</div></div>
+            <div class="ss-switch${cfg.enabled ? ' on' : ''}" id="sm-switch"><div class="ss-switch-knob"></div></div>
+          </div>
+          <div class="ss-sec-h">网易云 API 地址</div>
+          <input type="text" class="ss-dlg-input" id="sm-base" placeholder="https://你的网易云api地址" value="${_esc(cfg.base || '')}" spellcheck="false" style="width:100%;">
+          <div class="ss-sec-h">Cookie（MUSIC_U）</div>
+          <textarea class="ss-dlg-input ss-css-input" id="sm-cookie" rows="4" placeholder="粘贴你的 MUSIC_U=... cookie" spellcheck="false">${_esc(cfg.cookie || '')}</textarea>
+          <div class="ss-tip" style="margin-top:8px;">需自行部署网易云 API 并填入自己的 cookie。开关关闭、或地址/cookie 任一留空时，不会触发配乐。<b>注意：开配乐时记得开🪄，否则抓不到歌。</b></div>
+          <div class="ss-tip" style="border-top:.5px solid rgba(0,0,0,.08);padding-top:8px;margin-top:8px;">
+            <b style="display:block;margin-bottom:4px;">怎么获取 cookie？</b>
+            1. 电脑浏览器打开 <b>music.163.com</b> 并登录（建议 VIP 账号）<br>
+            2. 按 <b>F12</b> 打开开发者工具 → 顶部切到 <b>Application</b>（应用）<br>
+            3. 左侧 <b>Storage → Cookies</b> → 点 <b>https://music.163.com</b><br>
+            4. 找到名为 <b>MUSIC_U</b> 的那一行，复制它的 <b>Value</b><br>
+            5. 这里粘贴成 <b>MUSIC_U=刚复制的值</b> 即可（前面的 MUSIC_U= 要带上）
+          </div>
+        </div>
+        <div class="ss-dlg-foot">
+          <button class="ss-dlg-btn ghost" data-act="close">关闭</button>
+          <button class="ss-dlg-btn primary" data-act="save">保存</button>
+        </div>
+      </div>`;
+    const close = () => {
+      root.classList.remove('active');
+      setTimeout(() => { if (!root.classList.contains('active')) root.innerHTML = ''; }, 320);
+    };
+    const sw = root.querySelector('#sm-switch');
+    sw.onclick = () => sw.classList.toggle('on');
+    root.querySelector('[data-act="close"]').onclick = close;
+    root.querySelector('[data-act="save"]').onclick = async () => {
+      try {
+        const db = _DB();
+        await db.settings.set(K_CFG, {
+          enabled: sw.classList.contains('on'),
+          base: (root.querySelector('#sm-base').value || '').trim(),
+          cookie: (root.querySelector('#sm-cookie').value || '').trim(),
+        });
+        _toast('配乐设置已保存 ✦');
+      } catch (e) { _toast('保存失败'); }
+      close();
+    };
+    root.onclick = (e) => { if (e.target === root) close(); };
+    requestAnimationFrame(() => root.classList.add('active'));
+  }
+
+  /* ── 播放条 CSS（sm- 前缀，照搬群像票根风）── */
+  function _injectCSS() {
+    if (document.getElementById('sm-music-style')) return;
+    const css = `
+    .sm-music-player{position:relative;display:flex;align-items:stretch;gap:0;margin:12px 0;background:transparent;border:1px solid rgba(0,0,0,.22);cursor:pointer;font-family:'Space Mono','SFMono-Regular',monospace;overflow:hidden;-webkit-tap-highlight-color:transparent;transition:opacity .2s;}
+    .sm-music-player::before{content:"";position:absolute;left:0;right:0;top:0;height:3px;background-image:repeating-linear-gradient(90deg,rgba(0,0,0,.22) 0 5px,transparent 5px 10px);opacity:.5;}
+    .sm-music-player:active{opacity:.72;}
+    .sm-music-cover{flex:0 0 auto;width:52px;height:52px;margin:9px 0 9px 9px;background-size:cover;background-position:center;background-color:#e8e6e1;filter:grayscale(.35) contrast(1.02);border:.5px solid rgba(0,0,0,.18);}
+    .sm-music-cover-empty{display:flex;align-items:center;justify-content:center;}
+    .sm-music-note{font-size:18px;color:#999;opacity:.6;}
+    .sm-music-perf{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;justify-content:center;gap:5px;padding:9px 4px 9px 12px;}
+    .sm-music-meta{display:flex;flex-direction:column;gap:2px;min-width:0;}
+    .sm-music-title{font-size:12.5px;font-weight:700;letter-spacing:.01em;color:#1a1a1a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .sm-music-artist{font-size:10px;letter-spacing:.05em;color:#888;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .sm-music-foot{display:flex;align-items:center;gap:8px;}
+    .sm-music-code{font-size:8px;letter-spacing:.16em;color:#aaa;text-transform:uppercase;white-space:nowrap;}
+    .sm-music-wave{flex:0 0 auto;display:flex;align-items:flex-end;gap:2px;height:11px;}
+    .sm-music-wave i{width:2px;height:3px;background:#999;}
+    .sm-music-wave.playing i{animation:smWave .85s ease-in-out infinite;}
+    .sm-music-wave.playing i:nth-child(2){animation-delay:.22s;}
+    .sm-music-wave.playing i:nth-child(3){animation-delay:.44s;}
+    .sm-music-wave.playing i:nth-child(4){animation-delay:.13s;}
+    @keyframes smWave{0%,100%{height:3px;}50%{height:11px;}}
+    .sm-music-stub{flex:0 0 auto;display:flex;align-items:center;justify-content:center;width:42px;border-left:1px dashed rgba(0,0,0,.28);}
+    .sm-music-btn{width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-size:9px;color:#1a1a1a;border:1px solid rgba(0,0,0,.34);border-radius:50%;}
+    .sm-music-pending{opacity:.6;cursor:default;}
+    .sm-music-pending .sm-music-stub{border-left-color:rgba(0,0,0,.18);}
+    `;
+    const st = document.createElement('style');
+    st.id = 'sm-music-style';
+    st.textContent = css;
+    document.head.appendChild(st);
+  }
+  if (typeof document !== 'undefined') {
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _injectCSS);
+    else _injectCSS();
+  }
+
+  return {
+    isReady,         // () → bool
+    openPanel,       // () ＋菜单配置弹窗（居中）
+    buildPrompt,     // () → 选曲铁律提示词
+    playerHtml,      // (query) → pending 播放条 HTML
+    resolvePending,  // () 渲染后抓歌填充
+    toggle,          // (el) 点击播放/暂停
+  };
+})();
+if (typeof window !== 'undefined') window.StoryMusic = StoryMusic;
