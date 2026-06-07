@@ -31,6 +31,7 @@
 <script src="story-status.js"></script>
 <script src="updater.js"></script>
 <script src="fab-style.js"></script>
+<script src="import-migrate.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700;800&family=Great+Vibes&family=Libre+Barcode+39+Text&family=Noto+Sans+SC:wght@300;400;500;700&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,700&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
@@ -4949,7 +4950,6 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
           </div>
         </div>
 
-        <button class="btn-primary" style="background:#333; color:#fff;" onclick="DataModule.refresh()">刷新统计</button>
         <button class="btn-danger" style="margin-top:12px; width:100%; padding:16px; border:1px solid rgba(217,58,58,0.3); color:#D93A3A; background:transparent; border-radius:12px; font-weight:600; cursor:pointer;" onclick="DataModule.clearAll()">
           清除全部数据
         </button>
@@ -5298,6 +5298,20 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
         <div class="char-form-actions">
           <button class="char-btn-danger" id="char-btn-delete" style="display:none;" onclick="CharacterModule.deleteCharacter()">DELETE</button>
           <button class="char-btn-primary" onclick="CharacterModule.save()">保存档案</button>
+        </div>
+
+        <div style="display:flex; gap:10px; margin-top:14px;">
+          <button class="btn-outline" onclick="MigrateModule.openDataImport()" style="flex:1; padding:11px; display:flex; align-items:center; justify-content:center; gap:6px; font-size:0.78rem;">
+            <i class="ph ph-package"></i> 从 KiKi 导入
+          </button>
+          <button class="btn-outline" onclick="MigrateModule.openTextImport()" style="flex:1; padding:11px; display:flex; align-items:center; justify-content:center; gap:6px; font-size:0.78rem;">
+            <i class="ph ph-file-text"></i> 文档导入人设
+          </button>
+        </div>
+        <div style="font-size:0.6rem; color:#c0392b; line-height:1.6; margin-top:8px;">
+          * KiKi 备份 (.zip/.json)：勾选要搬入的角色，头像一起带过来。<br>
+          * 文档 (.txt/.docx)：正文整段进人设，名字等自己补；图片自动忽略。<br>
+          * 仅迁移角色档案，聊天记录无法跨项目迁移。
         </div>
       </div>
     </div>
@@ -10418,6 +10432,45 @@ const CharacterModule = (() => {
     showView('form');
   }
 
+  // ── 导入填表：把外部解析出的字段填进新建表单（不入库，供用户调整后保存）──
+  // fields: { name, title, mbti, persona, customQ1, customQ2, avatarBlob?, avatarType? }
+  async function fillForm(fields) {
+    openForm(); // 先重置为干净的新建表单
+    if (fields.name)     document.getElementById('char-form-name').value        = fields.name;
+    if (fields.title)    document.getElementById('char-form-title-input').value = fields.title;
+    if (fields.mbti)     document.getElementById('char-form-mbti').value        = fields.mbti;
+    if (fields.persona)  document.getElementById('char-form-persona').value     = fields.persona;
+    if (fields.customQ1) document.getElementById('char-form-q1').value          = fields.customQ1;
+    if (fields.customQ2) document.getElementById('char-form-q2').value          = fields.customQ2;
+
+    // 头像：写入临时 key char-avatar-new，保存时主流程会自动迁移到正式 key
+    if (fields.avatarBlob) {
+      try {
+        const blob = (fields.avatarBlob instanceof Blob)
+          ? fields.avatarBlob
+          : new Blob([fields.avatarBlob], { type: fields.avatarType || 'image/jpeg' });
+        await DB.assets.set('char-avatar-new', blob, blob.type || 'image/jpeg');
+        Assets.clearCache && Assets.clearCache('char-avatar-new');
+        _tempAvatarKey = 'char-avatar-new';
+        const url = URL.createObjectURL(blob);
+        const preview = document.getElementById('char-form-avatar-preview');
+        preview.src = url; preview.style.display = 'block';
+        document.getElementById('char-upload-text').style.display = 'none';
+      } catch (e) { console.error('fillForm avatar failed', e); }
+    }
+    showView('form');
+  }
+
+  // ── 导入后刷新：重读 DB、重渲染列表、强制切到列表层 ──
+  async function refreshAfterImport() {
+    try {
+      _characters = await DB.characters.getAll();
+    } catch (e) { console.error('refreshAfterImport getAll failed', e); }
+    await renderRoster();
+    // 显式切到列表层（关闭可能停留的表单/详情层）
+    showView('list');
+  }
+
   // ── 打开编辑表单 ──
   function editCurrent() {
     const char = _characters.find(c => c.id === _currentId);
@@ -10654,7 +10707,7 @@ ${char.mbti  ? `- MBTI：${char.mbti}` : ''}
     e.target.value = '';
   });
 
-  return { renderRoster, showView, openForm, editCurrent, save, retryAI, deleteCharacter };
+  return { renderRoster, showView, openForm, fillForm, refreshAfterImport, editCurrent, save, retryAI, deleteCharacter };
 })();
 
 // ============================================================
