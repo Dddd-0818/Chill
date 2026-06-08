@@ -6181,6 +6181,85 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
         </div>
       </div>
     </div>
+
+    <!-- 🎭 分身/冒充者 管理弹窗 -->
+    <style>
+      #gu-manage-overlay .gc-modal, #gu-edit-overlay .gc-modal { max-width: 440px; }
+      #gu-list { display:flex; flex-direction:column; gap:10px; margin-top:14px; max-height:340px; overflow-y:auto; scrollbar-width:none; }
+      #gu-list::-webkit-scrollbar { display:none; }
+      .gu-empty { font-size:0.78rem; color:#999; line-height:1.6; padding:18px 6px; text-align:center; }
+      .gu-row { display:flex; align-items:center; gap:12px; padding:10px 12px; border:0.5px solid rgba(0,0,0,0.12); border-radius:14px; background:#fafafa; }
+      .gu-row-ava { width:40px; height:40px; border-radius:50%; overflow:hidden; flex-shrink:0; background:#ddd; display:flex; align-items:center; justify-content:center; font-weight:600; color:#fff; }
+      .gu-row-ava img { width:100%; height:100%; object-fit:cover; }
+      .gu-row-info { flex:1; min-width:0; }
+      .gu-row-name { font-size:0.9rem; font-weight:600; color:#121212; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+      .gu-row-sub { font-size:0.68rem; color:#999; margin-top:2px; }
+      .gu-badge { display:inline-block; font-size:0.6rem; font-weight:700; letter-spacing:0.3px; padding:2px 7px; border-radius:6px; margin-right:7px; vertical-align:middle; transform:translateY(-1px); }
+      .gu-badge-u { background:#1d4ed8; color:#fff; }   /* 蓝 = 模仿真实用户 */
+      .gu-badge-c { background:#c2410c; color:#fff; }   /* 橙 = 模仿角色 */
+      .gu-row-edit, .gu-row-del { width:34px; height:34px; border:none; background:transparent; border-radius:10px; cursor:pointer; font-size:1.1rem; color:#666; flex-shrink:0; }
+      .gu-row-del { color:#9c2b2b; }
+      .gu-row-edit:active, .gu-row-del:active { background:rgba(0,0,0,0.06); }
+      .gu-reveal-bar { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:14px 12px; border:0.5px solid rgba(0,0,0,0.12); border-radius:14px; margin-top:6px; }
+      .gu-reveal-bar .gu-rb-txt { font-size:0.85rem; font-weight:600; color:#121212; }
+      .gu-reveal-bar .gu-rb-sub { font-size:0.66rem; color:#999; margin-top:3px; line-height:1.4; }
+      .gu-add-btn { width:100%; margin-top:14px; padding:14px; border:1px dashed rgba(0,0,0,0.3); background:transparent; border-radius:14px; font-size:0.88rem; font-weight:600; color:#121212; cursor:pointer; }
+      .gu-add-btn:active { background:rgba(0,0,0,0.04); }
+      #gu-avatar-preview { width:84px; height:84px; border-radius:50%; margin:6px auto 16px; background:#eee; display:flex; align-items:center; justify-content:center; font-size:1.8rem; color:#aaa; overflow:hidden; cursor:pointer; }
+      #gu-avatar-preview img { width:100%; height:100%; object-fit:cover; }
+      .gu-field-label { font-size:0.72rem; color:#666; font-weight:600; margin:12px 0 6px; letter-spacing:0.5px; }
+      #gu-name, #gu-persona { width:100%; border:0.5px solid rgba(0,0,0,0.2); border-radius:12px; padding:10px 12px; font-family:inherit; font-size:0.85rem; box-sizing:border-box; }
+      #gu-persona { min-height:80px; resize:vertical; line-height:1.5; }
+      .gu-hint { font-size:0.66rem; color:#aaa; margin-top:5px; line-height:1.4; }
+    </style>
+    <div class="gc-overlay" id="gu-manage-overlay" style="z-index: 362;">
+      <div class="gc-modal">
+        <div class="gc-modal-header">
+          <span>分身 / 冒充者</span>
+          <button class="gc-modal-close" onclick="GhostUserModule.closeManage()"><i class="ph-thin ph-x"></i></button>
+        </div>
+        <div class="gc-modal-body">
+         <div class="gu-reveal-bar">
+            <div>
+              <div class="gu-rb-txt"><span class="gu-badge gu-badge-u">U · 你</span>角色知道有冒充者</div>
+              <div class="gu-rb-sub"><b>此开关仅在你建了「U·模仿你」的分身后才有意义。</b><br>① 先在下方「新建分身」里把「模仿对象」选成<b>真实用户（你自己）</b>，这就是 U 分身——它会伪装成你、在你这一侧（右侧气泡）冒泡说话。<br>② 建好 U 分身后，这个开关才生效：<b>开启</b>＝群里角色知道有人冒充你，会怀疑、试探、追问"到底哪个才是真的你"；<b>关闭</b>＝角色全员蒙在鼓里，把所有"你"都当成同一个真实的你（适合演"人格分裂"）。<br><span style="color:#9c2b2b;font-weight:600;">⚠️ 没有任何 U 分身时，这个开关无效</span>——它不影响普通群聊，也<u>不影响</u>下面 🟠「C·角色」类型的模仿者。<br><span style="color:#c2410c;font-weight:600;">🟠 提醒：模仿角色的「C·角色」影子永远独立运作</span>，本体角色一直知道有人冒充自己、会当场反击并向你自证身份，跟这个开关没关系。</div>
+            </div>
+            <label class="cv-mag-toggle" id="gu-reveal-toggle" onclick="GhostUserModule.toggleReveal(this)" style="transform:scale(0.85);cursor:pointer;flex-shrink:0;"></label>
+          </div>
+          <div id="gu-list"></div>
+          <button class="gu-add-btn" onclick="GhostUserModule.openEdit(null)">+ 新建分身</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 🎭 分身 编辑弹窗 -->
+    <div class="gc-overlay" id="gu-edit-overlay" style="z-index: 364;">
+      <div class="gc-modal">
+        <div class="gc-modal-header">
+          <span id="gu-edit-title">新建分身</span>
+          <button class="gc-modal-close" onclick="GhostUserModule.closeEdit()"><i class="ph-thin ph-x"></i></button>
+        </div>
+        <div class="gc-modal-body">
+          <input type="file" id="gu-avatar-input" accept="image/*" style="display:none" onchange="GhostUserModule.handleAvatar(event)">
+          <div id="gu-avatar-preview" onclick="document.getElementById('gu-avatar-input').click()"><i class="ph ph-user"></i></div>
+          <div class="gu-hint" id="gu-avatar-hint" style="text-align:center;margin-top:-10px;">点头像上传（留空则用真实用户同款头像）</div>
+
+          <div class="gu-field-label">模仿对象</div>
+          <select id="gu-mimic-target" onchange="GhostUserModule.onMimicTargetChange()" style="width:100%;border:0.5px solid rgba(0,0,0,0.2);border-radius:12px;padding:10px 12px;font-family:inherit;font-size:0.85rem;box-sizing:border-box;background:#fff;"></select>
+          <div class="gu-hint" id="gu-mimic-hint">模仿真实用户 = 右侧气泡，以假乱真混进 user 一侧。模仿某角色 = 左侧气泡，长得和本体一模一样。</div>
+
+          <div class="gu-field-label" id="gu-name-label">分身名字</div>
+          <input type="text" id="gu-name" placeholder="留空则与真实用户同名…" maxlength="24">
+          <div class="gu-hint" id="gu-name-hint">想最大程度以假乱真，就和你自己的名字一模一样。</div>
+
+          <div class="gu-field-label">人设 / 说话风格（选填）</div>
+          <textarea id="gu-persona" placeholder="留空 = 默认模仿真实用户的语气。也可以写：一个嘴硬心软的吐槽役 / 总爱发表情包的话痨…"></textarea>
+        </div>
+        <div class="gc-modal-footer">
+          <button class="gc-confirm-btn" onclick="GhostUserModule.save()">保存</button>
+        </div>
+      </div>
+    </div>
     <!-- Settings Panel -->
     <div class="cv-settings-panel" id="cv-settings-panel">
       <div class="cv-sp-header">
@@ -6577,6 +6656,9 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
           <div class="cv-set-sec-title">Group Management</div>
           <button class="cv-btn-outline" style="width:100%; border-radius:16px; padding:16px; font-size:0.9rem; justify-content:center; border-color:var(--text-main); color:var(--text-main);" onclick="GroupChatModule.openInviteModal(document.getElementById('conv-screen').dataset.cvCharId)">
             <i class="ph ph-user-plus" style="font-size:1.2rem;"></i> 邀请新角色入群
+          </button>
+          <button class="cv-btn-outline" style="width:100%; border-radius:16px; padding:16px; font-size:0.9rem; justify-content:center; border-color:var(--text-main); color:var(--text-main); margin-top:12px;" onclick="GhostUserModule.openManage(document.getElementById('conv-screen').dataset.cvCharId)">
+            <i class="ph ph-user-focus" style="font-size:1.2rem;"></i> 分身 / 冒充者 (Impostor)
           </button>
         </div>
 
@@ -15194,6 +15276,274 @@ return {
 })();
 
 // ============================================================
+// GhostUserModule — 群聊「分身/冒充者」管理
+//   往群里塞 AI 扮演的假 user，和真 user 混在一起以假乱真。
+//   数据挂在 gc 对象上：
+//     gc.fakeUsers = [{ id, name, avatarKey, persona }]
+//       name/avatarKey 留空 → 继承真 user；persona 留空 → 默认模仿真 user
+//     gc.revealMode = false  // false=群内角色全蒙在鼓里; true=角色知道有冒充者
+// ============================================================
+const GhostUserModule = (() => {
+  let _gcId = null;          // 当前正在编辑的群 id
+  let _editingId = null;     // 正在编辑的假 user id（null=新增）
+  let _tempAvatarKey = '';   // 本次上传暂存的 asset key
+  let _tempAvatarUrl = '';   // 预览用 ObjectURL
+
+  function _genId() { return 'fu_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6); }
+
+  // ── 对外：读取某群的假 user 列表（永远返回数组）──
+  function listFor(gc) {
+    if (!gc) return [];
+    return Array.isArray(gc.fakeUsers) ? gc.fakeUsers : [];
+  }
+
+  // ── 打开管理面板（群设置里点进来）──
+  async function openManage(gcId) {
+    _gcId = gcId;
+    const gc = GroupChatModule.get(gcId);
+    if (!gc) { Toast.show('群聊不存在'); return; }
+    await _loadCharNames();
+    // 同步「角色是否知情」开关
+    const toggle = document.getElementById('gu-reveal-toggle');
+    if (toggle) toggle.classList.toggle('on', !!gc.revealMode);
+    await _renderList();
+    document.getElementById('gu-manage-overlay')?.classList.add('active');
+  }
+
+  function closeManage() {
+    document.getElementById('gu-manage-overlay')?.classList.remove('active');
+  }
+
+  // ── 切换「角色是否知道有冒充者」──
+  async function toggleReveal(el) {
+    el.classList.toggle('on');
+    const gc = GroupChatModule.get(_gcId);
+    if (!gc) return;
+    gc.revealMode = el.classList.contains('on');
+    await GroupChatModule.update(gc);
+  }
+
+  async function _renderList() {
+    const wrap = document.getElementById('gu-list');
+    if (!wrap) return;
+    const gc = GroupChatModule.get(_gcId);
+    const list = listFor(gc);
+    if (!list.length) {
+      wrap.innerHTML = `<div class="gu-empty">还没有分身。点下方「+ 新建分身」往群里塞一个冒充者吧。</div>`;
+      return;
+    }
+    // 真 user 的默认头像（用于「继承」显示）：用本群绑定的用户面具(persona)头像
+    let realAvatar = '';
+    try {
+      const personas = (typeof PersonaModule !== 'undefined') ? PersonaModule.getAll() : [];
+      const gcPersona = personas.find(p => String(p.id) === String(gc?.personaId)) || personas[0] || null;
+      if (gcPersona?.imgKey) realAvatar = await Assets.getUrl(gcPersona.imgKey).catch(() => '') || '';
+    } catch(e) {}
+
+    const rows = await Promise.all(list.map(async fu => {
+      const target = fu.mimicTarget || 'user';
+      let avaUrl, displayName, tag, badge;
+      // 🌟 显眼的类型徽章：U=模仿用户(蓝) / C=模仿角色(橙)
+      const badgeU = `<span class="gu-badge gu-badge-u">U · 你</span>`;
+      const badgeC = `<span class="gu-badge gu-badge-c">C · 角色</span>`;
+      if (target === 'user') {
+        avaUrl = fu.avatarKey ? (await Assets.getUrl(fu.avatarKey).catch(() => '') || '') : realAvatar;
+        displayName = _esc(fu.name) || '（继承真我名字）';
+        tag = fu.persona ? '自定义人设' : '默认模仿真我';
+        badge = badgeU;
+      } else if (target === 'all') {
+        avaUrl = '';
+        displayName = '随机角色影子';
+        tag = (fu.persona ? '自定义人设' : '贴近本体') + ' · 全部角色';
+        badge = badgeC;
+      } else {
+        // 模仿某个具体角色：用该角色头像名字
+        const cname = _charNameCache[String(target)] || ('#' + target);
+        avaUrl = await Assets.getUrl(`char-avatar-${target}`).catch(() => '') || '';
+        displayName = _esc(cname) + ' 的影子';
+        tag = (fu.persona ? '自定义人设' : '贴近本体') + ` · 模仿 ${_esc(cname)}`;
+        badge = badgeC;
+      }
+      const inner = avaUrl
+        ? `<img src="${avaUrl}" alt="">`
+        : `<span>${(displayName || '?')[0]}</span>`;
+      return `
+        <div class="gu-row" data-fu-id="${fu.id}">
+          <div class="gu-row-ava">${inner}</div>
+          <div class="gu-row-info">
+            <div class="gu-row-name">${badge}${displayName}</div>
+            <div class="gu-row-sub">${tag}</div>
+          </div>
+          <button class="gu-row-edit" onclick="GhostUserModule.openEdit('${fu.id}')"><i class="ph ph-pencil-simple"></i></button>
+          <button class="gu-row-del" onclick="GhostUserModule.remove('${fu.id}')"><i class="ph ph-trash"></i></button>
+        </div>`;
+    }));
+    wrap.innerHTML = rows.join('');
+  }
+
+  function _esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  }
+
+  // ── 填充「模仿对象」下拉：真实用户 + 全部角色 + 全选 ──
+  function _populateMimicSelect(currentVal) {
+    const sel = document.getElementById('gu-mimic-target');
+    if (!sel) return;
+    const gc = GroupChatModule.get(_gcId);
+    let opts = `<option value="user">真实用户（你自己）</option>`;
+    const members = (gc?.members || []);
+    // 角色名缓存：从 GhostUserModule 拿不到 _gcMemberMap，改查 DB 名字缓存
+    opts += members.map(mid => `<option value="${mid}">角色：${_esc(_charNameCache[String(mid)] || ('#' + mid))}</option>`).join('');
+    if (members.length > 1) opts += `<option value="all">全部角色（随机模仿任意一个）</option>`;
+    sel.innerHTML = opts;
+    sel.value = currentVal || 'user';
+  }
+
+  // 角色名缓存（打开面板时填充）
+  let _charNameCache = {};
+  async function _loadCharNames() {
+    try {
+      const all = await DB.characters.getAll().catch(() => []);
+      _charNameCache = {};
+      for (const c of all) _charNameCache[String(c.id)] = c.name;
+    } catch(e) {}
+  }
+
+  // ── 模仿对象切换时调整 UI 文案 ──
+  function onMimicTargetChange() {
+    const sel = document.getElementById('gu-mimic-target');
+    const val = sel ? sel.value : 'user';
+    const isUser = (val === 'user');
+    const isAll = (val === 'all');
+    const nameLabel = document.getElementById('gu-name-label');
+    const nameInput = document.getElementById('gu-name');
+    const nameHint = document.getElementById('gu-name-hint');
+    const avaHint = document.getElementById('gu-avatar-hint');
+    const mimicHint = document.getElementById('gu-mimic-hint');
+    const persona = document.getElementById('gu-persona');
+
+    if (isUser) {
+      nameLabel.textContent = '分身名字';
+      nameInput.placeholder = '留空则与真实用户同名…';
+      nameInput.disabled = false;
+      nameHint.textContent = '想最大程度以假乱真，就和你自己的名字一模一样。';
+      avaHint.textContent = '点头像上传（留空则用真实用户同款头像）';
+      mimicHint.textContent = '模仿真实用户 = 右侧气泡，混进 user 一侧以假乱真。';
+      persona.placeholder = '留空 = 默认模仿真实用户的语气。也可写：嘴硬心软的吐槽役…';
+    } else if (isAll) {
+      nameLabel.textContent = '名字（模仿角色时自动用对方名字，可忽略）';
+      nameInput.placeholder = '模仿角色时此项无效';
+      nameInput.disabled = true;
+      nameHint.textContent = '全选模式：每次随机挑一个角色来模仿，头像名字自动跟随被模仿者。';
+      avaHint.textContent = '模仿角色时自动用对方头像，无需上传';
+      mimicHint.textContent = '全部角色 = 这个影子会随机扮成群里任意一个角色，和本体长得一模一样。';
+      persona.placeholder = '留空 = 尽量贴近被模仿角色。也可写：故意夸张/微妙的差异…';
+    } else {
+      nameLabel.textContent = '名字（自动用被模仿角色的名字）';
+      nameInput.placeholder = '模仿角色时此项无效';
+      nameInput.disabled = true;
+      nameHint.textContent = '影子会用被模仿角色的名字和头像，左侧气泡，和本体难辨真假。';
+      avaHint.textContent = '模仿角色时自动用对方头像，无需上传';
+      mimicHint.textContent = '模仿某角色 = 左侧气泡、同名同头像，连你也猜不出谁是本体。';
+      persona.placeholder = '留空 = 尽量贴近被模仿角色。也可写：故意黑化/反差的版本…';
+    }
+  }
+
+  // ── 打开编辑表单 ──
+  async function openEdit(fuId) {
+    _editingId = fuId || null;
+    _tempAvatarKey = '';
+    _tempAvatarUrl = '';
+    const gc = GroupChatModule.get(_gcId);
+    const fu = fuId ? listFor(gc).find(f => f.id === fuId) : null;
+
+    await _loadCharNames();
+    _populateMimicSelect(fu?.mimicTarget || 'user');
+    onMimicTargetChange();
+
+    document.getElementById('gu-edit-title').textContent = fu ? '编辑分身' : '新建分身';
+    document.getElementById('gu-name').value = fu?.name || '';
+    document.getElementById('gu-persona').value = fu?.persona || '';
+
+    const prev = document.getElementById('gu-avatar-preview');
+    if (fu?.avatarKey) {
+      Assets.getUrl(fu.avatarKey).then(url => {
+        if (url) { prev.innerHTML = `<img src="${url}" alt="">`; _tempAvatarKey = fu.avatarKey; }
+      }).catch(() => {});
+    } else {
+      prev.innerHTML = `<i class="ph ph-user"></i>`;
+    }
+    document.getElementById('gu-edit-overlay')?.classList.add('active');
+  }
+
+  function closeEdit() {
+    document.getElementById('gu-edit-overlay')?.classList.remove('active');
+    if (_tempAvatarUrl) { try { URL.revokeObjectURL(_tempAvatarUrl); } catch(e) {} }
+    _tempAvatarUrl = '';
+  }
+
+  // ── 上传分身头像 ──
+  async function handleAvatar(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const key = `ghost-avatar-${_gcId}-${_editingId || 'new'}-${Date.now()}`;
+    try {
+      const url = await Assets.save(key, file, 400, 0.85);
+      _tempAvatarKey = key;
+      _tempAvatarUrl = url;
+      document.getElementById('gu-avatar-preview').innerHTML = `<img src="${url}" alt="">`;
+    } catch(err) {
+      Toast.show('头像处理失败');
+    }
+    e.target.value = '';
+  }
+
+  // ── 保存（新增或编辑）──
+  async function save() {
+    const gc = GroupChatModule.get(_gcId);
+    if (!gc) { Toast.show('群聊不存在'); return; }
+    if (!Array.isArray(gc.fakeUsers)) gc.fakeUsers = [];
+
+    const name = document.getElementById('gu-name').value.trim();
+    const persona = document.getElementById('gu-persona').value.trim();
+    const mimicTarget = document.getElementById('gu-mimic-target')?.value || 'user';
+
+    if (_editingId) {
+      const fu = gc.fakeUsers.find(f => f.id === _editingId);
+      if (fu) {
+        fu.name = name;
+        fu.persona = persona;
+        fu.mimicTarget = mimicTarget;
+        if (_tempAvatarKey) fu.avatarKey = _tempAvatarKey;
+      }
+    } else {
+      gc.fakeUsers.push({ id: _genId(), name, avatarKey: _tempAvatarKey || '', persona, mimicTarget });
+    }
+
+    await GroupChatModule.update(gc);
+    // 若当前正开着这个群，热更新内存里的分身映射
+    if (typeof ConvModule !== 'undefined' && ConvModule.refreshGhostUsers) ConvModule.refreshGhostUsers(gc);
+    closeEdit();
+    await _renderList();
+    Toast.show(_editingId ? '分身已更新' : '分身已潜入群聊');
+  }
+
+  // ── 删除分身 ──
+  async function remove(fuId) {
+    const gc = GroupChatModule.get(_gcId);
+    if (!gc || !Array.isArray(gc.fakeUsers)) return;
+    const fu = gc.fakeUsers.find(f => f.id === fuId);
+    if (fu?.avatarKey) { try { await Assets.remove(fu.avatarKey); } catch(e) {} }
+    gc.fakeUsers = gc.fakeUsers.filter(f => f.id !== fuId);
+    await GroupChatModule.update(gc);
+    if (typeof ConvModule !== 'undefined' && ConvModule.refreshGhostUsers) ConvModule.refreshGhostUsers(gc);
+    await _renderList();
+  }
+
+  return { listFor, openManage, closeManage, toggleReveal, openEdit, closeEdit, handleAvatar, save, remove, onMimicTargetChange };
+})();
+
+// ============================================================
 // ConvModule — 聊天页核心
 // ============================================================
 const ConvModule = (() => {
@@ -15222,6 +15572,9 @@ const ConvModule = (() => {
   let _gcMeta = null;           // { id, name, members: [charId...] }
   let _gcMembers = [];          // [{ id, name, char, imgUrl }]
   let _gcMemberMap = {};        // { charId: { name, imgUrl } } 快查表
+  let _ghostUsers = [];         // 🌟 假 user 列表 [{ id, name, avatarKey, persona }]（运行时）
+  let _ghostUserMap = {};       // { fakeUserId: { name, avatarUrl } } 快查表
+  let _realUserAvatarUrl = '';  // 真 user 头像（供假 user 继承）
   
 // ── 进入聊天 ──
   async function enter(charId, personaId) {
@@ -15234,11 +15587,18 @@ const ConvModule = (() => {
     _gcMeta = null;
     _gcMembers = [];
     _gcMemberMap = {};
+    _ghostUsers = [];
+    _ghostUserMap = {};
+    _realUserAvatarUrl = '';
 
     const _cvScr = document.getElementById('conv-screen');
     if (_cvScr) _cvScr.dataset.cvCharId = String(charId);
 
     console.log(`[ConvModule] enter — charId: ${charId}, personaId: ${personaId}, isGroup: ${_isGroup}`);
+
+    // 🌟 提前确定面具，使群聊分身映射能拿到真实用户名字
+    const allPersonas = PersonaModule.getAll();
+    _persona = allPersonas.find(p => String(p.id) === String(personaId)) || allPersonas[0] || null;
 
     if (_isGroup) {
       // ── 群聊模式 ──
@@ -15260,6 +15620,8 @@ const ConvModule = (() => {
     _gcMemberMap[String(mId)] = member;
   } catch(e) {}
 }
+      // 🌟 加载假 user（分身/冒充者）运行时映射
+      await refreshGhostUsers(_gcMeta);
     } else {
       // ── 私聊模式（原逻辑）──
       await DB.settings.set(`last-interaction-${charId}`, Date.now());
@@ -15269,9 +15631,7 @@ const ConvModule = (() => {
       } catch(e) { _char = null; _charImgUrl = ''; }
     }
 
-    // 加载面具
-    const allPersonas = PersonaModule.getAll();
-    _persona = allPersonas.find(p => String(p.id) === String(personaId)) || allPersonas[0] || null;
+    // 加载面具头像（_persona 已在群聊检测前确定）
     await _loadPersonaAvatar();
 
   // ── 头部显示 ──
@@ -16662,7 +17022,7 @@ function _renderImgPreviewBar() {
       }
       
       const row = _buildBubble(msg);
-      const currSenderId = String(msg.senderId || msg.role);
+      const currSenderId = String(msg.fakeUserId ? ('fu:' + msg.fakeUserId) : (msg.senderId || msg.role));
       
    // 👇 核心修复：加上 _isGroup
       if (_isGroup && !isTimeSplit && lastSenderId === currSenderId && msg.role !== 'system_ticket' && !msg.recalled) {
@@ -16704,7 +17064,7 @@ function _renderImgPreviewBar() {
       }
 
       const row = _buildBubble(msg);
-      const currSenderId = String(msg.senderId || msg.role);
+      const currSenderId = String(msg.fakeUserId ? ('fu:' + msg.fakeUserId) : (msg.senderId || msg.role));
 
       // 👇 核心修复：加上 _isGroup
       if (_isGroup && !isTimeSplit && lastSenderId === currSenderId && msg.role !== 'system_ticket') {
@@ -16884,12 +17244,21 @@ function _renderImgPreviewBar() {
         senderLabel = member.name;
       }
     }
+    // 🌟 假 user（分身）：靠右 user 气泡，但用分身自己的头像/名字（留空则继承真 user）
+    if (_isGroup && isUser && msg.fakeUserId) {
+      const ghost = _ghostUserMap[String(msg.fakeUserId)];
+      if (ghost) {
+        avatarSrc = ghost.avatarUrl || _personaAvatarUrl || '';
+        senderLabel = ghost.name || '';
+      }
+    }
     const d         = new Date(msg.timestamp);
     const row       = document.createElement('div');
     row.className   = `cv-msg-row ${isUser ? 'user' : 'ai'}`;
     row.dataset.msgId = msg.id;
 
     const senderNameHtml = (_isGroup && senderLabel) ? `<span class="cv-sender-name">${senderLabel}</span>` : '';
+    const isGhostBubble = !!(isUser && msg.fakeUserId);
     // 如果有头像 URL 用 img，没有时用首字母占位
     const avatarInner = avatarSrc
       ? `<img src="${avatarSrc}" class="cv-msg-avatar" alt="">`
@@ -17535,6 +17904,9 @@ function _renderImgPreviewBar() {
     // _gcMembers/_gcMemberMap 被 enter() 清空，导致 senderId 全存成空字符串
     const gcMembers    = _gcMembers.slice();
     const gcMemberMap  = Object.assign({}, _gcMemberMap);
+    // 🌟 快照假 user（分身），与成员同理防串
+    const ghostUsers   = _ghostUsers.slice();
+    const ghostUserMap = Object.assign({}, _ghostUserMap);
 
     console.log(`[ConvModule] ✦ 群聊 AI — group: ${gcMeta.name}, members: ${gcMembers.map(m => m.name).join(', ')}`);
 
@@ -17669,11 +18041,27 @@ function _renderImgPreviewBar() {
      
       // 🌟 核心修复：彻底抛弃重复的 apiMessages 拼接！
       
-     let finalUserContent = '[System 引擎调度]: 所有的记忆档案、当前群聊剧本与私密上下文均已向你同步完毕。请严格遵循设定与格式限制，自然地接续上面的聊天流，输出你接下来要说的话。';
-      
-      // ✨ 新增：潜水吃瓜机制
+    let finalUserContent = '[System 引擎调度]: 所有的记忆档案、当前群聊剧本与私密上下文均已向你同步完毕。请严格遵循设定与格式限制，自然地接续上面的聊天流，输出你接下来要说的话。';
+
+      // ✨ 用户刚发言：必须有角色回应用户，不能集体无视
+      if (histMsgs.length > 0 && histMsgs[histMsgs.length - 1].role === 'user' && !histMsgs[histMsgs.length - 1].fakeUserId) {
+          const _rn = _persona?.name || '用户';
+          finalUserContent = `[System 引擎调度]: 用户「${_rn}」刚刚在群里发言了！请群成员们**自然地接住并回应ta刚说的内容**——可以是其中一两个角色直接搭话/回答，也可以顺势引发大家的讨论。绝对不要集体无视用户、自顾自地继续聊别的话题。当然，回应之后角色之间也可以互相补充、调侃，让群聊真实热闹。(每句话必须带 [角色名]: 前缀，并用 ||| 分隔)`;
+      }
+
+      // ✨ 新增：潜水吃瓜机制（最后一条不是用户发的 = 用户在潜水）
       if (histMsgs.length > 0 && histMsgs[histMsgs.length - 1].role !== 'user') {
           finalUserContent = '[System 引擎调度]: 用户目前正在“潜水”暗中观察你们。请你们几位群成员暂时忽略用户，自己顺着刚才的话题继续水群，或者互相调侃、吐槽、开启个新话题。展现出你们私底下真实的群聊氛围和人物关系！(注意：每句话依然必须带 [角色名]: 前缀，并用 ||| 分隔)';
+      }
+      // ✨ 知情模式 + 真实用户刚发言：触发"真假身份大乱斗"
+      else if (gcMeta.revealMode && ghostUsers.length > 0 && histMsgs.length > 0 && histMsgs[histMsgs.length - 1].role === 'user' && !histMsgs[histMsgs.length - 1].fakeUserId) {
+          const _rn = _persona?.name || '用户';
+          finalUserContent = `[System 引擎调度]: 真实用户「${_rn}」刚刚开口了！现在请至少一个分身立刻跳出来争夺身份——反驳ta、抢着自称才是真的"${_rn}"、或反咬ta是冒牌货，制造多个"${_rn}"各执一词的混乱场面。角色们则要被搅得真假难辨、反复横跳地试探，但谁都不要直接拆穿。每句话依然必须带 [发言者名]: 前缀，并用 ||| 分隔。`;
+      }
+      // ✨ 蒙在鼓里模式 + 真实用户刚发言：触发"人格分裂剧场"
+      else if (!gcMeta.revealMode && ghostUsers.length > 0 && histMsgs.length > 0 && histMsgs[histMsgs.length - 1].role === 'user' && !histMsgs[histMsgs.length - 1].fakeUserId) {
+          const _rn = _persona?.name || '用户';
+          finalUserContent = `[System 引擎调度]: 真实用户「${_rn}」刚刚开口了。现在请至少一个分身接上来，用与刚才反差明显的性格/态度说话（可以唱反调、改口、自相矛盾），把"${_rn}"演成忽冷忽热、出尔反尔的样子。角色们只把这些都当成同一个"${_rn}"，要对ta的"突变"做出懵圈、吐槽或担心的反应，但绝不能怀疑有人冒充。每句话依然必须带 [发言者名]: 前缀，并用 ||| 分隔。`;
       }
       let apiMessages =[];
       
@@ -17707,10 +18095,40 @@ function _renderImgPreviewBar() {
       // ── 解析多角色回复 ──
       // AI 可能用 ||| 分隔，也可能用换行 + [角色名]: 分隔
       // 先按 ||| 拆，再对每块按换行 [角色名]: 二次拆分
-      const memberNames = gcMembers.map(m => m.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-      const speakerSplitRe = new RegExp(`(?=\\[(?:${memberNames.join('|')})\\][:：])`, 'g');
+      const realNameForGhost = _persona?.name || '我';
 
-      let parsedItems = []; // { senderId, text }
+      // 🌟 构建分身发言锚点：
+      //   - user 分身：用其显示名（留空→真 user 名）
+      //   - char 模仿者：用一个「独特发言标签」(如 Bob②/Bob-影)，避免和本体 [Bob] 混淆；
+      //     渲染时再还原成本体同名同头像。
+      const ghostByTag = {};       // 发言标签 → { fu, info }
+      const ghostTagNames = [];    // 供切分锚点
+      ghostUsers.forEach((fu, idx) => {
+        const info = ghostUserMap[String(fu.id)] || {};
+        if (info.side === 'char') {
+          // char 模仿者：给一个独特标签。targetCharId='all' 时标签为「影子N」，
+          // 具体角色时标签为「<角色名>·影N」
+          const base = (info.targetCharId && info.targetCharId !== 'all')
+            ? (info.name || '角色')
+            : '影子';
+          const tag = `${base}·影${idx + 1}`;
+          ghostByTag[tag] = { fu, info };
+          ghostTagNames.push(tag);
+        } else {
+          // user 分身
+          const dn = (fu.name || '').trim() || realNameForGhost;
+          if (!(dn in ghostByTag)) { ghostByTag[dn] = { fu, info }; ghostTagNames.push(dn); }
+        }
+      });
+
+      const allSpeakerNames = [...gcMembers.map(m => m.name), ...ghostTagNames]
+        .map(n => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+      const memberNames = allSpeakerNames; // 兼容下方引用
+      const speakerSplitRe = allSpeakerNames.length
+        ? new RegExp(`(?=\\[(?:${allSpeakerNames.join('|')})\\][:：])`, 'g')
+        : /(?=\[[^\]]+\][:：])/g;
+
+      let parsedItems = []; // { senderId, text, ghostId?, mimicCharId? }
       let lastSenderId = gcMembers[0]?.id || ''; // 🌟 防串：记录上一条气泡的发言者
 
       const rawBubbles = _splitAiBubbles(response);
@@ -17720,6 +18138,8 @@ function _renderImgPreviewBar() {
         for (const sub of subChunks) {
           // 🌟 修复：无前缀气泡继承上一条发言者，而非永远给 member[0]
           let senderId = lastSenderId;
+          let ghostId = null;
+          let mimicCharId = null;  // char 模仿者实际模仿的角色 id（用于渲染同名同头像）
           let bubbleText = sub;
 
           // 修复：将 [\s\S]+ 改为 [\s\S]* ，完美容错大模型断联导致的空回复，防止产生带有残缺文本框的气泡
@@ -17727,18 +18147,34 @@ function _renderImgPreviewBar() {
           if (speakerMatch) {
             const speakerName = speakerMatch[1].trim();
             bubbleText = speakerMatch[2].trim();
-            const matched = gcMembers.find(m => m.name === speakerName);
-            if (matched) { senderId = matched.id; lastSenderId = matched.id; }
+            // 优先判断是不是分身（按发言标签）
+            const ghostHit = ghostByTag[speakerName];
+            if (ghostHit) {
+              ghostId = ghostHit.fu.id;
+              const info = ghostHit.info || {};
+              if (info.side === 'char') {
+                // char 模仿者：渲染成被模仿角色（all 模式则跟随上一个角色，兜底首个成员）
+                mimicCharId = (info.targetCharId && info.targetCharId !== 'all')
+                  ? info.targetCharId
+                  : (lastSenderId || gcMembers[0]?.id || '');
+              }
+              // 分身气泡不污染角色 lastSenderId
+            } else {
+              const matched = gcMembers.find(m => m.name === speakerName);
+              if (matched) { senderId = matched.id; lastSenderId = matched.id; }
+            }
           }
 
           if (bubbleText.trim()) {
-            parsedItems.push({ senderId, text: bubbleText.trim() });
+            parsedItems.push({ senderId, ghostId, mimicCharId, text: bubbleText.trim() });
           }
         }
       }
 
      for (let pi = 0; pi < parsedItems.length; pi++) {
         const item = parsedItems[pi];
+        const isGhost = !!item.ghostId;
+        const isCharMimic = isGhost && !!item.mimicCharId;
 
         const { text: strippedText, prompts: novelPrompts } = _stripNovelImgTags(item.text);
         let src = _cleanAiBubble(strippedText || item.text);
@@ -17751,6 +18187,7 @@ function _renderImgPreviewBar() {
         let msgParts       = [];
 
         // 恢复所有高级行为标签的正则表达式匹配
+        // 🌟 方案B：分身（假 user）与角色一样全能，可发红包、语音、撤回、表情、引用。
       const isRecall      = src.startsWith('[RECALL]');
         const audioMatch    = !isRecall && src.match(/^\[AUDIO\s*[:：]\s*(?:(\d+)\s*[:：]\s*)?([\s\S]+?)\]/i);
         // 🌟 核心：精准拦截红包，同时兼容转移过来的旧设定防错
@@ -17815,8 +18252,16 @@ function _renderImgPreviewBar() {
 
         const msg = {
           charId:     gcId,
-          senderId:   item.senderId,
-          role:       msgRole,
+          // ┌─────────────────────────────────────────────────────────────┐
+          // │ 🔵 [U·user分身] senderId='' · role='user'  → 右侧气泡       │
+          // │ 🟠 [C·char模仿者] senderId=被模仿角色 · role='assistant'    │
+          // │                   → 左侧、同名同头像；并打 mimicCharId 隔离 │
+          // │ ⚪ [普通角色] senderId=本体角色 · role='assistant'          │
+          // └─────────────────────────────────────────────────────────────┘
+          senderId:   isCharMimic ? item.mimicCharId : (isGhost ? '' : item.senderId),
+          role:       isCharMimic ? 'assistant' : (isGhost ? 'user' : msgRole),
+          fakeUserId: isGhost ? item.ghostId : undefined,   // 🔵🟠 是哪个分身（U 和 C 都打）
+          mimicCharId: isCharMimic ? String(item.mimicCharId) : undefined, // 🟠 仅 C：被模仿角色 id（记忆隔离关键钥匙）
           parts:      msgParts,
           content:    displayContent,
           timestamp:  Date.now(),
@@ -18102,9 +18547,19 @@ function _renderImgPreviewBar() {
           const gcMsgs = await DB.messages.getPage(gc.id, 0, 30).catch(() =>[]);
           for (const m of gcMsgs) {
             if (!m.perceivers || m.perceivers.includes(String(sessionCharId))) {
-              const senderName = m.role === 'user'
-                ? (_persona?.name || '用户')
-                : (_charNameCache[String(m.senderId)] || '角色');
+              let senderName;
+              if (m.mimicCharId) {
+                // 🟠🚨 [C·记忆隔离 — 跨窗口回灌] 这是整个 char 模仿者功能的命脉！
+                //   本体的私聊会把ta的群消息拉回当记忆。模仿者 senderId=本体角色，
+                //   若不改名，本体就会把"冒充者说的话"当成"自己说过的话"→记忆被污染。
+                //   所以这里强制改写发件人为"【冒充XX的人】"，本体一眼认出不是自己。
+                const mimickedName = _charNameCache[String(m.mimicCharId)] || '某角色';
+                senderName = `【冒充${mimickedName}的人】`;
+              } else if (m.role === 'user') {
+                senderName = (_persona?.name || '用户');
+              } else {
+                senderName = (_charNameCache[String(m.senderId)] || '角色');
+              }
               const readerNames = (m.perceivers || gc.members).map(pid => _charNameCache[String(pid)] || (_persona?.name || '用户')).join(',');
               crossWindowMsgs.push({
                 ...m,
@@ -18794,6 +19249,61 @@ ${dialogueFlow.trim()}
     return parseFloat(amt.toFixed(2));
   }
 
+  // ── 🌟 假 user（分身/冒充者）运行时映射刷新 ──
+  async function refreshGhostUsers(gcMeta) {
+    _ghostUsers = (gcMeta && Array.isArray(gcMeta.fakeUsers)) ? gcMeta.fakeUsers.slice() : [];
+    _ghostUserMap = {};
+    // 真 user 头像（供未自定义头像的 user 分身继承）：用本群绑定的用户面具(persona)头像
+    _realUserAvatarUrl = '';
+    try {
+      if (_persona?.imgKey) {
+        _realUserAvatarUrl = await Assets.getUrl(_persona.imgKey).catch(() => '') || '';
+      }
+    } catch(e) {}
+    for (const fu of _ghostUsers) {
+      const target = fu.mimicTarget || 'user';
+      if (target === 'user') {
+        // 🔵🔵🔵 [U·模仿真实用户] 右侧 user 气泡 · 继承你的面具头像名字 · 存为 role:'user'
+        let avatarUrl = _realUserAvatarUrl;
+        if (fu.avatarKey) {
+          try { avatarUrl = await Assets.getUrl(fu.avatarKey).catch(() => '') || _realUserAvatarUrl; } catch(e) {}
+        }
+        _ghostUserMap[String(fu.id)] = { side: 'user', name: fu.name || (_persona?.name || '我'), avatarUrl, targetCharId: null };
+      } else if (target === 'all') {
+        // 🟠🟠🟠 [C·模仿全部角色] 左侧 · 随机扮任意角色（解析时再定具体是谁）· 需记忆隔离
+        _ghostUserMap[String(fu.id)] = { side: 'char', name: '', avatarUrl: '', targetCharId: 'all' };
+      } else {
+        // 🟠🟠🟠 [C·模仿某具体角色] 左侧 · 用该角色名字头像（和本体难辨真假）· 需记忆隔离
+        const member = _gcMemberMap[String(target)] || _gcMembers.find(m => String(m.id) === String(target));
+        _ghostUserMap[String(fu.id)] = {
+          side: 'char',
+          name: member?.name || '角色',
+          avatarUrl: member?.imgUrl || '',
+          targetCharId: String(target)
+        };
+      }
+    }
+  }
+
+  // 真 user 的显示名（分身留空名字时继承）
+  function _realUserName() { return _persona?.name || '我'; }
+
+  // 按「假 user 名字」找到对应的 ghost（用于解析 AI 输出的 [名字]: 前缀）
+  function _findGhostByName(name) {
+    const n = String(name || '').trim();
+    if (!n) return null;
+    // 1. 自定义名字精确匹配
+    const exact = _ghostUsers.find(fu => (fu.name || '').trim() === n);
+    if (exact) return exact;
+    // 2. 留空名字的分身 → 继承真 user 名字
+    const real = _realUserName();
+    if (n === real) {
+      const inherit = _ghostUsers.find(fu => !(fu.name || '').trim());
+      if (inherit) return inherit;
+    }
+    return null;
+  }
+
   function _resolveSenderName(senderId) {
     if (senderId == null || senderId === '') return _gcMembers[0]?.name || '角色';
     const key = String(senderId);
@@ -18810,8 +19320,7 @@ ${dialogueFlow.trim()}
   }
 
   // ── 群聊专用：一次性组装所有角色的 System Prompt ──
- function _buildGroupSystemPromptAll(gcMeta, histMsgs, worldBookBlock, timeGapPrompt, crossWindowMsgs =[], schedulesMap = {}, timePerceptionOn = true) {
- 
+  function _buildGroupSystemPromptAll(gcMeta, histMsgs, worldBookBlock, timeGapPrompt, crossWindowMsgs =[], schedulesMap = {}, timePerceptionOn = true) {
     const userBg = _persona ? `用户的名字是${_persona.name}${_persona.bio ? '，个人简介/签名：' + _persona.bio : ''}${_persona.backstory ? '\n背景：' + _persona.backstory : ''}` : '';
 
     // 时间感知：开启注入真实时间；关闭则不暴露现实时间（仅保留模糊的语言/时差铁律）
@@ -18821,6 +19330,64 @@ ${dialogueFlow.trim()}
       : `# 语言感知\n【母语规则】：如果某角色是外国人，其发言必须优先使用母语或本国语言（除非档案注明精通中文）。\n`;
 
     const worldLoreSection = worldBookBlock ? `\n# 世界背景知识\n${worldBookBlock}\n` : '';
+
+    // ── 🌟 假 user（分身/冒充者）档案与扮演指令 ──
+    const realName = _persona?.name || '我';
+    let ghostSection = '';
+    let ghostNamesForFormat = [];
+    if (_ghostUsers.length > 0) {
+      const reveal = !!gcMeta.revealMode;
+
+      // 分两类：user 分身 / char 模仿者。注意发言标签要和解析器(_triggerGroupAI)完全一致。
+      const userGhosts = [];
+      const charMimics = [];
+      _ghostUsers.forEach((fu, idx) => {
+        const info = _ghostUserMap[String(fu.id)] || {};
+        if (info.side === 'char') {
+          const base = (info.targetCharId && info.targetCharId !== 'all') ? (info.name || '角色') : '影子';
+          charMimics.push({ fu, info, tag: `${base}·影${idx + 1}`, idx });
+        } else {
+          const dispName = (fu.name || '').trim() || realName;
+          userGhosts.push({ fu, dispName, idx });
+        }
+      });
+
+      // —— user 分身档案 ——
+      let userGhostBlock = '';
+      if (userGhosts.length > 0) {
+        const profiles = userGhosts.map(({ fu, dispName }) => {
+          ghostNamesForFormat.push(dispName);
+          const personaLine = (fu.persona || '').trim()
+            ? `说话风格与人设：${fu.persona.trim()}`
+            : `没有特别设定，请尽力模仿用户「${realName}」一贯的说话语气、用词习惯和性格。`;
+          return `---\n分身代号：${dispName}${dispName === realName ? '（与真实用户同名，注意区分）' : ''}\n${personaLine}\n---`;
+        }).join('\n');
+        userGhostBlock = `\n# 🎭 特殊身份：群里的「用户分身」(Impostor Users)\n群里除了真实用户「${realName}」，还潜伏着 ${userGhosts.length} 个由你扮演的"用户分身"。他们伪装成普通用户在用户那一侧（右侧气泡）说话。\n你要额外扮演他们，让他们像真人一样冒泡、插话：\n${profiles}\n\n【发言格式】：用 \`[分身代号]: 内容\`，||| 分隔气泡，可用全部高级行为（引用/撤回/语音/红包/表情）。\n`;
+      }
+
+      // —— char 模仿者档案 ——
+      let charMimicBlock = '';
+      if (charMimics.length > 0) {
+        const profiles = charMimics.map(({ fu, info, tag }) => {
+          const targetName = (info.targetCharId && info.targetCharId !== 'all') ? info.name : '群里任意一个角色（每次自己挑一个）';
+          const personaLine = (fu.persona || '').trim()
+            ? `这个冒充者的特点：${fu.persona.trim()}`
+            : `尽量贴近被模仿角色的说话方式，做到以假乱真。`;
+          return `---\n发言代号：[${tag}]　（模仿对象：${targetName}）\n${personaLine}\n---`;
+        }).join('\n');
+        charMimicBlock = `\n# 🥸 特殊身份：群里的「角色模仿者」(Character Impostors)\n群里潜伏着 ${charMimics.length} 个**冒充群成员角色**的模仿者，由你额外扮演。他们伪装成某个真角色说话，气泡和本体长得一模一样（左侧、同名同头像），目的是让真实用户「${realName}」也分不清谁是本尊。\n${profiles}\n\n【发言格式（务必遵守）】：模仿者发言时**必须**用上面给的「发言代号」做前缀，例如 \`[${charMimics[0].tag}]: 内容\`，绝对不要直接用被模仿角色的本名做前缀（否则系统无法区分本体和冒充者）。同样用 ||| 分隔气泡，可用全部高级行为。\n【关键设定 —— 本体角色"知情且反击"】：被模仿的角色**本体清楚地知道**有人在冒充自己。本体绝不把冒充者的话当成自己说过的，反而会**当场反驳那个假货、戳穿矛盾、并主动向「${realName}」证明"我才是真的本人"**（比如提只有本体和用户之间才知道的事）。让本体和模仿者之间产生"真假对峙"的张力。\n`;
+      }
+
+      ghostSection = userGhostBlock + charMimicBlock;
+      ghostSection += `\n【⚠️ 强制要求】：本轮回复中，**至少要有一个分身/模仿者开口说话**（除非剧情上极不合理）。分身、模仿者、本体角色穿插发言，顺序随机。\n`;
+
+
+      if (reveal) {
+        ghostSection += `\n【知情模式·开启 —— 真假身份大乱斗】：群里的角色们**知道**混进了冒充"${realName}"的家伙，但没人能确定哪个才是本尊。本轮要演成一场"谁才是真${realName}"的猜谜博弈，规则如下：\n1. **分身必须主动争夺身份**：当真实用户「${realName}」发言后，分身要立刻跳出来唱反调——可以反驳真用户刚说的话、可以抢着说"我才是真的××，那个是假冒的！"、可以故意模仿真用户的语气制造混淆，让现场出现两个（或多个）都自称是${realName}的人各执一词。\n2. **分身可以反咬一口**：分身完全可以反过来指认真实用户"你才是冒牌货"，态度理直气壮，让角色更难判断。\n3. **角色被搅得真假难辨**：角色要表现出真的拿不准——在几个"${realName}"之间反复横跳、试探性提问（问只有真本尊才知道的细节）、吐槽"你俩到底哪个是真的啊"、甚至一会儿信这个一会儿信那个。\n4. **绝对不要直接拆穿或下定论**：谁都不能明确说出"系统层面谁是分身"。保留悬念，让这场猜谜继续下去才好玩。\n`;
+      } else {
+        ghostSection += `\n【蒙在鼓里模式 —— 人格分裂剧场】：群里的角色们**完全不知道**有分身存在，他们把所有以用户身份说话的人（真实用户 + 全部分身）都当成**同一个**真实的"${realName}"。绝对不能怀疑或提及"冒充""分身""假的""你们""哪个"之类的字眼。本轮要玩出"${realName}一个人精神分裂"的喜剧效果，规则如下：\n1. **分身各演各的反差性格**：每个分身按各自的人设说话，放大彼此的性格差异（比如一个温柔一个毒舌、一个积极一个摆烂）。但在角色眼里这些全是同一个"${realName}"，于是"${realName}"就显得前一秒一个样、后一秒另一个样。\n2. **制造出尔反尔/忽冷忽热**：分身可以推翻"${realName}"前面刚说的话、突然改口、自相矛盾，让角色觉得"${realName}今天怎么阴晴不定"。\n3. **角色要对这种"突变"做出懵圈反应**：角色应该一脸问号地吐槽——"你不是刚说不去吗？""你今天是不是没睡醒啊""怎么一会儿一个态度"——但他们只会归因于"${realName}心情多变/精神状态堪忧"，绝不会往"有别人冒充"上想。\n4. **真实用户也是这场分裂的一部分**：真实用户发言后，分身可以顺着接、也可以唱反调，共同把"${realName}"演成一个让人摸不透的多面体。\n`;
+      }
+    }
 
     // ── 所有角色档案 ──
     const charProfiles = _gcMembers.map(m => {
@@ -18848,7 +19415,21 @@ ${c?.mbti ? 'MBTI：' + c.mbti : ''}
           if (m._isLocal) {
             // 群聊本地消息 → [C|readers|群名|time]
             let senderName;
-            if (m.role === 'user') senderName = _persona?.name || '用户';
+            if (m.mimicCharId) {
+              // 🟠🚨 [C·记忆隔离 — 群聊上下文] 群内历史里也把模仿者标成"【冒充XX的人】"，
+              //   否则模型在群里也会把模仿者发言当成本体角色自己说的，张冠李戴。
+              const mn = _gcMemberMap[String(m.mimicCharId)]?.name
+                || _gcMembers.find(mm => String(mm.id) === String(m.mimicCharId))?.name
+                || '某角色';
+              senderName = `【冒充${mn}的人】`;
+            } else if (m.role === 'user') {
+              // 🌟 分身消息用分身名字（蒙在鼓里模式下也与真 user 同名，天然以假乱真）
+              if (m.fakeUserId && _ghostUserMap[String(m.fakeUserId)]) {
+                senderName = _ghostUserMap[String(m.fakeUserId)].name || (_persona?.name || '用户');
+              } else {
+                senderName = _persona?.name || '用户';
+              }
+            }
             else senderName = _resolveSenderName(m.senderId);
 
             const perceivers = m.perceivers || gcMeta.members;
@@ -18922,7 +19503,7 @@ ${c?.mbti ? 'MBTI：' + c.mbti : ''}
 ${timeCtx}
 # 角色档案
 ${charProfiles}
-
+${ghostSection}
 ${worldLoreSection}
 # 关于用户
 ${userBg}
@@ -19459,7 +20040,7 @@ ${emoteBlock}
         if (_isGroup) {
           const lastRole = lastRow.classList.contains('user') ? 'user' : 'assistant';
           const lastSender = lastRow.dataset.senderId;
-          const currSender = String(msg.senderId || msg.role);
+          const currSender = String(msg.fakeUserId ? ('fu:' + msg.fakeUserId) : (msg.senderId || msg.role));
           const lastWasRecalled = lastRow.classList.contains('recalled');
           
           // 如果上一条是撤回，或者自己是撤回，都不进行贴合
@@ -19471,7 +20052,7 @@ ${emoteBlock}
     }
     
     const newRow = _buildBubble(msg);
-    newRow.dataset.senderId = String(msg.senderId || msg.role);
+    newRow.dataset.senderId = String(msg.fakeUserId ? ('fu:' + msg.fakeUserId) : (msg.senderId || msg.role));
     if (isConsecutive) newRow.classList.add('consecutive');
     
     feed.appendChild(newRow);
@@ -21910,7 +22491,7 @@ if (action === 'quote') {
     document.getElementById('cv-dist-overlay').classList.remove('active');
   }
   
-  return { enter, back, openQuickReply, closeQuickReply,openSettings, closeSettings, openFuncPanel, loadMore, sendUserMsg, sendAndTriggerAI, fetchModels, closeApiModal, confirmApi, openRecallModal, closeRecallModal, collectTransfer, openHangTag, closeHangTag, tearHangTag, sendUserTransfer, sendImgMsg, closeMenu,handleMenuAction,cancelQuote, updateMultiSelectUI, cancelMultiSelect, favoriteSelected, deleteSelected,addEmoteToPreview,_openImgViewer, _openImgViewerFromEl, _viewerDownloadImage, _regenerateNovelFromViewer, toggleAudio, clearWallpaper, clearHistory, deleteChat, _toggleAccordion, _selectRadio, _selectPersona,_removePendingImg,playAudio, previewVoice, _toggleTTS, _toggleNovel, _toggleTranslate, _appendNovelImageMessage, _replaceMessageBubble, _showNovelPending, _hideNovelPending, _toggleAlias,copyDefaultCSS, applyAndSaveCSS, clearCustomCSS, saveCssPreset, confirmSaveCssPreset, applyCssPreset, deleteCssPreset,manualSummarize, clearMemory, archiveToWorldBook, confirmArchive, syncSummary, _onSummaryEdit,openCallRecordModal, closeCallRecordModal,_toggleOfflineMsg, _scrollToBottom, openContextConsole,_splitAiBubbles, openLocModal, closeLocModal, sendLocationMsg, openDistModal, closeDistModal, _removeFace, _setFaceFidelity, _onFaceConsent, _pickFace };
+  return { enter, back, openQuickReply, closeQuickReply,openSettings, closeSettings, openFuncPanel, loadMore, sendUserMsg, sendAndTriggerAI, fetchModels, closeApiModal, confirmApi, openRecallModal, closeRecallModal, collectTransfer, openHangTag, closeHangTag, tearHangTag, sendUserTransfer, sendImgMsg, closeMenu,handleMenuAction,cancelQuote, updateMultiSelectUI, cancelMultiSelect, favoriteSelected, deleteSelected,addEmoteToPreview,_openImgViewer, _openImgViewerFromEl, _viewerDownloadImage, _regenerateNovelFromViewer, toggleAudio, clearWallpaper, clearHistory, deleteChat, _toggleAccordion, _selectRadio, _selectPersona,_removePendingImg,playAudio, previewVoice, _toggleTTS, _toggleNovel, _toggleTranslate, _appendNovelImageMessage, _replaceMessageBubble, _showNovelPending, _hideNovelPending, _toggleAlias,copyDefaultCSS, applyAndSaveCSS, clearCustomCSS, saveCssPreset, confirmSaveCssPreset, applyCssPreset, deleteCssPreset,manualSummarize, clearMemory, archiveToWorldBook, confirmArchive, syncSummary, _onSummaryEdit,openCallRecordModal, closeCallRecordModal,_toggleOfflineMsg, _scrollToBottom, openContextConsole,_splitAiBubbles, openLocModal, closeLocModal, sendLocationMsg, openDistModal, closeDistModal, _removeFace, _setFaceFidelity, _onFaceConsent, _pickFace, refreshGhostUsers };
 })();
 /** 供 NovelModule 等脚本用 window 访问；const 不会自动挂到 window */
 window.ConvModule = ConvModule;
