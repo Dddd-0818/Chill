@@ -316,6 +316,76 @@ const CloudModule = (() => {
     if (typeof Toast !== 'undefined') Toast.show('配置已清空');
   }
 
+  // ============================================================
+  // ☁️ 云端代答（Cloud Reply）——把"等回复"交给杀不死的云端
+  // ============================================================
+
+  // 提交一条待云端处理的回复任务。
+  // 成功返回该行的 id（字符串）；任何原因失败都返回 null（前端据此回退到本地 fetch）。
+  async function submitCloudReply(charId, apiProfile, messages) {
+    try {
+      const supabase = await _getSupabaseSilent();
+      if (!supabase) return null; // 第一道：没连云端 → 回退本地
+
+      const { data, error } = await supabase
+        .from('pending_replies')
+        .insert({
+          char_id:     String(charId),
+          api_profile: apiProfile,
+          messages:    messages,
+          status:      'pending'
+        })
+        .select('id')
+        .single();
+
+      if (error) { _log('error', '云端代答提交失败', error.message); return null; }
+      _log('info', '云端代答任务已提交', `id: ${data.id}`);
+      return data.id;
+    } catch (e) {
+      _log('error', '云端代答提交异常', e.message || e);
+      return null; // 第三道兜底：表不存在/网络炸 → 回退本地
+    }
+  }
+
+  // 拉取一条已完成的云端回复结果。
+  // 返回 { status, result, error_msg } 或 null。读到后由调用方决定是否删除该行。
+  async function fetchCloudReply(rowId) {
+    try {
+      const supabase = await _getSupabaseSilent();
+      if (!supabase) return null;
+      const { data, error } = await supabase
+        .from('pending_replies')
+        .select('status, result, error_msg')
+        .eq('id', rowId)
+        .single();
+      if (error) return null;
+      return data;
+    } catch (e) { return null; }
+  }
+
+  // 删除一条已处理完的云端回复（拿到结果后清理，避免堆积 + 减少 key 留存）
+  async function deleteCloudReply(rowId) {
+    try {
+      const supabase = await _getSupabaseSilent();
+      if (!supabase) return;
+      await supabase.from('pending_replies').delete().eq('id', rowId);
+    } catch (e) { /* 静默 */ }
+  }
+
+  // 拉取所有 done 状态的回复（切回前台时批量收取，类似离线信箱）
+  async function pollDoneReplies() {
+    try {
+      const supabase = await _getSupabaseSilent();
+      if (!supabase) return [];
+      const { data, error } = await supabase
+        .from('pending_replies')
+        .select('id, char_id, result, status, error_msg')
+        .eq('status', 'done');
+      if (error || !data) return [];
+      return data;
+    } catch (e) { return []; }
+  }
+
   // 辅助报错拦截，用于排查朋友遇到的奇怪问题
   function handleFetchError(e, action) {
     _log('error', `${action} 失败拦截`, e.message);
@@ -684,7 +754,7 @@ const CloudModule = (() => {
     });
   }
 
-  return { init, open, close, syncUp, syncDown, requestPushPermission, toggleAutoBackup, changeBackupInterval, openLogs, saveConnection, clearConnection };
+  return { init, open, close, syncUp, syncDown, requestPushPermission, toggleAutoBackup, changeBackupInterval, openLogs, saveConnection, clearConnection, submitCloudReply, fetchCloudReply, deleteCloudReply, pollDoneReplies };
 })();
 
 window.CloudModule = CloudModule;
