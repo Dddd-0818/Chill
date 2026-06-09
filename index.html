@@ -8877,12 +8877,13 @@ const ApiHelper = (() => {
     return models;
   }
 
-  async function chatCompletion(apiProfile, messages) {
+  async function chatCompletion(apiProfile, messages, signal) {
     const url = buildUrl(apiProfile.url, 'chat');
     const res = await fetch(url, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiProfile.key}` },
       body: JSON.stringify({ model: apiProfile.model, messages, temperature: parseFloat(apiProfile.temp) }),
+      signal,
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
@@ -18604,7 +18605,9 @@ function _renderImgPreviewBar() {
       // ===========================
       if (typeof KeepAliveModule !== 'undefined') KeepAliveModule.start(); // 开启保活
 
-      // ☁️ 云端代答（正式版）：读用户开关；仅当「开关开 + 已切到后台 + 模块可用」时走云端。
+      // ☁️ 云端代答（正式版 · 赛跑模式）：
+      //   前台聊天 → 照常走前端 fetch，完整渲染、不碰云端（付费体验零影响）。
+      //   只有「开关开 + fetch 还没回 + 用户中途切到后台」时 → 中断前端，转交云端跑+推送。
       let cloudReplyEnabled = false;
       try { cloudReplyEnabled = (await DB.settings.get('cloud-reply-enabled')) === true; } catch(e) {}
 
@@ -18613,20 +18616,45 @@ function _renderImgPreviewBar() {
         ...apiMessages
       ];
 
-      if (cloudReplyEnabled && document.hidden && window.CloudModule && CloudModule.submitCloudReply) {
-        const rowId = await CloudModule.submitCloudReply(sessionCharId, activeApi, fullMessages);
-        if (rowId) {
-          // 交给云端后，前端这次的活就结束了：撤掉打字动画、释放锁。
-          // 回复会以"离线消息"形式在切回前台时到账（+ 推送）。
-          if (typeof KeepAliveModule !== 'undefined') KeepAliveModule.stop();
-          if (_charId === sessionCharId) _removeTyping();
-          _typingChars.delete(sessionCharId);
-          return;
-        }
-        // rowId 为 null（没连云端 / 提交失败）→ 落到下面本地兜底
-      }
+      let response;
+      if (cloudReplyEnabled && window.CloudModule && CloudModule.submitCloudReply) {
+        // —— 赛跑：前端 fetch vs 切后台信号 ——
+        const _ac = new AbortController();
+        let _bgResolve;
+        const _bgPromise = new Promise(res => { _bgResolve = res; });
+        const _onHide = () => { if (document.hidden) _bgResolve('__BG__'); };
+        document.addEventListener('visibilitychange', _onHide);
+        // 若发起时就已经在后台（极少见），立即触发
+        if (document.hidden) _bgResolve('__BG__');
 
-      const response = await ApiHelper.chatCompletion(activeApi, fullMessages);
+        const _fetchPromise = ApiHelper.chatCompletion(activeApi, fullMessages, _ac.signal)
+          .then(r => ({ ok: true, r }))
+          .catch(e => ({ ok: false, e }));
+
+        const _winner = await Promise.race([_fetchPromise, _bgPromise]);
+        document.removeEventListener('visibilitychange', _onHide);
+
+        if (_winner === '__BG__') {
+          // 用户切后台了，且前端还没回 → 中断前端，转交云端
+          try { _ac.abort(); } catch(_) {}
+          const rowId = await CloudModule.submitCloudReply(sessionCharId, activeApi, fullMessages);
+          if (rowId) {
+            if (typeof KeepAliveModule !== 'undefined') KeepAliveModule.stop();
+            if (_charId === sessionCharId) _removeTyping();
+            _typingChars.delete(sessionCharId);
+            return; // 回复将以离线消息形式到账 + 推送
+          }
+          // 云端提交失败 → 兜底：重新用前端跑一次
+          response = await ApiHelper.chatCompletion(activeApi, fullMessages);
+        } else {
+          // 前端先跑完（用户还在前台）→ 走原来的完整渲染，格式全保留
+          if (!_winner.ok) throw _winner.e;
+          response = _winner.r;
+        }
+      } else {
+        // 没开开关 / 云端不可用 → 完全是原来的前端流程
+        response = await ApiHelper.chatCompletion(activeApi, fullMessages);
+      }
       if (typeof KeepAliveModule !== 'undefined') KeepAliveModule.stop(); // 关闭保活
       // ===========================
       // ⚠️ 请求回来了！
