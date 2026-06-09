@@ -16744,6 +16744,29 @@ const ConvModule = (() => {
   function addEmoteToPreview(keyword, url) {
     _pendingImgs.push({ isEmote: true, keyword, url });
     _renderImgPreviewBar();
+
+    // 🌟 点联想表情后，自动擦掉触发联想的「最后一个词」，避免文字跟着表情一起发出去
+    // 切分规则需与上方 input 监听器里的联想逻辑保持完全一致
+    const input = document.getElementById('cv-input');
+    if (input) {
+      const raw = input.value;
+      const trimmedRight = raw.replace(/\s+$/, ''); // 去掉尾部空白，便于定位最后一个词
+      // 找到最后一个分隔符（空白或中英文标点）的位置，词 = 它之后到结尾的部分
+      const lastSepMatch = trimmedRight.match(/[\s，。！？、,!?]+(?=[^\s，。！？、,!?]*$)/);
+      if (lastSepMatch) {
+        // 有分隔符：保留分隔符及之前的内容，擦掉最后一个词
+        const cutIdx = lastSepMatch.index + lastSepMatch[0].length;
+        input.value = trimmedRight.slice(0, cutIdx);
+      } else {
+        // 整段就是一个词：直接清空
+        input.value = '';
+      }
+      // 同步收起高度 & 隐藏联想条
+      input.style.height = '44px';
+      input.style.overflowY = 'hidden';
+      const suggestBar = document.getElementById('cv-emote-suggest-bar');
+      if (suggestBar) suggestBar.style.display = 'none';
+    }
   }
 
   // ── 用户语音逻辑 ──

@@ -3,7 +3,7 @@
 
 const UpdateModule = (() => {
   // 🌟 每次更新时，只需要修改这个版本号和下面的更新内容即可！
-  const CURRENT_VERSION = 'v3.5.0'; 
+  const CURRENT_VERSION = 'v3.6.0'; 
   const VERSION_KEY = 'chillos-last-version';
   
   const CHANGELOG = [
