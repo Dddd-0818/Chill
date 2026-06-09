@@ -18144,8 +18144,18 @@ function _renderImgPreviewBar() {
         ...apiMessages
       ];
 
+      // 🔍 云端代答诊断：把判断条件打到诊断面板，方便手机上排查
+      try {
+        const _diag = `enabled:${CLOUD_REPLY_ENABLED} | hidden:${document.hidden} | hasModule:${!!(window.CloudModule && CloudModule.submitCloudReply)}`;
+        console.log('[CloudReply] 判断条件 →', _diag);
+      } catch(e){}
+
+      // ⚠️⚠️ 测试模式：暂时去掉 document.hidden 条件，无条件走云端，用于验证整条链路。
+      //        验证通过后，把下面这行的判断改回：
+      //        if (CLOUD_REPLY_ENABLED && document.hidden && window.CloudModule && CloudModule.submitCloudReply) {
       let usedCloud = false;
-      if (CLOUD_REPLY_ENABLED && document.hidden && window.CloudModule && CloudModule.submitCloudReply) {
+      if (CLOUD_REPLY_ENABLED && window.CloudModule && CloudModule.submitCloudReply) {
+        console.log('[CloudReply] ✅ 条件满足（测试：无条件），调用 submitCloudReply');
         const rowId = await CloudModule.submitCloudReply(sessionCharId, activeApi, fullMessages);
         if (rowId) {
           usedCloud = true;
@@ -18157,7 +18167,10 @@ function _renderImgPreviewBar() {
           _typingChars.delete(sessionCharId);
           return;
         }
+        console.log('[CloudReply] ⚠️ submitCloudReply 返回 null，回退本地 fetch');
         // rowId 为 null（没连云端 / 提交失败）→ 落到下面本地兜底
+      } else {
+        console.log('[CloudReply] ✗ 条件不满足，走前端 fetch');
       }
 
       // 本地兜底 / 前台正常路径：走原来的前端 fetch（最快）

@@ -323,9 +323,17 @@ const CloudModule = (() => {
   // 提交一条待云端处理的回复任务。
   // 成功返回该行的 id（字符串）；任何原因失败都返回 null（前端据此回退到本地 fetch）。
   async function submitCloudReply(charId, apiProfile, messages) {
+    _log('info', '☁️ [云端代答] 进入 submitCloudReply', `charId: ${charId}`);
     try {
       const supabase = await _getSupabaseSilent();
-      if (!supabase) return null; // 第一道：没连云端 → 回退本地
+      if (!supabase) {
+        _log('warn', '☁️ [云端代答] 未连接云端 → 回退本地', '没有 cloud-url / cloud-key，或 SDK 未加载');
+        return null; // 第一道：没连云端 → 回退本地
+      }
+      _log('info', '☁️ [云端代答] 已拿到 Supabase 实例，准备写入 pending_replies');
+
+      const payloadInfo = `model: ${apiProfile?.model || '?'}, 消息数: ${Array.isArray(messages) ? messages.length : '?'}`;
+      _log('info', '☁️ [云端代答] 任务内容', payloadInfo);
 
       const { data, error } = await supabase
         .from('pending_replies')
@@ -338,11 +346,14 @@ const CloudModule = (() => {
         .select('id')
         .single();
 
-      if (error) { _log('error', '云端代答提交失败', error.message); return null; }
-      _log('info', '云端代答任务已提交', `id: ${data.id}`);
+      if (error) {
+        _log('error', '☁️ [云端代答] 写入 pending_replies 失败 → 回退本地', error.message || JSON.stringify(error));
+        return null;
+      }
+      _log('info', '✅ [云端代答] 任务已提交成功！等待云端处理', `行 id: ${data.id}`);
       return data.id;
     } catch (e) {
-      _log('error', '云端代答提交异常', e.message || e);
+      _log('error', '☁️ [云端代答] 提交异常 → 回退本地', e.message || String(e));
       return null; // 第三道兜底：表不存在/网络炸 → 回退本地
     }
   }
