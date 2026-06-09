@@ -18138,28 +18138,20 @@ function _renderImgPreviewBar() {
       // 云端跑完会：① 把回复拆气泡写进离线信箱 cloud_offline_messages
       //            ② 逐条发推送
       // 用户切回前台时，现成的 CloudModule.checkOfflineMessages() 会自动收取渲染。
-      const CLOUD_REPLY_ENABLED = true; // TODO: 跑通后改成 await DB.settings.get('cloud-reply-enabled')
+      // ☁️ 云端代答（正式版）：读用户开关；仅当「开关开 + 已切到后台 + 模块可用」时走云端。
+      let cloudReplyEnabled = false;
+      try { cloudReplyEnabled = (await DB.settings.get('cloud-reply-enabled')) === true; } catch(e) {}
+
       const fullMessages = [
         { role: 'system', content: systemPrompt },
         ...apiMessages
       ];
 
-      // 🔍 云端代答诊断：把判断条件打到诊断面板，方便手机上排查
-      try {
-        const _diag = `enabled:${CLOUD_REPLY_ENABLED} | hidden:${document.hidden} | hasModule:${!!(window.CloudModule && CloudModule.submitCloudReply)}`;
-        console.log('[CloudReply] 判断条件 →', _diag);
-      } catch(e){}
-
-      // ⚠️⚠️ 测试模式：暂时去掉 document.hidden 条件，无条件走云端，用于验证整条链路。
-      //        验证通过后，把下面这行的判断改回：
-      //        if (CLOUD_REPLY_ENABLED && document.hidden && window.CloudModule && CloudModule.submitCloudReply) {
       let usedCloud = false;
-      if (CLOUD_REPLY_ENABLED && window.CloudModule && CloudModule.submitCloudReply) {
-        console.log('[CloudReply] ✅ 条件满足（测试：无条件），调用 submitCloudReply');
+      if (cloudReplyEnabled && document.hidden && window.CloudModule && CloudModule.submitCloudReply) {
         const rowId = await CloudModule.submitCloudReply(sessionCharId, activeApi, fullMessages);
         if (rowId) {
           usedCloud = true;
-          console.log('[CloudReply] ☁️ 已交给云端处理，本次前端不再等待', rowId);
           // 交给云端后，前端这次的活就结束了：撤掉打字动画、释放锁。
           // 回复会以"离线消息"形式在切回前台时到账（+ 推送）。
           if (typeof KeepAliveModule !== 'undefined') KeepAliveModule.stop();
@@ -18167,10 +18159,7 @@ function _renderImgPreviewBar() {
           _typingChars.delete(sessionCharId);
           return;
         }
-        console.log('[CloudReply] ⚠️ submitCloudReply 返回 null，回退本地 fetch');
         // rowId 为 null（没连云端 / 提交失败）→ 落到下面本地兜底
-      } else {
-        console.log('[CloudReply] ✗ 条件不满足，走前端 fetch');
       }
 
       // 本地兜底 / 前台正常路径：走原来的前端 fetch（最快）

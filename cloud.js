@@ -101,6 +101,18 @@ const CloudModule = (() => {
                 <div class="toggle-thumb"></div>
               </label>
             </div>
+
+            <div class="toggle-row" style="margin-top: 16px; border-top: 1px dashed rgba(18,18,18,0.1); padding-top: 16px;">
+              <div class="toggle-row-info">
+                <div class="toggle-row-label" style="font-size:0.85rem; font-weight:600; color:var(--s-text-primary);">云端代答 (Cloud Reply)</div>
+                <div class="toggle-row-desc" style="font-size:0.6rem; color:var(--s-text-secondary); margin-top:4px;">等回复时切到后台，改由云端跑完并推送（需已部署 cloud-reply 函数）</div>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="cloud-reply-enabled" onchange="CloudModule.toggleCloudReply(this.checked)">
+                <div class="toggle-track"></div>
+                <div class="toggle-thumb"></div>
+              </label>
+            </div>
             
             <!-- 🌟 新增：冷却时间选择器 -->
             <div class="input-wrapper" id="auto-backup-interval-wrapper" style="margin-top:12px; display:none;">
@@ -267,6 +279,12 @@ const CloudModule = (() => {
       const intervalSelect = document.getElementById('cloud-backup-interval');
       if (intervalSelect) intervalSelect.value = backupInterval;
 
+      const cloudReplyToggle = document.getElementById('cloud-reply-enabled');
+      if (cloudReplyToggle) {
+        const cr = await DB.settings.get('cloud-reply-enabled');
+        cloudReplyToggle.checked = !!cr;
+      }
+
     } catch(e) {}
     document.getElementById('cloud-screen').classList.add('active');
   }
@@ -282,6 +300,19 @@ const CloudModule = (() => {
       if (enabled) {
          _log('info', '用户开启了自动备份功能');
          Toast.show('自动备份已开启');
+      }
+    } catch (e) {}
+  }
+
+  async function toggleCloudReply(enabled) {
+    try {
+      await DB.settings.set('cloud-reply-enabled', enabled);
+      if (enabled) {
+        _log('info', '用户开启了云端代答');
+        Toast.show('云端代答已开启 ✦ 切后台等回复将由云端处理');
+      } else {
+        _log('info', '用户关闭了云端代答');
+        Toast.show('云端代答已关闭，回复改回本地处理');
       }
     } catch (e) {}
   }
@@ -765,7 +796,7 @@ const CloudModule = (() => {
     });
   }
 
-  return { init, open, close, syncUp, syncDown, requestPushPermission, toggleAutoBackup, changeBackupInterval, openLogs, saveConnection, clearConnection, submitCloudReply, fetchCloudReply, deleteCloudReply, pollDoneReplies };
+  return { init, open, close, syncUp, syncDown, requestPushPermission, toggleAutoBackup, toggleCloudReply, changeBackupInterval, openLogs, saveConnection, clearConnection, submitCloudReply, fetchCloudReply, deleteCloudReply, pollDoneReplies };
 })();
 
 window.CloudModule = CloudModule;
