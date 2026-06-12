@@ -7,6 +7,7 @@ const EditorialModule = (() => {
     let _initialized = false;
     let _botPosts =[]; // 存放 Bot 页面的所有帖子
     let _isDecrypting = false; // 防并发锁
+    let _isRefreshingPinned = false; // 爆料贴刷新并发锁
     let _replyTargetMap = {}; // 记录每个帖子当前正在回复谁：{ postId: 'TargetName' }
     let _interviews =[]; // 存放所有盲采数据
     let _isGeneratingInterview = false; // 防止重复点击生成
@@ -994,7 +995,8 @@ ${contextComments}
 2. 如果帖子作者是具体的角色（有背景设定），那么【帖子作者本人】必须亲自下场回复用户！回复的语气必须严格符合 ta 的人设，以及符合对用户面具身份的态度（是暧昧、傲娇还是死对头）。
 3. 此外，你可以随机附带 3-5 条路人NPC（如：吃瓜群众、ANON. 99X、精神稳定状态0）的吐槽、附和或看热闹的评论。
 4. 语气要有强烈的“活人网感”、短平快、不客气、拒绝AI味。
-5. 严格返回 JSON 数组，格式：[{"name":"评论者名称", "text":"评论内容"}]`;
+5. 🚧【分寸下限】：可以毒舌、抬杠、阴阳、看热闹，但绝不许人身攻击与辱骂（针对长相、身材、智商、出身、性别、性取向、地域、家庭的羞辱）、脏话侮辱、威胁诅咒、引战仇恨。要"好笑有梗"而不是"恶心踩人"，冲突停在互相调侃，不能滑向网暴。
+6. 严格返回 JSON 数组，格式：[{"name":"评论者名称", "text":"评论内容"}]`;
 
             const response = await ApiHelper.chatCompletion(activeApi,[{  role: 'user', content: prompt }]);
             const cleaned = response.replace(/```json|```/g, '').trim();
@@ -1521,30 +1523,77 @@ ${historyText}
             const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
             const allChars = await DB.characters.getAll();
             let allMsgs =[];
+            const activeCharIds = new Set(); // 记录24h内真正出场过的角色
             for (const c of allChars) {
                 const msgs = await DB.messages.getPage(String(c.id), 0, 100).catch(()=>[]);
-                allMsgs = allMsgs.concat(msgs.filter(m => m.timestamp >= oneDayAgo));
+                const recent = msgs.filter(m => m.timestamp >= oneDayAgo);
+                if (recent.length > 0) activeCharIds.add(String(c.id));
+                allMsgs = allMsgs.concat(recent);
             }
             allMsgs.sort((a,b) => a.timestamp - b.timestamp);
             
             let historyText = allMsgs.map(m => `[${m.role === 'user' ? '用户' : m.charName}]: ${m.content}`).join('\n').slice(-3000);
             if (!historyText) historyText = "今日观测站风平浪静，暂无数据。";
 
-            const prompt = `你是一个匿名八卦博主（风格完美复刻《Gossip Girl》的 Gossip Girl）。
+            // 只注入「这24小时真正出场」的角色人设，避免无关角色误导 AI 瞎编排
+            const personaCards = allChars
+                .filter(c => activeCharIds.has(String(c.id)) && c.persona)
+                .map(c => `· ${c.name}：${String(c.persona).slice(0, 200)}`)
+                .join('\n');
+            const personaBlock = personaCards
+                ? `\n【涉及人物的真实人设档案】（爆料必须符合 ta 们的真实性格，不许编出与设定矛盾的人）：\n${personaCards}\n`
+                : '';
+
+            // 收集这24h用户实际用到的面具（按出场角色查绑定，去重）。用户在不同角色处可能戴不同面具，全列出来让 AI 自己对应
+            let userMaskBlock = '';
+            try {
+                const allPersonas = typeof PersonaModule !== 'undefined' ? PersonaModule.getAll() : [];
+                if (allPersonas.length) {
+                    const maskMap = new Map(); // personaId -> persona对象，天然去重
+                    for (const cid of activeCharIds) {
+                        const binding = await DB.bindings.get(String(cid)).catch(()=>null);
+                        const pId = binding ? binding.personaId : (typeof PersonaModule !== 'undefined' ? PersonaModule.getActiveId() : null);
+                        const pObj = allPersonas.find(p => String(p.id) === String(pId)) || allPersonas[0];
+                        if (pObj && !maskMap.has(String(pObj.id))) maskMap.set(String(pObj.id), pObj);
+                    }
+                    const maskCards = [...maskMap.values()]
+                        .map(p => `· ${p.name}：${String((p.bio || '') + ' ' + (p.backstory || '')).trim().slice(0, 200)}`)
+                        .join('\n');
+                    if (maskCards) {
+                        userMaskBlock = `\n【"用户"的真实面具档案】（记录里标为"用户"的就是 ta，爆料涉及"用户"时必须符合下面的面具设定，不许编排成矛盾的样子）：\n${maskCards}\n`;
+                    }
+                }
+            } catch(e) { console.error('[Pinned UserMask]', e); }
+
+            const prompt = `你是一个匿名八卦博主（风格复刻《Gossip Girl》的 Gossip Girl）。
 你刚刚获取了过去24小时的所有私密频道的聊天记录：
 ${historyText}
-
+${personaBlock}${userMaskBlock}
 【任务】：
-从中揪出一个最具反差感、最暧昧、或者最社死的隐秘细节（比如：某人半夜的撤回、嘴硬心软的转账、情绪波动的瞬间、或者暗戳戳的吃醋）。用极度毒舌、玩味、看透一切且略带嘲讽的“吃瓜”口吻写一条匿名爆料动态。
+从上面【真实存在的聊天记录】里，挑出一个最具反差感、最暧昧、或者最社死的真实细节（比如某人半夜的撤回、嘴硬心软的转账、情绪波动的瞬间、暗戳戳的吃醋），用毒舌、玩味、看透一切的"吃瓜"口吻爆料出来。
 
-【红线警告】：
-1. 绝对不要像机器汇报数据！不要用“根据数据分析”这种词。
-2. 语气要拽、高傲、充满网感（可以使用类似：笑死、救命、别太爱了、我都不好意思点破 等词汇）。
-3. 结尾可以加上类似“XOXO”、“祝你好运”之类的标志性挑衅。
-4. 控制在 80 字以内，直接输出爆料正文，不需要任何前言。`;
+【事实红线 · 最高优先级】：
+1. 你爆的"料"必须能在上面的聊天记录里找到原始出处。只允许对真实发生的事做夸张化的解读和调侃，绝对禁止编造记录里根本没有的人物、事件、对话或情节。
+2. 爆料里涉及的角色言行，必须符合上方【人设档案】里 ta 的真实性格设定。绝对禁止把 ta 编排成与人设矛盾的样子（例如把高冷的人写成话痨、把没出场的关系硬安上去）。拿不准就别写。
+3. 记录里标为"用户"的发言，对应上方【用户面具档案】。爆到"用户"时同样必须符合 ta 的面具设定，不许凭空给用户安上矛盾的性格、关系或行为。
+4. 宁可点到为止、留白暗示，也不要为了戏剧性而虚构。你是在"放大真相"，不是在"写小说"。
+5. 如果记录确实平淡、找不到任何可爆的点（例如记录为空或只是日常寒暄），就不要硬编。这种情况下只输出三个字：__SKIP__，不要输出任何爆料。
+
+【语气要求】：
+1. 不要像机器汇报数据，不要用"根据数据分析"这种词。
+2. 语气拽、高傲、有网感（笑死、救命、别太爱了、我都不好意思点破 等）。
+3. 可以毒舌、可以阴阳，但调侃的是"事"不是恶意攻击"人"，不要人身侮辱、不要外貌/身份羞辱。
+4. 结尾可加"XOXO""祝你好运"之类的标志性挑衅。
+5. 控制在 80 字以内，直接输出爆料正文，不要任何前言。`;
 
             const response = await ApiHelper.chatCompletion(activeApi,[{ role: 'user', content: prompt }]);
-            
+
+            // 真空兜底：AI 判定无料可爆时跳过，绝不硬塞捏造帖
+            const _clean = (response || '').trim();
+            if (!_clean || _clean.includes('__SKIP__')) {
+                console.log('[Bot Pinned] 今日无真实爆点，跳过生成');
+                return;
+            }
             _botPosts.push({
                 id: 'ed_bot_' + Date.now(),
                 type: 'pinned',
@@ -1598,7 +1647,8 @@ ${historyText}
 2. 关系网调用：如果作者是具体角色，必须从ta的背景设定中提取出死对头、亲属、或暧昧对象来评论。语气必须完全符合他们的关系。
 3. 路人代号：对于无关的路人，请使用充满网感的 ID（如：ANON. 7A9F、熬夜冠军、精神稳定状态0、纯爱战神）。
 4. 拒绝AI味：评论必须短平快！大量使用人类上网习惯的表达（如：绝了、笑死、666、啊？、救命、什么鬼、已截图）。绝对不要端着！
-5. ⚠️【禁止串戏警告】（极度重要）：你生成的评论列表中，**绝对不能**出现用户（即“${userName}”或“我”）的发言！所有的路人仅仅是网上的陌生网友。帖子作者在回复这些路人时，必须把他们当做【素不相识的陌生吃瓜网友】，绝对不能把任何路人当做“${userName}”来产生互动！`;
+5. ⚠️【禁止串戏警告】（极度重要）：你生成的评论列表中，**绝对不能**出现用户（即“${userName}”或“我”）的发言！所有的路人仅仅是网上的陌生网友。帖子作者在回复这些路人时，必须把他们当做【素不相识的陌生吃瓜网友】，绝对不能把任何路人当做“${userName}”来产生互动！
+6. 🚧【分寸下限】（必须遵守）：可以毒舌、抬杠、阴阳怪气、看热闹，这是网感；但绝对不许出现以下内容——人身攻击与辱骂（针对长相、身材、智商、出身、性别、性取向、地域、家庭的羞辱）、脏话和侮辱性绰号、人身威胁、诅咒、引战仇恨言论、以及任何让人单纯感到被冒犯而非觉得好笑的恶意。目标是"好笑、有梗、有network感"，不是"恶心、攻击、踩人"。冲突要停在"互相调侃"，不能滑到"网暴"。`;
 
             const response = await ApiHelper.chatCompletion(activeApi,[{ role: 'user', content: prompt }]);
             const cleaned = response.replace(/```json|```/g, '').trim();
@@ -1813,6 +1863,7 @@ ${historyText || '（暂无聊天记录）'}
                 <div class="interaction-bar">
                     <button class="action-btn" onclick="EditorialModule.toggleLike(this)"><i class="ph-fill ph-heart" style="color:#d64045;"></i> ${post.likes}</button>
                     <button class="action-btn" onclick="EditorialModule.handleCommentsClick('${post.id}', this)"><i class="ph ph-list-dashes"></i> View Records</button>
+                    <button class="action-btn" style="margin-left:auto; color:var(--sage-green);" onclick="EditorialModule.refreshPinnedPost(this)"><i class="ph-bold ph-arrows-clockwise"></i></button>
                     ${delBtnHtml}
                 </div>
             </div>`;
@@ -1886,6 +1937,42 @@ ${historyText || '（暂无聊天记录）'}
         await _saveBotPosts();
         _renderBotFeed();
         showMessage('记录已物理抹除');
+    }
+
+    // --- 刷新爆料贴：清掉旧的（连带评论）并重新生成 ---
+    async function refreshPinnedPost(btn) {
+        if (_isRefreshingPinned) { showMessage('正在重新观测，请稍候'); return; }
+        if (_isDecrypting) { showMessage('评论解密中，请稍后再刷新'); return; }
+        _isRefreshingPinned = true;
+
+        const originalHtml = btn ? btn.innerHTML : '';
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = `<i class="ph-thin ph-circle-notch" style="animation: ed-spin 1s linear infinite;"></i>`;
+        }
+
+        try {
+            // 清掉旧的爆料贴，post.comments 一并随之删除
+            _botPosts = _botPosts.filter(p => p.type !== 'pinned');
+            await _saveBotPosts();
+
+            // 重新生成（_generatePinnedPost 内部含 __SKIP__ 兜底 + _renderBotFeed）
+            await _generatePinnedPost();
+
+            // 若本轮无真实爆点被跳过，pinned 不会回来，给个提示并刷新视图
+            if (!_botPosts.some(p => p.type === 'pinned')) {
+                _renderBotFeed();
+                showMessage('暂无新的可爆细节，已清空旧爆料');
+            } else {
+                showMessage('已重新观测');
+            }
+        } catch(e) {
+            console.error('[Refresh Pinned Error]', e);
+            showMessage('刷新失败，信号干扰');
+        } finally {
+            _isRefreshingPinned = false;
+            if (btn) { btn.disabled = false; btn.innerHTML = originalHtml; }
+        }
     }
 
     // --- 处理点击“View Notes”按钮的逻辑 ---
@@ -2417,6 +2504,7 @@ ${historyText}
         generateWeekly,
         _checkHomeState,
         deleteBotPost, 
+        refreshPinnedPost,
         handleCommentsClick,
         forceGenerateNewPosts,
         addAgentRolePost: _generateRolePost,   prepareReply,_checkInterviewState,prepareInterviewReply,selectWeeklyRole,generateWeeklyRole
