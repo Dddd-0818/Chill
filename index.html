@@ -2938,6 +2938,22 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
 .fd-c-send-btn { background: none; border: none; cursor: pointer; color: #111; font-size: 1.2rem; display: flex; align-items: center; justify-content: center; }
 .fd-c-send-btn:active { transform: scale(0.9); }
 
+/* ── 唱片风动态语音条 (fdv-) ── */
+.fdv-bar { position: relative; width: 100%; max-width: 280px; margin-top: 2px; }
+.fdv-header { position: relative; z-index: 2; display: flex; align-items: center; gap: 12px; cursor: pointer; }
+.fdv-record { width: 34px; height: 34px; background: #1F1F1F; border-radius: 50%; display: flex; justify-content: center; align-items: center; box-shadow: 0 4px 10px rgba(0,0,0,0.15); flex-shrink: 0; position: relative; transition: transform 0.2s ease; cursor: pointer; }
+.fdv-record::before { content: ''; position: absolute; top: 3px; left: 3px; right: 3px; bottom: 3px; border-radius: 50%; border: 1px solid transparent; border-top-color: rgba(255,255,255,0.15); border-right-color: rgba(255,255,255,0.05); }
+.fdv-dot { width: 6px; height: 6px; background: #FFFFFF; border-radius: 50%; position: relative; z-index: 2; }
+.fdv-bar.playing .fdv-record { animation: fdvSpin 3s linear infinite; }
+@keyframes fdvSpin { 100% { transform: rotate(360deg); } }
+.fdv-title { font-family: 'Cormorant Garamond', serif; font-size: 0.95rem; font-weight: 600; color: #111; line-height: 1.2; }
+.fdv-sub { font-family: 'Space Mono', monospace; font-size: 0.5rem; font-weight: 400; color: #999; letter-spacing: 1px; }
+.fdv-time { font-family: 'Space Mono', monospace; font-size: 0.6rem; background: #E5E4DE; color: #4A4A4A; padding: 2px 8px; border-radius: 12px; display: inline-block; margin-top: 4px; letter-spacing: 1px; }
+.fdv-body-wrap { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 0.4s cubic-bezier(0.25,1,0.2,1); margin-top: -18px; position: relative; z-index: 1; }
+.fdv-bar.expanded .fdv-body-wrap { grid-template-rows: 1fr; }
+.fdv-body-inner { overflow: hidden; }
+.fdv-transcript { background: #FFFFFF; padding: 30px 16px 16px 16px; border-radius: 16px; box-shadow: 0 6px 16px rgba(0,0,0,0.04); font-family: 'Noto Sans SC', sans-serif; font-size: 0.8rem; font-weight: 300; color: #666; line-height: 1.6; margin-top: 4px; }
+
 /* FAB & Modal */
 .fd-fab { position: absolute; bottom: 28px; right: 28px; width: 56px; height: 56px; border-radius: 50%; background: #111; color: #fff; border: none; display: flex; align-items: center; justify-content: center; font-size: 1.6rem; cursor: pointer; z-index: 50; box-shadow: 0 8px 24px rgba(0,0,0,0.15); transition: transform .3s cubic-bezier(0.16,1,0.3,1); }
 .fd-fab:active { transform: scale(0.9); }
@@ -6318,6 +6334,13 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
                 </button>
               </div>
             </div>
+            <div class="cv-set-item">
+              <div class="cv-si-info">
+                <span class="cv-si-label">动态留言发语音</span>
+                <span class="cv-si-sub">Feed Voice Comment</span>
+              </div>
+              <div class="cv-mag-toggle" id="cv-feed-voice-toggle" onclick="ConvModule._toggleFeedVoice(this)"></div>
+            </div>
           </div>
         </div>
 
@@ -8117,6 +8140,14 @@ const DB = (() => {
       req.onerror   = e => reject(e.target.error);
     });
   }
+  async function assetGetAllKeys() {
+    await open();
+    return new Promise((resolve, reject) => {
+      const req = tx('assets').getAllKeys();
+      req.onsuccess = () => resolve((req.result || []).map(String));
+      req.onerror   = e => reject(e.target.error);
+    });
+  }
 
   //---- api_profiles ----
   async function apiGetAll() {
@@ -8527,7 +8558,7 @@ async function msgDel(id) {
     VERSION: DB_VERSION,
     settings:   { get: settingsGet, set: settingsSet, del: settingsDel },
     meet:       { get: meetGet, set: meetSet, del: meetDel },
-    assets:     { get: assetGet, set: assetSet, del: assetDel, getAll: assetGetAll },
+    assets:     { get: assetGet, set: assetSet, del: assetDel, getAll: assetGetAll, getAllKeys: assetGetAllKeys },
     api:        { getAll: apiGetAll, get: apiGet, add: apiAdd, put: apiPut, del: apiDel, setActive: apiSetActive, getActive: apiGetActive },
     characters: { getAll: charGetAll, get: charGet, add: charAdd, put: charPut, del: charDel },
     groups:     { getAll: groupGetAll, put: groupPut, del: groupDel },
@@ -9842,15 +9873,20 @@ const DataModule = (() => {
   async function _buildReferenceIndex() {
     const db = await _getRawDB();
     const allStores = Array.from(db.objectStoreNames);
+    const getAll = (s) => new Promise((res, rej) => {
+      const r = db.transaction(s, 'readonly').objectStore(s).getAll();
+      r.onsuccess = e => res(e.target.result || []);
+      r.onerror = e => rej(e.target.error);   // 单表失败 → 向上抛 → 整体中止
+    });
 
-    // 1) 现算白名单：每个「现存角色」的头像 / 对话壁纸 / 通话壁纸 / 查岗照
+    // 1) 现算白名单 live + 现存「上下文」集合 validCtx
+    //    validCtx = 现存角色 id ∪ story_角色id ∪ 现存群 id
+    //    用于剔除「已删角色 / 已删群」残留消息对图片的虚假引用——
+    //    删角色若没连带删消息，这些消息会一直「拴」着聊天大图，使其无法被回收。
     const live = new Set();
+    const validCtx = new Set();
     if (allStores.includes('characters')) {
-      const chars = await new Promise((res, rej) => {
-        const r = db.transaction('characters', 'readonly').objectStore('characters').getAll();
-        r.onsuccess = e => res(e.target.result || []);
-        r.onerror = e => rej(e.target.error);
-      });
+      const chars = await getAll('characters');
       for (const c of chars) {
         const id = c && c.id;
         if (id == null) continue;
@@ -9858,29 +9894,40 @@ const DataModule = (() => {
         live.add(`conv-wallpaper-${id}`);
         live.add(`call-wallpaper-${id}`);
         live.add(`novel-face-${id}`);
+        validCtx.add(String(id));
+        validCtx.add(`story_${id}`);
       }
     }
+    if (allStores.includes('groups')) {
+      const groups = await getAll('groups');
+      for (const g of groups) { if (g && g.id != null) validCtx.add(String(g.id)); }
+    }
+    // ⚠️ 群聊不在 groups 表（那是角色分组文件夹），而在 settings 的 gc-list / gc-meta-{id}。
+    //    群聊消息 charId = 群聊id，必须把现存群聊 id 纳入 validCtx，否则群聊图会被误判可清理。
+    try {
+      const gcList = await DB.settings.get('gc-list');
+      if (Array.isArray(gcList)) for (const id of gcList) { if (id != null) validCtx.add(String(id)); }
+    } catch (e) {}
 
     // 2) 把 assets 以外的所有表序列化成一个大字符串。某 key 只要作为字段值
     //    出现在任意记录里就算「在用」。replacer 跳过 Blob，避免把图本身塞进字符串。
+    //    messages 表特殊处理：只纳入「归属仍存在」的消息，残留孤儿消息不算有效引用。
     const replacer = (k, v) => (v instanceof Blob || v instanceof ArrayBuffer) ? undefined : v;
     let haystack = '';
     for (const s of allStores) {
       if (s === 'assets') continue;
-      const recs = await new Promise((res, rej) => {
-        const r = db.transaction(s, 'readonly').objectStore(s).getAll();
-        r.onsuccess = e => res(e.target.result || []);
-        r.onerror = e => rej(e.target.error);   // 单表失败 → 向上抛 → 整体中止
-      });
+      let recs = await getAll(s);
+      if (s === 'messages') {
+        recs = recs.filter(m => {
+          const cid = m && m.charId;
+          if (cid == null) return true;        // 无归属 → 保守保留（不冒误删风险）
+          return validCtx.has(String(cid));    // 仅保留归属角色/群/剧情仍存在的消息
+        });
+      }
       haystack += JSON.stringify(recs, replacer);
     }
 
-    const records = await new Promise((res, rej) => {
-      const r = db.transaction('assets', 'readonly').objectStore('assets').getAll();
-      r.onsuccess = e => res(e.target.result || []);
-      r.onerror = e => rej(e.target.error);
-    });
-
+    const records = await getAll('assets');
     return { live, haystack, records };
   }
 
@@ -11348,13 +11395,14 @@ ${char.mbti  ? `- MBTI：${char.mbti}` : ''}
   // ── 删除角色 ──
  async function deleteCharacter() {
   if (!_currentId) return;
-  if (!confirm('确定销毁此档案？')) return;
+  if (!confirm('确定销毁此档案？\n（将一并清除该角色的聊天记录与聊天中生成的图片）')) return;
   try {
-    await Assets.remove(`char-avatar-${_currentId}`).catch(() => {});
-    await DB.characters.del(_currentId);
+    const cid = _currentId;
+    await Assets.remove(`char-avatar-${cid}`).catch(() => {});
+    await DB.characters.del(cid);
 
     // ✅ 新增：从所有群聊中移除该角色
-    const charIdStr = String(_currentId);
+    const charIdStr = String(cid);
     const allGc = GroupChatModule.getAll();
     for (const gc of allGc) {
       if (gc.members.includes(charIdStr)) {
@@ -11363,10 +11411,34 @@ ${char.mbti  ? `- MBTI：${char.mbti}` : ''}
       }
     }
 
+    // ✅ 连带清理：聊天记录 / 剧情消息 / 绑定 / 壁纸 / 查岗照
+    //    不这么做的话，删掉的角色会残留一堆消息，那些消息又「拴」着聊天生成的大图，
+    //    导致瘦身扫描把这些图当成「在用」而清不掉。
+    try { await DB.messages.delByChar(cid); } catch (e) {}
+    try { await DB.messages.delByChar(`story_${cid}`); } catch (e) {}
+    try { await DB.bindings.del(charIdStr); } catch (e) {}
+    await Assets.remove(`conv-wallpaper-${cid}`).catch(() => {});
+    await Assets.remove(`call-wallpaper-${cid}`).catch(() => {});
+    await Assets.remove(`novel-face-${cid}`).catch(() => {});
+    try {
+      await DB.settings.del('monologue-state-'   + cid);
+      await DB.settings.del('monologue-history-' + cid);
+      await DB.settings.del(`conv-blur-${cid}`);
+    } catch (e) {}
+
+    // ✅ 按前缀清掉该角色名下所有「聊天生成图 / 剧情图 / 语音」资产（只取 key，不加载图本身）
+    try {
+      const keys = await DB.assets.getAllKeys();
+      const prefixes = [`chat-img-${cid}-`, `story-img-story_${cid}-`, `uvoice-${cid}-`];
+      for (const k of keys) {
+        if (prefixes.some(p => k.startsWith(p))) await Assets.remove(k).catch(() => {});
+      }
+    } catch (e) { console.warn('清理角色资产失败', e); }
+
     _currentId = null;
     await renderRoster();
     showView('list');
-    Toast.show('档案已销毁');
+    Toast.show('档案及其聊天图片已销毁');
   } catch(e) { Toast.show('删除失败'); console.error(e); }
 }
 
@@ -11630,6 +11702,108 @@ const FeedModule = (() => {
     return `${months[d.getMonth()]} ${pad(d.getDate())}, ${d.getFullYear()} • ${pad(d.getHours())}:${pad(d.getMinutes())}`;
   }
 
+  // ── 防抽风：模型有时自己吐出字面「[语音消息 0:06]」之类，渲染前剥掉 ──
+  function _stripVoiceLiteral(text) {
+    return String(text || '')
+      .replace(/\[?\s*语音消息\s*\d{1,2}:\d{2}\s*\]?/g, '')
+      .replace(/\[?\s*voice\s*message\s*\d{1,2}:\d{2}\s*\]?/gi, '')
+      .trim();
+  }
+
+  // ── 秒数 → m:ss ──
+  function _fmtDur(sec) {
+    sec = Math.round(sec || 0);
+    if (!isFinite(sec) || sec < 0) sec = 0;
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return `${m}:${s < 10 ? '0' + s : s}`;
+  }
+
+  // ── 给一条评论尝试合成语音：成功则就地给 comment 挂 audioKey/duration/transcript ──
+  // 由 Agent 写入评论后调用。开关关 / 没配音色 / 合成失败 → 静默跳过，评论保持纯文字。
+  async function trySynthComment(post, comment) {
+    try {
+      const charId = comment.authorId;
+      if (!charId || charId === 'user_main') return false;
+
+      // 1. 该角色的动态语音开关
+      const on = await DB.settings.get(`feed-voice-${charId}`).catch(() => false);
+      if (!on) return false;
+
+      // 2. 该角色的音色
+      const voiceId = await DB.settings.get(`voice-id-${charId}`).catch(() => null);
+      if (!voiceId) return false;
+
+      // 3. 取要念的纯文字（剥掉「回复 xxx：」前缀，只念正文）
+      const spoken = _stripVoiceLiteral(comment.text).replace(/^回复\s*.*?[：:]/, '').trim();
+      if (!spoken) return false;
+
+      // 4. 合成并入库
+      const assetKey = `feed-voice-${post.id}-${comment.id}`;
+      const res = await VoiceModule.synthesizeToAsset(spoken, voiceId, assetKey);
+      if (!res) return false;
+
+      comment.audioKey  = res.audioKey;
+      comment.duration  = res.duration;
+      comment.transcript = spoken; // 转写兜底
+      return true;
+    } catch (e) {
+      console.error('[Feed] trySynthComment failed', e);
+      return false;
+    }
+  }
+
+  // ── 唱片语音条：播放控制（真 audio 驱动旋转/时间/自动展开）──
+  let _fdvAudio = null;
+  let _fdvBar = null;
+
+  function _fdvReset(bar) {
+    if (!bar) return;
+    bar.classList.remove('playing');
+    const t = bar.querySelector('.fdv-time');
+    if (t) t.innerText = _fmtDur(parseInt(t.dataset.dur) || 0);
+  }
+
+  function _fdvStop() {
+    if (_fdvAudio) { _fdvAudio.pause(); _fdvAudio.onended = null; _fdvAudio.ontimeupdate = null; }
+    if (_fdvBar) _fdvReset(_fdvBar);
+    _fdvAudio = null; _fdvBar = null;
+  }
+
+  function _fdvTogglePlay(recordBtn, event) {
+    event.stopPropagation();
+    const bar = recordBtn.closest('.fdv-bar');
+    if (!bar) return;
+    const url = bar.dataset.audio;
+    if (!url) return;
+
+    // 正在播这条 → 停
+    if (_fdvBar === bar && _fdvAudio && !_fdvAudio.paused) { _fdvStop(); return; }
+    // 切到别条 → 先停旧的
+    _fdvStop();
+
+    const audio = new Audio(url);
+    _fdvAudio = audio; _fdvBar = bar;
+    bar.classList.add('playing');
+    // 点播放自动展开转写
+    bar.classList.add('expanded');
+
+    const timeNode = bar.querySelector('.fdv-time');
+    const total = parseInt(bar.dataset.dur) || 0;
+    audio.ontimeupdate = () => {
+      if (!timeNode) return;
+      const remain = Math.max(0, total - Math.floor(audio.currentTime));
+      timeNode.innerText = _fmtDur(remain);
+    };
+    audio.onended = () => _fdvStop();
+    audio.play().catch(e => { console.warn('[Feed] voice play error', e); _fdvStop(); });
+  }
+
+  function _fdvToggleExpand(bar, event) {
+    if (event.target.closest('.fdv-record')) return; // 点唱片不触发折叠
+    bar.classList.toggle('expanded');
+  }
+
   async function init() {
     try {
       const saved = await DB.settings.get('global-profile');
@@ -11693,12 +11867,43 @@ const FeedModule = (() => {
 
       const textHtml = p.text.replace(/\n/g, '<br>').replace(/<em>/g, '<em>').replace(/<\/em>/g, '</em>');
      // 🌟 修复评论时间：利用评论自带的 id (Date.now()生成) 作为时间戳
-      const commentsHtml = (p.comments || []).map(c => `
+      const commentsHtml = (await Promise.all((p.comments || []).map(async c => {
+        const metaHtml = `<div class="fd-c-meta"><span class="fd-c-name">${c.authorName}</span><span class="fd-c-time">${_formatFeedTime(c.id)}</span><button class="fd-comment-delete" onclick="event.stopPropagation();FeedModule.deleteComment(${p.id}, ${c.id})" title="删除评论"><i class="ph-thin ph-trash"></i></button></div>`;
+
+        // 语音留言：渲染唱片语音条
+        if (c.audioKey) {
+          const audioUrl = await Assets.getUrl(c.audioKey).catch(() => '') || '';
+          // 标题：角色名 + 回复某人（从 text 里解析「回复 xxx：」）
+          const replyMatch = String(c.text || '').match(/^回复\s*(.+?)[：:]/);
+          const titleSub = replyMatch ? `回复${replyMatch[1]}` : '';
+          const transcript = _stripVoiceLiteral(c.transcript || c.text).replace(/^回复\s*.*?[：:]/, '').trim();
+          const durTxt = _fmtDur(c.duration);
+          if (audioUrl) {
+            return `
+            <div class="fd-comment-item" onclick="event.stopPropagation()">
+              ${metaHtml}
+              <div class="fdv-bar expanded" data-audio="${audioUrl}" data-dur="${c.duration || 0}" onclick="FeedModule._fdvToggleExpand(this, event)">
+                <div class="fdv-header">
+                  <div class="fdv-record" onclick="FeedModule._fdvTogglePlay(this, event)"><div class="fdv-dot"></div></div>
+                  <div class="fdv-meta">
+                    <div class="fdv-title">${c.authorName}${titleSub ? ` <span class="fdv-sub">· ${titleSub}</span>` : ''}</div>
+                    <div class="fdv-time" data-dur="${c.duration || 0}">${durTxt}</div>
+                  </div>
+                </div>
+                <div class="fdv-body-wrap"><div class="fdv-body-inner">
+                  <div class="fdv-transcript">${transcript || '…'}</div>
+                </div></div>
+              </div>
+            </div>`;
+          }
+        }
+        // 普通文字评论
+        return `
        <div class="fd-comment-item" onclick="FeedModule.setReplyTarget(${p.id}, '${c.authorName}')">
-          <div class="fd-c-meta"><span class="fd-c-name">${c.authorName}</span><span class="fd-c-time">${_formatFeedTime(c.id)}</span><button class="fd-comment-delete" onclick="event.stopPropagation();FeedModule.deleteComment(${p.id}, ${c.id})" title="删除评论"><i class="ph-thin ph-trash"></i></button></div>
-          <div class="fd-c-text">${c.text}</div>
-        </div>
-      `).join('');
+          ${metaHtml}
+          <div class="fd-c-text">${_stripVoiceLiteral(c.text)}</div>
+        </div>`;
+      }))).join('');
 
       const isLiked = (p.likes || []).includes('user_main');
       const placeholder = _replyState[p.id] ? `回复 ${_replyState[p.id]}...` : 'Add a comment...';
@@ -11771,6 +11976,8 @@ const FeedModule = (() => {
   async function deleteComment(pid, cid) {
     const p = _posts.find(x => x.id === pid);
     if (!p) return;
+    const _gone = (p.comments || []).find(c => c.id === cid);
+    if (_gone && _gone.audioKey) await Assets.remove(_gone.audioKey).catch(()=>{});
     p.comments = (p.comments || []).filter(c => c.id !== cid);
     await DB.feed.put(p);
     refresh();
@@ -11784,6 +11991,10 @@ const FeedModule = (() => {
     // 1. 清理可能存在的图片资产（防止吃内存）
     if (p.imageKey && !p.imageKey.startsWith('http')) {
       await Assets.remove(p.imageKey).catch(()=>{});
+    }
+    // 1.5 🎵 清理该动态下所有语音留言的音频资产
+    for (const c of (p.comments || [])) {
+      if (c.audioKey) await Assets.remove(c.audioKey).catch(()=>{});
     }
 
     // 2. 从动态数据库中删除
@@ -11936,7 +12147,7 @@ const FeedModule = (() => {
     if (icon) icon.className = collapsed ? 'ph ph-x' : 'ph ph-list';
   }
 
-  return { init, refresh, renderFeed, toggleLike, deletePost, deleteComment,toggleComments, setReplyTarget, sendComment, updateProfileName, changeHeroBg, changeHeroAvatar, openPostModal, closePostModal, onPostImgSelected, removePostImg, submitPost, toggleSidebar };
+  return { init, refresh, renderFeed, toggleLike, deletePost, deleteComment,toggleComments, setReplyTarget, sendComment, updateProfileName, changeHeroBg, changeHeroAvatar, openPostModal, closePostModal, onPostImgSelected, removePostImg, submitPost, toggleSidebar, trySynthComment, _fdvTogglePlay, _fdvToggleExpand };
 })();
 // ============================================================
 // 视图流转公共逻辑 (推拉动画)
@@ -13344,7 +13555,109 @@ const VoiceModule = (() => {
     _audioCache.clear();
   }
 
-  return { init, save, getCfg, synthesize, playAudioBubble, playSequence, clearCache, cleanForTTS: _cleanForTTS };
+  // ── 单句合成：返回原始字节 Uint8Array（供拼接用）。不做清洗，调用方负责。 ──
+  async function _synthesizeBytes(rawText) {
+    if (!_cfg?.apiKey || !_cfg?.groupId) return null;
+    const ttsText = String(rawText || '').trim();
+    if (!ttsText) return null;
+
+    const url = `https://api.minimax.chat/v1/t2a_v2?GroupId=${_cfg.groupId}`;
+    const body = {
+      model:      _cfg.model   || 'speech-01-turbo',
+      text:       ttsText,
+      stream:     false,
+      voice_setting: { voice_id: _lastVoiceId, speed: _cfg.speed || 1, vol: _cfg.vol ?? 1, pitch: 0 },
+      audio_setting: { audio_sample_rate: 32000, bitrate: 128000, format: 'mp3' },
+      language_boost: _cfg.lang !== 'auto' ? _cfg.lang : undefined
+    };
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${_cfg.apiKey}` },
+        body: JSON.stringify(body)
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      const hex = data?.data?.audio;
+      if (!hex) return null;
+      return new Uint8Array(hex.match(/.{1,2}/g).map(b => parseInt(b, 16)));
+    } catch (e) {
+      console.error('[VoiceModule] _synthesizeBytes error', e);
+      return null;
+    }
+  }
+  let _lastVoiceId = null; // _synthesizeBytes 用，避免改签名
+
+  // ── 把长文本按句末标点切句（与聊天 playSequence 同款逻辑，保证自然度一致）──
+  function _splitSentences(text) {
+    const cleaned = _cleanForTTS(text);
+    if (!cleaned) return [];
+    const m = cleaned.match(/[^。！？…~.!?\n]+[。！？…~.!?]*/g);
+    return (m && m.length) ? m.map(s => s.trim()).filter(Boolean) : [cleaned.trim()];
+  }
+
+  // ── 合成并存进 DB.assets（动态语音留言用）──
+  // 关键：先断句、逐句合成、再把多段 mp3 字节拼成一条，继承聊天那套自然度。
+  // 整段一次性合成（旧做法）的人机味，正是出在没断句。
+  // 返回 { audioKey, duration } 或 null。
+  async function synthesizeToAsset(text, voiceId, assetKey) {
+    if (!_cfg?.apiKey || !_cfg?.groupId || !voiceId) return null;
+    _lastVoiceId = voiceId;
+
+    const segs = _splitSentences(text);
+    if (!segs.length) return null;
+
+    // 逐句合成，收集字节段
+    const chunks = [];
+    for (const seg of segs) {
+      const bytes = await _synthesizeBytes(seg);
+      if (bytes && bytes.length) chunks.push(bytes);
+    }
+    if (!chunks.length) return null;
+
+    try {
+      // mp3 帧可直接字节拼接，浏览器连续解码播放
+      const blob = new Blob(chunks, { type: 'audio/mpeg' });
+      await DB.assets.set(assetKey, blob, 'audio/mpeg');
+
+      const tmpUrl = URL.createObjectURL(blob);
+      const duration = await _readDuration(tmpUrl);
+      URL.revokeObjectURL(tmpUrl);
+
+      return { audioKey: assetKey, duration };
+    } catch (e) {
+      console.error('[VoiceModule] synthesizeToAsset error', e);
+      return null;
+    }
+  }
+
+  // 读音频真实秒数，处理 Infinity / NaN
+  function _readDuration(url) {
+    return new Promise(resolve => {
+      const a = new Audio();
+      let done = false;
+      const finish = (d) => {
+        if (done) return; done = true;
+        const sec = (isFinite(d) && d > 0) ? Math.round(d) : 0;
+        resolve(sec);
+      };
+      a.addEventListener('loadedmetadata', () => {
+        if (a.duration === Infinity) {
+          // Chrome 对部分 mp3 需 seek 一次才吐真时长
+          a.currentTime = 1e101;
+          a.addEventListener('durationchange', () => finish(a.duration), { once: true });
+          setTimeout(() => finish(a.duration), 800);
+        } else {
+          finish(a.duration);
+        }
+      });
+      a.addEventListener('error', () => finish(0));
+      a.src = url;
+      setTimeout(() => finish(a.duration || 0), 1500); // 终极兜底
+    });
+  }
+
+  return { init, save, getCfg, synthesize, synthesizeToAsset, playAudioBubble, playSequence, clearCache, cleanForTTS: _cleanForTTS };
 })();
 
 // ============================================================
@@ -21438,6 +21751,7 @@ if (!isRecall && !isHtml && !isQuote && !isAudio && !isEmote && !isTransfer && !
     _renderPersonaList();
     _loadTTSToggle();
     _loadVoiceId();
+    _loadFeedVoiceToggle();
     _loadNovelToggle();
     _loadNovelPrefix();
     _loadNovelNegative();
@@ -21848,6 +22162,22 @@ if (!isRecall && !isHtml && !isQuote && !isAudio && !isEmote && !isTransfer && !
 
   async function _getVoiceId() {
     try { return await DB.settings.get(_voiceIdKey()); } catch(e) { return null; }
+  }
+
+  // ── 动态留言发语音：每角色独立开关 ──
+  function _feedVoiceKey() { return `feed-voice-${_charId}`; }
+
+  async function _loadFeedVoiceToggle() {
+    let on = false;
+    try { on = !!(await DB.settings.get(_feedVoiceKey())); } catch(e) {}
+    const t = document.getElementById('cv-feed-voice-toggle');
+    if (t) t.classList.toggle('on', on);
+  }
+
+  function _toggleFeedVoice(el) {
+    const on = el.classList.toggle('on');
+    DB.settings.set(_feedVoiceKey(), on).catch(()=>{});
+    Toast.show(on ? '该角色动态留言将发语音' : '已关闭动态语音留言');
   }
 
   // ── 语音条播放按钮 ──
@@ -23367,7 +23697,7 @@ if (action === 'quote') {
     document.getElementById('cv-dist-overlay').classList.remove('active');
   }
   
-  return { enter, back, openQuickReply, closeQuickReply,openSettings, closeSettings, openFuncPanel, loadMore, sendUserMsg, sendAndTriggerAI, fetchModels, closeApiModal, confirmApi, openRecallModal, closeRecallModal, collectTransfer, openHangTag, closeHangTag, tearHangTag, sendUserTransfer, sendImgMsg, closeMenu,handleMenuAction,cancelQuote, updateMultiSelectUI, cancelMultiSelect, favoriteSelected, deleteSelected,addEmoteToPreview,_openImgViewer, _openImgViewerFromEl, _viewerDownloadImage, _regenerateNovelFromViewer, toggleAudio, clearWallpaper, clearHistory, deleteChat, _toggleAccordion, _selectRadio, _selectPersona,_removePendingImg,playAudio, playUserAudio, previewVoice, _toggleTTS, _toggleNovel, _toggleTranslate, _appendNovelImageMessage, _replaceMessageBubble, _showNovelPending, _hideNovelPending, _toggleAlias,copyDefaultCSS, applyAndSaveCSS, clearCustomCSS, saveCssPreset, confirmSaveCssPreset, applyCssPreset, deleteCssPreset,manualSummarize, clearMemory, archiveToWorldBook, confirmArchive, syncSummary, _onSummaryEdit,openCallRecordModal, closeCallRecordModal,_toggleOfflineMsg, _scrollToBottom, openContextConsole,_splitAiBubbles, openLocModal, closeLocModal, sendLocationMsg, openDistModal, closeDistModal, _removeFace, _setFaceFidelity, _onFaceConsent, _pickFace, refreshGhostUsers };
+  return { enter, back, openQuickReply, closeQuickReply,openSettings, closeSettings, openFuncPanel, loadMore, sendUserMsg, sendAndTriggerAI, fetchModels, closeApiModal, confirmApi, openRecallModal, closeRecallModal, collectTransfer, openHangTag, closeHangTag, tearHangTag, sendUserTransfer, sendImgMsg, closeMenu,handleMenuAction,cancelQuote, updateMultiSelectUI, cancelMultiSelect, favoriteSelected, deleteSelected,addEmoteToPreview,_openImgViewer, _openImgViewerFromEl, _viewerDownloadImage, _regenerateNovelFromViewer, toggleAudio, clearWallpaper, clearHistory, deleteChat, _toggleAccordion, _selectRadio, _selectPersona,_removePendingImg,playAudio, playUserAudio, previewVoice, _toggleTTS, _toggleFeedVoice, _toggleNovel, _toggleTranslate, _appendNovelImageMessage, _replaceMessageBubble, _showNovelPending, _hideNovelPending, _toggleAlias,copyDefaultCSS, applyAndSaveCSS, clearCustomCSS, saveCssPreset, confirmSaveCssPreset, applyCssPreset, deleteCssPreset,manualSummarize, clearMemory, archiveToWorldBook, confirmArchive, syncSummary, _onSummaryEdit,openCallRecordModal, closeCallRecordModal,_toggleOfflineMsg, _scrollToBottom, openContextConsole,_splitAiBubbles, openLocModal, closeLocModal, sendLocationMsg, openDistModal, closeDistModal, _removeFace, _setFaceFidelity, _onFaceConsent, _pickFace, refreshGhostUsers };
 })();
 /** 供 NovelModule 等脚本用 window 访问；const 不会自动挂到 window */
 window.ConvModule = ConvModule;
@@ -23672,6 +24002,9 @@ ${promptContext}
       const match = response.match(/\[REPLY_COMMENT:(.+?)\]/s);
       if (match) {
         const replyText = match[1].trim();
+        // 🛡️ 防抽风：剥掉字面「[语音消息 0:06]」，若为空说明整条都是抽风产物，放弃
+        const _clean = replyText.replace(/\[?\s*语音消息\s*\d{1,2}:\d{2}\s*\]?/g, '').replace(/\[?\s*voice\s*message\s*\d{1,2}:\d{2}\s*\]?/gi, '').trim();
+        if (!_clean) return;
         
         const feedPosts = await DB.feed.getAll();
         const currentPost = feedPosts.find(p => p.id === postId);
@@ -23682,12 +24015,17 @@ ${promptContext}
         const finalPostText = postText + (imgDesc ? ' ' + imgDesc : '');
 
         currentPost.comments = currentPost.comments ||[];
-        currentPost.comments.push({
+        const _newComment = {
           id: Date.now() + Math.floor(Math.random() * 1000),
           authorId: targetCharId,
           authorName: char.name,
-          text: `回复 ${globalProfileName}：${replyText}` 
-        });
+          text: `回复 ${globalProfileName}：${_clean}` 
+        };
+        currentPost.comments.push(_newComment);
+        // 🎵 若该角色开了动态语音且配了音色，就地合成挂到评论上
+        if (typeof FeedModule !== 'undefined' && FeedModule.trySynthComment) {
+          await FeedModule.trySynthComment(currentPost, _newComment).catch(()=>{});
+        }
         await DB.feed.put(currentPost);
 
         if (typeof FeedModule !== 'undefined') FeedModule.refresh();
@@ -23695,7 +24033,7 @@ ${promptContext}
         let charAvatar = await Assets.getUrl(`char-avatar-${targetCharId}`).catch(()=>'');
         NotificationModule.show({
           charId: targetCharId, personaId: personaId, name: char.name,
-          msg: `回复了你的评论: ${replyText}`, avatar: charAvatar, type: 'feed' 
+          msg: `回复了你的评论: ${_clean}`, avatar: charAvatar, type: 'feed' 
         });
 
         const recentMsgs = await DB.messages.getPage(String(targetCharId), 0, 1).catch(()=>[]);
@@ -23706,7 +24044,7 @@ ${promptContext}
             lastMsg.parts[0].postId === postId) {
           
           lastMsg.parts[0].userText += ` | 然后用户回复：“${userText}”`;
-          lastMsg.parts[0].replyText += ` | 你接着回复：“${replyText}”`;
+          lastMsg.parts[0].replyText += ` | 你接着回复：“${_clean}”`;
           lastMsg.timestamp = Date.now();
           
           if (imgDesc && !lastMsg.parts[0].postText.includes(imgDesc)) {
@@ -23721,7 +24059,7 @@ ${promptContext}
             parts:[{
               type: 'system_ticket', action: 'comment_replied',
               postText: finalPostText, 
-              userText: userText, replyText: replyText,
+              userText: userText, replyText: _clean,
               postId: postId
             }],
             content: `[在动态中回复了 ${userName}]`,
@@ -23797,6 +24135,9 @@ ${charListText}
       let delayMultiplier = 0;
       for (const [cid, reply] of Object.entries(results)) {
         if (!reply || reply.includes('[IGNORE]')) continue;
+        // 🛡️ 防抽风：模型有时把字面「[语音消息 0:06]」当范例吐出来，剥掉后若为空则丢弃这条
+        const _clean = String(reply).replace(/\[?\s*语音消息\s*\d{1,2}:\d{2}\s*\]?/g, '').replace(/\[?\s*voice\s*message\s*\d{1,2}:\d{2}\s*\]?/gi, '').trim();
+        if (!_clean) continue;
 
         const staggerDelay = (delayMultiplier * 8000) + Math.floor(Math.random() * 6000);
         const executeTime = Date.now() + (_cfg.reactionDelay * 1000) + staggerDelay;
@@ -23805,7 +24146,7 @@ ${charListText}
           id: `task_publish_${postId}_${cid}`,
           type: 'PUBLISH_COMMENT',
           executeAt: executeTime,
-          data: { postId, charId: cid, replyText: reply, finalPostText }
+          data: { postId, charId: cid, replyText: _clean, finalPostText }
         });
         delayMultiplier++;
       }
@@ -23831,12 +24172,17 @@ ${charListText}
       const userName = userPersona?.name || '用户';
 
       currentPost.comments = currentPost.comments ||[];
-      currentPost.comments.push({
+      const _newComment = {
         id: Date.now() + Math.floor(Math.random() * 1000), 
         authorId: charId,
         authorName: char.name,
         text: replyText
-      });
+      };
+      currentPost.comments.push(_newComment);
+      // 🎵 若该角色开了动态语音且配了音色，就地合成挂到评论上
+      if (typeof FeedModule !== 'undefined' && FeedModule.trySynthComment) {
+        await FeedModule.trySynthComment(currentPost, _newComment).catch(()=>{});
+      }
       await DB.feed.put(currentPost);
 
       if (typeof FeedModule !== 'undefined') FeedModule.refresh();
