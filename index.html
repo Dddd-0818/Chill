@@ -1627,6 +1627,10 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
 }
 #conv-screen .cv-bubble.translate-open::after,
 #conv-screen .cv-bubble.translatable:active::after { opacity:0; }
+/* 翻译总开关：关闭时（容器无 show-translate）彻底隐藏译文区与角标 */
+#cv-feed:not(.show-translate) .cv-translate-wrap { display:none !important; }
+#cv-feed:not(.show-translate) .cv-bubble.translatable { cursor:default; }
+#cv-feed:not(.show-translate) .cv-bubble.translatable::after { display:none; }
 
 /* ── 转账卡片 ── */
 #conv-screen .cv-transfer { position:relative;width:220px;padding:14px 16px;border:1px solid #e0e0e0;background:#fbfaf8;display:flex;flex-direction:column;border-radius:6px;box-shadow:0 6px 14px rgba(0,0,0,0.06);cursor:pointer;transition:transform 0.5s cubic-bezier(0.19,1,0.22,1),box-shadow 0.5s cubic-bezier(0.19,1,0.22,1); }
@@ -8890,8 +8894,161 @@ const ApiHelper = (() => {
     return data.choices?.[0]?.message?.content ?? '';
   }
 
-  return { buildUrl, fetchModels, chatCompletion };
+  // ── 带工具循环的对话(OpenAI function calling)──
+  // tools: ToolRegistry.getSchemas() 返回的数组
+  // onToolStart(toolName): 即将执行某工具时回调(给 UI 显示"正在查询…")
+  // onToolEnd(): 本轮所有工具执行完毕回调(给 UI 恢复默认提示)
+  // 模型若要调工具,自己执行后回填,最多循环 maxRounds 轮
+  async function chatWithTools(apiProfile, messages, tools, signal, onToolStart, onToolEnd, maxRounds = 5) {
+    const url = buildUrl(apiProfile.url, 'chat');
+    const msgs = [...messages];
+
+    for (let round = 0; round < maxRounds; round++) {
+      const body = {
+        model: apiProfile.model,
+        messages: msgs,
+        temperature: parseFloat(apiProfile.temp),
+      };
+      if (tools && tools.length) {
+        body.tools = tools;
+        body.tool_choice = 'auto';
+      }
+
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiProfile.key}` },
+        body: JSON.stringify(body),
+        signal,
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      const msg = data.choices?.[0]?.message;
+      if (!msg) return '';
+
+      // 模型没要调工具 → 直接返回最终回复
+      if (!msg.tool_calls || !msg.tool_calls.length) {
+        return msg.content ?? '';
+      }
+
+      // 模型要调工具:先把它这条 assistant 消息原样放回历史
+      msgs.push(msg);
+
+      // 逐个执行工具,把结果作为 role:'tool' 消息回填
+      for (const call of msg.tool_calls) {
+        let result;
+        try {
+          if (typeof onToolStart === 'function') {
+            try { onToolStart(call.function.name); } catch(_) {}
+          }
+          const args = JSON.parse(call.function.arguments || '{}');
+          result = await ToolRegistry.execute(call.function.name, args);
+        } catch (e) {
+          result = `工具执行失败: ${e.message}`;
+        }
+        msgs.push({
+          role: 'tool',
+          tool_call_id: call.id,
+          content: typeof result === 'string' ? result : JSON.stringify(result),
+        });
+      }
+      // 本轮工具全部执行完,通知 UI 恢复(等下一轮模型回复)
+      if (typeof onToolEnd === 'function') {
+        try { onToolEnd(); } catch(_) {}
+      }
+    }
+    // 超过循环上限的兜底
+    return '(工具调用轮次过多,已中止)';
+  }
+
+  return { buildUrl, fetchModels, chatCompletion, chatWithTools };
 })();
+
+// ============================================================
+// ToolRegistry — 工具注册中心 (OpenAI function calling)
+//   每个工具 = { schema, handler }
+//   schema: OpenAI tools 格式; handler: async (args) => 结果
+// ============================================================
+const ToolRegistry = (() => {
+  const _tools = new Map();
+
+  function register(name, schema, handler) {
+    _tools.set(name, { schema, handler });
+  }
+
+  // 给模型看的工具列表(schema 数组)。剥掉非标准的 hint 字段,只发标准字段
+  function getSchemas() {
+    return [..._tools.values()].map(t => {
+      const { hint, ...clean } = t.schema;
+      return clean;
+    });
+  }
+
+  // 取某工具的 UI 提示文案(给 typing 气泡用)
+  function getHint(name) {
+    return _tools.get(name)?.schema?.hint || null;
+  }
+
+  async function execute(name, args) {
+    const tool = _tools.get(name);
+    if (!tool) return `未知工具: ${name}`;
+    return await tool.handler(args);
+  }
+
+  return { register, getSchemas, getHint, execute };
+})();
+
+// ── 示例工具:查天气 (open-meteo,免 key,带 CORS,前端可直连) ──
+ToolRegistry.register(
+  'get_weather',
+  {
+    type: 'function',
+    hint: '正在查询天气',  // ← UI 显示用:调用此工具时 typing 气泡显示的文案
+    function: {
+      name: 'get_weather',
+      description: '查询某个具体城市的实时天气数据(气温/湿度/风速)。仅当用户或剧情明确需要知道某地"现在的真实天气"时才调用,例如"东京现在多少度""那边在下雨吗"。注意:角色闲聊里随口提到天气、用天气作比喻或抒情(如"今天天气真好""心情像阴天")时不要调用本工具。',
+      parameters: {
+        type: 'object',
+        properties: {
+          city: { type: 'string', description: '城市名,中英文皆可,如"东京"或"Tokyo"。若用户没在本句里明说城市,优先采用角色设定或用户人设(persona)中提到的常驻地/所在城市;只有当角色设定和用户人设里都查不到任何地点线索时,才在回复里反问用户要查哪个城市(此时不要调用本工具)。' },
+        },
+        required: ['city'],
+      },
+    },
+  },
+  async ({ city }) => {
+    // 1. 城市名 → 经纬度(取多个候选,优先人口最多的,避开冷门同名地点)
+    const geoRes = await fetch(
+      `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=10`
+    );
+    const geo = await geoRes.json();
+    const list = geo.results || [];
+    if (!list.length) return `找不到城市:${city}`;
+    // 有人口数据的里挑最大的;都没有就退回第一个
+    const withPop = list.filter(p => typeof p.population === 'number');
+    const place = withPop.length
+      ? withPop.reduce((a, b) => (b.population > a.population ? b : a))
+      : list[0];
+
+    // 2. 经纬度 → 当前天气
+    const wRes = await fetch(
+      `https://api.open-meteo.com/v1/forecast?latitude=${place.latitude}&longitude=${place.longitude}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m`
+    );
+    const w = await wRes.json();
+    const cur = w.current;
+    if (!cur) return `获取 ${city} 天气失败`;
+
+    const codeMap = {
+      0:'晴', 1:'多云转晴', 2:'多云', 3:'阴',
+      45:'雾', 48:'雾凇', 51:'小毛毛雨', 53:'毛毛雨', 55:'大毛毛雨',
+      61:'小雨', 63:'中雨', 65:'大雨', 71:'小雪', 73:'中雪', 75:'大雪',
+      80:'阵雨', 81:'强阵雨', 82:'暴雨', 95:'雷阵雨',
+    };
+    const desc = codeMap[cur.weather_code] ?? '未知天气';
+    // 带上地区,避免同名歧义(如有 admin1 行政区则附注)
+    const label = place.admin1 ? `${place.name}(${place.admin1})` : place.name;
+    return `${label}当前:${desc},气温 ${cur.temperature_2m}°C,湿度 ${cur.relative_humidity_2m}%,风速 ${cur.wind_speed_10m} km/h。`;
+  }
+);
 
 // ============================================================
 // ApiModule — API 设置页 UI 逻辑 (新增副用 API 支持)
@@ -15760,7 +15917,7 @@ const ConvModule = (() => {
     _scrollToBottom();
     await _initWallpaper();
 
-    try { _translateEnabled = (await DB.settings.get(`translate-enabled-${_charId}`)) === true; } catch(e) { _translateEnabled = false; }
+    await _loadTranslateToggle();
    try { const customCss = await DB.settings.get(`char-css-${_charId}`); _injectCustomCSS(customCss || ''); } catch(e) {}
 
     _bindEvents();
@@ -16727,7 +16884,7 @@ const ConvModule = (() => {
         if (_charId !== _rerollCharId) return; // 400ms 内已切屏，放弃本次 reroll
         if (_rerollIsGroup) {
           // 👇 核心修复：如果是群聊，走群聊专属的生成引擎
-          _triggerGroupAI();
+          _triggerGroupAI('auto');  // 🌟 reroll：删完末条后按 DB 末条 role 自动判定是否潜水
         } else {
           // 👇 单聊，走单聊引擎并带上 reroll 标记
           _triggerAI(true); 
@@ -16776,6 +16933,12 @@ const ConvModule = (() => {
   let _recDuration = 0;
   let _recTranscriptPrefix = '';
   let _recSessionFinal = '';
+  // 🎙️ 真音频录制（MediaRecorder）：与 SpeechRecognition 并行，留下可播放的声音
+  let _mediaRec = null;          // MediaRecorder 实例
+  let _mediaStream = null;       // 麦克风流（停止时要 stop 掉释放）
+  let _recChunks = [];           // 录到的音频分片
+  let _recAudioBlob = null;      // 本次录音的完整 Blob（sendAudioMsg 时入库）
+  let _userAudioEl = null;       // 播放用户语音条的 <audio> 单例
 
   function openAudioModal() {
     document.getElementById('cv-audio-transcript').value = '';
@@ -16783,11 +16946,14 @@ const ConvModule = (() => {
     _recDuration = 0;
     _recTranscriptPrefix = '';
     _recSessionFinal = '';
+    _recAudioBlob = null;
+    _recChunks = [];
     document.getElementById('cv-audio-overlay').classList.add('active');
   }
 
   function closeAudioModal() {
     if (_isRecording) stopRecord();
+    _stopMicStream();
     document.getElementById('cv-audio-overlay').classList.remove('active');
   }
 
@@ -16795,28 +16961,63 @@ const ConvModule = (() => {
     if (_isRecording) { stopRecord(); } else { startRecord(); }
   }
 
-  function startRecord() {
+  async function startRecord() {
+    const btn = document.getElementById('cv-audio-record-btn');
+    const status = document.getElementById('cv-audio-status');
+    const transcriptEl = document.getElementById('cv-audio-transcript');
+
+    // ① 先拿麦克风、启动真音频录制（这是「能播放」的核心，必须成功）
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      Toast.show('当前环境不支持录音，请直接手打文字');
+      return;
+    }
+    try {
+      _mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (e) {
+      console.error('getUserMedia failed', e);
+      Toast.show('无法访问麦克风，请检查权限');
+      return;
+    }
+
+    // 选一个浏览器支持的音频容器：iOS Safari 多为 mp4，其余多为 webm/opus
+    let mime = '';
+    const cand = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus'];
+    if (window.MediaRecorder && MediaRecorder.isTypeSupported) {
+      mime = cand.find(t => MediaRecorder.isTypeSupported(t)) || '';
+    }
+    try {
+      _mediaRec = mime ? new MediaRecorder(_mediaStream, { mimeType: mime }) : new MediaRecorder(_mediaStream);
+    } catch (e) {
+      console.error('MediaRecorder init failed', e);
+      _stopMicStream();
+      Toast.show('录音初始化失败');
+      return;
+    }
+    _recChunks = [];
+    _recAudioBlob = null;
+    _mediaRec.ondataavailable = ev => { if (ev.data && ev.data.size > 0) _recChunks.push(ev.data); };
+    _mediaRec.onstop = () => {
+      const type = (_mediaRec && _mediaRec.mimeType) || mime || 'audio/webm';
+      _recAudioBlob = _recChunks.length ? new Blob(_recChunks, { type }) : null;
+      _stopMicStream();
+    };
+
+    _isRecording = true;
+    _recStartTime = Date.now();
+    btn.classList.add('recording');
+    status.textContent = 'Listening...';
+    _recTranscriptPrefix = transcriptEl.value;
+    _recSessionFinal = '';
+    try { _mediaRec.start(); } catch (e) { console.error(e); }
+
+    // ② 并行启动语音识别（可选：拿不到也不影响录音，文字可手打）
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) { Toast.show('当前浏览器环境不支持语音识别，请直接手打文字'); return; }
+    if (!SR) { return; }
     try {
       _rec = new SR();
       _rec.lang = 'zh-CN';
       _rec.continuous = true;
       _rec.interimResults = true;
-
-      const btn = document.getElementById('cv-audio-record-btn');
-      const status = document.getElementById('cv-audio-status');
-      const transcriptEl = document.getElementById('cv-audio-transcript');
-
-      _recTranscriptPrefix = transcriptEl.value;
-      _recSessionFinal = '';
-
-      _rec.onstart = () => {
-        _isRecording = true;
-        _recStartTime = Date.now();
-        btn.classList.add('recording');
-        status.textContent = 'Listening...';
-      };
 
       _rec.onresult = (e) => {
         let interim = '';
@@ -16831,29 +17032,34 @@ const ConvModule = (() => {
       _rec.onerror = (e) => {
         console.error('Record error', e);
         const err = e.error || '';
-        if (err === 'aborted' || err === 'no-speech') {
-          if (_isRecording) stopRecord();
-          if (err === 'no-speech') status.textContent = '未检测到语音，可再试或手打';
-          return;
-        }
-        stopRecord();
-        Toast.show('识别出错: ' + err);
+        // 识别出错不该中断真录音，仅提示，让用户继续录/手打
+        if (err === 'no-speech') { status.textContent = '没听清，可继续说或手打'; return; }
+        // aborted/其它识别错误：静默放弃识别，录音照常
       };
 
-     _rec.onend = () => {
-    if (_isRecording) {
-        // 安卓 Chrome continuous 失效，手动重启
-        try { _rec.start(); } catch(e) { stopRecord(); }
-    }
-};
+      _rec.onend = () => {
+        if (_isRecording) {
+          // 安卓 Chrome continuous 失效，手动重启
+          try { _rec.start(); } catch(e) {}
+        }
+      };
       _rec.start();
-    } catch(e) { console.error(e); Toast.show('无法启动麦克风'); }
+    } catch(e) { console.error('SR start failed', e); /* 识别失败不影响录音 */ }
+  }
+
+  function _stopMicStream() {
+    if (_mediaStream) {
+      try { _mediaStream.getTracks().forEach(t => t.stop()); } catch(e) {}
+      _mediaStream = null;
+    }
   }
 
   function stopRecord() {
     if (!_isRecording) return;
     _isRecording = false;
-    if (_rec) { _rec.stop(); }
+    if (_rec) { try { _rec.stop(); } catch(e) {} }
+    if (_mediaRec && _mediaRec.state !== 'inactive') { try { _mediaRec.stop(); } catch(e) { _stopMicStream(); } }
+    else { _stopMicStream(); }
     _recDuration = Math.round((Date.now() - _recStartTime) / 1000) || 1;
     document.getElementById('cv-audio-record-btn').classList.remove('recording');
     document.getElementById('cv-audio-status').textContent = `Recorded: ${_fmtDuration(_recDuration)}`;
@@ -16867,7 +17073,23 @@ const ConvModule = (() => {
     // 如果用户纯手打没录音，根据字数估算时长（大致 1 秒 4 个字）
     const duration = _recDuration > 0 ? _recDuration : Math.max(1, Math.round(transcript.length / 4));
 
+    // 🎙️ 等真音频 Blob 落定（MediaRecorder.onstop 是异步的，刚 stop 可能还没好）
+    let audioKey = null;
+    if (_recChunks.length || (_mediaRec && _mediaRec.state !== 'inactive')) {
+      for (let i = 0; i < 20 && !_recAudioBlob; i++) { await new Promise(r => setTimeout(r, 50)); }
+    }
+    if (_recAudioBlob && _recAudioBlob.size > 0) {
+      audioKey = `uvoice-${_charId}-${Date.now()}`;
+      try {
+        await DB.assets.set(audioKey, _recAudioBlob, _recAudioBlob.type);
+      } catch (e) {
+        console.error('save user audio failed', e);
+        audioKey = null; // 存失败就降级为假语音条，不挡发送
+      }
+    }
+
     const msgPart = { type: 'audio', duration, transcript };
+    if (audioKey) msgPart.audioKey = audioKey;
 
     const msg = {
       charId:         _charId,
@@ -17332,7 +17554,7 @@ function _renderImgPreviewBar() {
     if (parts.length === 1) {
       const part = parts[0];
       if (part.type === 'audio') {
-        row.innerHTML = `${avatarHtml}${_buildAudioHtml(part, msg.id, msg.role)}`;
+        row.innerHTML = `${avatarHtml}${_buildAudioHtml(part, msg.id, msg.role, msg.senderId)}`;
         return row;
       }
       if (part.type === 'redenvelope') {
@@ -17384,16 +17606,16 @@ function _renderImgPreviewBar() {
         }
       // text（可能带 quoteRef）
       const quoteHtml = part.quoteRef ? _buildQuoteRefHtml(part.quoteRef) : '';
-      const needsTranslate = !isUser && _isNonChinese(part.content);
-      const transClass = needsTranslate ? ' translatable' : '';
-      const transHtml  = needsTranslate ? `<div class="cv-translate-wrap"><div class="cv-translate-inner"><div class="cv-translate-divider"></div><div class="cv-translate-label"><i class="ph-thin ph-asterisk cv-tl-spin"></i>TRANSLATE</div><div class="cv-translate-text"></div></div></div>` : '';
-      row.innerHTML = `${avatarHtml}<div class="cv-bubble${transClass}">${senderNameHtml}${quoteHtml}${_escHtml(part.content)}${transHtml}</div>`;
+      const hasTrans = !isUser && !!part.translation;
+      const transClass = hasTrans ? ' translatable translate-open' : '';
+      const transHtml  = hasTrans ? _buildTranslateHtml(part.translation) : '';
+      row.innerHTML = `${avatarHtml}<div class="cv-bubble${transClass}">${senderNameHtml}${quoteHtml}${_escHtml(_stripXhsTag(part.content))}${transHtml}</div>`;
       return row;
     }
    
     // 多 part：用 bubbles-wrap 包裹
     const bubblesHtml = parts.map(part => {
-      if (part.type === 'audio')         return _buildAudioHtml(part, msg.id, msg.role);
+      if (part.type === 'audio')         return _buildAudioHtml(part, msg.id, msg.role, msg.senderId);
       if (part.type === 'redenvelope')   return _buildRedEnvelopeHtml(part, msg.id, msg.role === 'user');
       if (part.type === 'transfer')      return _buildTransferHtml(part, msg.id);
       if (part.type === 'user_transfer') return _buildUserTransferHtml(part, msg.id);
@@ -17423,15 +17645,19 @@ function _renderImgPreviewBar() {
               return cardHtml;
           }
         }
+      // 🌟 小红书帖子卡片
+      if (part.type === 'xhs_share') {
+          return window.XhsShare ? XhsShare.buildCardHtml(part.data) : '';
+      }
   const quoteHtml = part.quoteRef ? _buildQuoteRefHtml(part.quoteRef) : '';
       
       // 👇 核心修复 2：如果没有文本内容，也没有引用，直接返回空，绝不画空的气泡！
       if (!part.content && !quoteHtml) return ''; 
       
-      const needsTranslate = !isUser && _isNonChinese(part.content);
-      const transClass = needsTranslate ? ' translatable' : '';
-      const transHtml  = needsTranslate ? `<div class="cv-translate-wrap"><div class="cv-translate-inner"><div class="cv-translate-divider"></div><div class="cv-translate-label"><i class="ph-thin ph-asterisk cv-tl-spin"></i>TRANSLATE</div><div class="cv-translate-text"></div></div></div>` : '';
-      return `<div class="cv-bubble${transClass}">${quoteHtml}${_escHtml(part.content)}${transHtml}</div>`;
+      const hasTransM = !isUser && !!part.translation;
+      const transClass = hasTransM ? ' translatable translate-open' : '';
+      const transHtml  = hasTransM ? _buildTranslateHtml(part.translation) : '';
+      return `<div class="cv-bubble${transClass}">${quoteHtml}${_escHtml(_stripXhsTag(part.content))}${transHtml}</div>`;
     }).join('');
     row.innerHTML = `${avatarHtml}<div class="cv-bubbles-wrap">${bubblesHtml}</div>`;
     return row;
@@ -17445,15 +17671,35 @@ function _renderImgPreviewBar() {
     </div>`;
   }
 
-  function _buildAudioHtml(part, msgId, role) {
+  // ── 翻译区（译文随回复一起出，已预填，点击气泡可收起/展开）──
+  function _buildTranslateHtml(translation) {
+    return `<div class="cv-translate-wrap"><div class="cv-translate-inner"><div class="cv-translate-divider"></div><div class="cv-translate-label">TRANSLATE</div><div class="cv-translate-text">${_escHtml(translation)}</div></div></div>`;
+  }
+
+  // ── 显示用：剥掉小红书解析隐藏标签 <已解析的小红书帖子:...>（AI 读的原文保留标签）──
+  function _stripXhsTag(s) {
+    return String(s == null ? '' : s).replace(/\n?<已解析的小红书帖子:[\s\S]*?>/g, '').trim();
+  }
+
+  function _buildAudioHtml(part, msgId, role, senderId = '') {
     const cacheKey = `audio-${msgId}`;
-    const iconHtml = role === 'assistant'
-      ? `<span data-cache-key="${cacheKey}" data-transcript="${_escHtml(part.transcript)}"
+    let iconHtml;
+    if (role === 'assistant') {
+      iconHtml = `<span data-cache-key="${cacheKey}" data-transcript="${_escHtml(part.transcript)}" data-sender-id="${_escHtml(String(senderId || ''))}"
            onclick="event.stopPropagation();ConvModule.playAudio(this)"
            style="cursor:pointer;font-size:1.1rem;flex-shrink:0;display:flex;align-items:center;">
            <i class="ph-fill ph-waveform"></i>
-         </span>`
-      : `<i class="ph-fill ph-waveform" style="font-size:1.1rem;flex-shrink:0;"></i>`;
+         </span>`;
+    } else if (part.audioKey) {
+      // 🎙️ user 真录音：点击播放自己的声音
+      iconHtml = `<span data-audio-key="${_escHtml(String(part.audioKey))}"
+           onclick="event.stopPropagation();ConvModule.playUserAudio(this)"
+           style="cursor:pointer;font-size:1.1rem;flex-shrink:0;display:flex;align-items:center;">
+           <i class="ph-fill ph-waveform"></i>
+         </span>`;
+    } else {
+      iconHtml = `<i class="ph-fill ph-waveform" style="font-size:1.1rem;flex-shrink:0;"></i>`;
+    }
     return `<div class="cv-audio-bubble" onclick="ConvModule.toggleAudio(this)">
       <div class="cv-audio-core">
         ${iconHtml}
@@ -17867,16 +18113,47 @@ function _renderImgPreviewBar() {
 
    const textPart = { type: 'text', content: text };
 
+    // ── 🌟 小红书链接解析：抓取帖子 → xhs_share part（AI 从 part 读 + 卡片渲染）──
+    let _xhsPost = null;
+    if (window.XhsShare && XhsShare.getEdgeUrl && XhsShare.getEdgeUrl() && XhsShare.hasXhsLink(text)) {
+      const _xhsUrl = XhsShare.firstUrl(text);
+      if (_xhsUrl) {
+        try { Toast.show('小红书链接解析中…'); } catch (e) {}
+        _xhsPost = await XhsShare.fetchPost(_xhsUrl);
+      }
+    }
+    // 抓到帖子后：把链接URL及小红书分享套话从文本里抹掉，只留用户自己写的话（多半为空 → 只显示卡片）
+    let _hasUserText = true;
+    if (_xhsPost && _xhsPost.ok) {
+      const _cleaned = text
+        .replace(/https?:\/\/[^\s]+/g, '')          // 去链接
+        .replace(/[^\n]*(?:复制后|複製後)[^\n]*打开?小红书[^\n]*/g, '') // 去"复制后打开小红书查看笔记"套话
+        .replace(/^\s*\n/gm, '')
+        .trim();
+      _hasUserText = _cleaned.length > 0;
+      textPart.content = _cleaned; // 空就空着，下面 parts 会据此决定要不要这个文字气泡
+    }
+
     // 【新增这几行】：如果当前有引用状态，就把引用数据注入给这个气泡，并清除状态
     if (_currentQuote) {
       textPart.quoteRef = { name: _currentQuote.name, text: _currentQuote.text };
       cancelQuote(); // 注入完毕后，关掉引用 UI
     }
 
+    // 小红书卡片记录发送时的 AI 回合数，供多模态视觉 age 计算（近 3 轮喂真图）
+    let _xhsSentRound = 0;
+    if (_xhsPost && _xhsPost.ok) {
+      try { _xhsSentRound = await _countAiReplies(); } catch (e) {}
+    }
+
     const msg = {
       charId:         _charId,
       role:           'user',
-      parts:          [textPart],
+      parts:          (_xhsPost && _xhsPost.ok)
+                        ? ((_hasUserText || textPart.quoteRef)
+                            ? [textPart, { type: 'xhs_share', data: _xhsPost, sentRound: _xhsSentRound }]
+                            : [{ type: 'xhs_share', data: _xhsPost, sentRound: _xhsSentRound }])  // 纯链接 → 只留卡片
+                        : [textPart],
       content:        text,
       timestamp:      Date.now(),
       status:         'pending',
@@ -17907,8 +18184,8 @@ function _renderImgPreviewBar() {
     if (_isGroup) {
       if (_typingChars.has(_charId)) return; // 群聊整体锁
       const input = document.getElementById('cv-input');
-      if (input?.value.trim()) await sendUserMsg();
-      await _triggerGroupAI();
+      if (input?.value.trim()) await sendUserMsg();   // 输入框里若还有字，先上屏
+      await _triggerGroupAI('auto');                  // 🌟 统一按 DB 末条真实 user 发言判定，避免输入框已清空导致误判潜水
       return;
     }
     if (_typingChars.has(_charId)) return;
@@ -17917,7 +18194,7 @@ function _renderImgPreviewBar() {
     await _triggerAI();
   }
 // ── 群聊：一次 API 调用生成所有角色回复 ──
-  async function _triggerGroupAI() {
+  async function _triggerGroupAI(userJustSpoke = 'auto') {
     const gcId = _charId;
     const gcMeta = _gcMeta;
     if (!gcId || !gcMeta) return;
@@ -18067,25 +18344,39 @@ function _renderImgPreviewBar() {
       
     let finalUserContent = '[System 引擎调度]: 所有的记忆档案、当前群聊剧本与私密上下文均已向你同步完毕。请严格遵循设定与格式限制，自然地接续上面的聊天流，输出你接下来要说的话。';
 
-      // ✨ 用户刚发言：必须有角色回应用户，不能集体无视
-      if (histMsgs.length > 0 && histMsgs[histMsgs.length - 1].role === 'user' && !histMsgs[histMsgs.length - 1].fakeUserId) {
-          const _rn = _persona?.name || '用户';
-          finalUserContent = `[System 引擎调度]: 用户「${_rn}」刚刚在群里发言了！请群成员们**自然地接住并回应ta刚说的内容**——可以是其中一两个角色直接搭话/回答，也可以顺势引发大家的讨论。绝对不要集体无视用户、自顾自地继续聊别的话题。当然，回应之后角色之间也可以互相补充、调侃，让群聊真实热闹。(每句话必须带 [角色名]: 前缀，并用 ||| 分隔)`;
+      // 🌟 判定"用户是否刚发言"：不靠输入框（上屏时已清空），也不靠数组末位（id 时序可能乱），
+      //    而是按 timestamp 找出全场最新的一条【真实消息】（真人 user 或角色 assistant，
+      //    排除分身 fakeUserId、system_ticket 等）。这条若是真人 user，就该回应；否则才算潜水。
+      if (userJustSpoke === 'auto') {
+          const realOnes = histMsgs.filter(m =>
+              (m.role === 'user' || m.role === 'assistant') && !m.fakeUserId
+          );
+          let _latest = null;
+          for (const m of realOnes) {
+              if (!_latest || (m.timestamp ?? 0) >= (_latest.timestamp ?? 0)) _latest = m;
+          }
+          userJustSpoke = !!(_latest && _latest.role === 'user');
+          console.log(`[ConvModule] ✦ 潜水判定 — userJustSpoke=${userJustSpoke} (最新真实消息 role=${_latest?.role ?? '无'})`);
       }
 
-      // ✨ 新增：潜水吃瓜机制（最后一条不是用户发的 = 用户在潜水）
-      if (histMsgs.length > 0 && histMsgs[histMsgs.length - 1].role !== 'user') {
+      // 🌟 核心：是否"用户刚发言"决定本轮是回应用户还是潜水水群。
+      if (userJustSpoke) {
+          const _rn = _persona?.name || '用户';
+          // ✨ 知情模式 + 有分身：真假身份大乱斗
+          if (gcMeta.revealMode && ghostUsers.length > 0) {
+              finalUserContent = `[System 引擎调度]: 真实用户「${_rn}」刚刚开口了！现在请至少一个分身立刻跳出来争夺身份——反驳ta、抢着自称才是真的"${_rn}"、或反咬ta是冒牌货，制造多个"${_rn}"各执一词的混乱场面。角色们则要被搅得真假难辨、反复横跳地试探，但谁都不要直接拆穿。每句话依然必须带 [发言者名]: 前缀，并用 ||| 分隔。`;
+          }
+          // ✨ 蒙在鼓里模式 + 有分身：人格分裂剧场
+          else if (!gcMeta.revealMode && ghostUsers.length > 0) {
+              finalUserContent = `[System 引擎调度]: 真实用户「${_rn}」刚刚开口了。现在请至少一个分身接上来，用与刚才反差明显的性格/态度说话（可以唱反调、改口、自相矛盾），把"${_rn}"演成忽冷忽热、出尔反尔的样子。角色们只把这些都当成同一个"${_rn}"，要对ta的"突变"做出懵圈、吐槽或担心的反应，但绝不能怀疑有人冒充。每句话依然必须带 [发言者名]: 前缀，并用 ||| 分隔。`;
+          }
+          // ✨ 普通群聊：必须有角色接住用户，不能集体无视
+          else {
+              finalUserContent = `[System 引擎调度]: 用户「${_rn}」刚刚在群里发言了！请群成员们**自然地接住并回应ta刚说的内容**——可以是其中一两个角色直接搭话/回答，也可以顺势引发大家的讨论。绝对不要集体无视用户、自顾自地继续聊别的话题。当然，回应之后角色之间也可以互相补充、调侃，让群聊真实热闹。(每句话必须带 [角色名]: 前缀，并用 ||| 分隔)`;
+          }
+      } else {
+          // ✨ 真·潜水吃瓜：用户本轮确实没输入，直接按触发键
           finalUserContent = '[System 引擎调度]: 用户目前正在“潜水”暗中观察你们。请你们几位群成员暂时忽略用户，自己顺着刚才的话题继续水群，或者互相调侃、吐槽、开启个新话题。展现出你们私底下真实的群聊氛围和人物关系！(注意：每句话依然必须带 [角色名]: 前缀，并用 ||| 分隔)';
-      }
-      // ✨ 知情模式 + 真实用户刚发言：触发"真假身份大乱斗"
-      else if (gcMeta.revealMode && ghostUsers.length > 0 && histMsgs.length > 0 && histMsgs[histMsgs.length - 1].role === 'user' && !histMsgs[histMsgs.length - 1].fakeUserId) {
-          const _rn = _persona?.name || '用户';
-          finalUserContent = `[System 引擎调度]: 真实用户「${_rn}」刚刚开口了！现在请至少一个分身立刻跳出来争夺身份——反驳ta、抢着自称才是真的"${_rn}"、或反咬ta是冒牌货，制造多个"${_rn}"各执一词的混乱场面。角色们则要被搅得真假难辨、反复横跳地试探，但谁都不要直接拆穿。每句话依然必须带 [发言者名]: 前缀，并用 ||| 分隔。`;
-      }
-      // ✨ 蒙在鼓里模式 + 真实用户刚发言：触发"人格分裂剧场"
-      else if (!gcMeta.revealMode && ghostUsers.length > 0 && histMsgs.length > 0 && histMsgs[histMsgs.length - 1].role === 'user' && !histMsgs[histMsgs.length - 1].fakeUserId) {
-          const _rn = _persona?.name || '用户';
-          finalUserContent = `[System 引擎调度]: 真实用户「${_rn}」刚刚开口了。现在请至少一个分身接上来，用与刚才反差明显的性格/态度说话（可以唱反调、改口、自相矛盾），把"${_rn}"演成忽冷忽热、出尔反尔的样子。角色们只把这些都当成同一个"${_rn}"，要对ta的"突变"做出懵圈、吐槽或担心的反应，但绝不能怀疑有人冒充。每句话依然必须带 [发言者名]: 前缀，并用 ||| 分隔。`;
       }
       let apiMessages =[];
       
@@ -18266,12 +18557,18 @@ function _renderImgPreviewBar() {
           // 🌟 普通文本，恢复 Quote 的 UI 生成逻辑
           let textContent = src;
           let quoteRef    = null;
+          let quoteTrans  = '';
           if (quoteMatch) {
-            quoteRef    = { name: 'Quote', text: quoteMatch[1] };
+            // 引用文本里若混入了翻译括号，抽干净：引用区只显示外语原话，译文并入正文
+            const _qt = _extractTranslation(quoteMatch[1].trim());
+            quoteRef    = { name: 'Quote', text: _qt.content };
+            quoteTrans  = _qt.translation;
             textContent = src.slice(quoteMatch[0].length).trim();
           }
-          displayContent = textContent;
-          msgParts = [{ type: 'text', content: textContent, ...(quoteRef ? { quoteRef } : {}) }];
+          const _trG = _extractTranslation(textContent);
+          const _mergedTrans = [quoteTrans, _trG.translation].filter(Boolean).join(' ');
+          displayContent = _trG.content;
+          msgParts = [{ type: 'text', content: _trG.content, ...(_mergedTrans ? { translation: _mergedTrans } : {}), ...(quoteRef ? { quoteRef } : {}) }];
         }
 
         const msg = {
@@ -18437,6 +18734,34 @@ function _renderImgPreviewBar() {
       feed.appendChild(typingRow);
       _scrollToBottom();
     }
+
+    // ── 工具调用时的 typing 文案切换 ──
+    //   只在当前页面正是这个角色时才改文字;其它情况静默(后台角色无需提示)
+    //   加最短显示时间,避免工具秒回导致提示一闪而过
+    const _defaultHint = isReroll ? 'Re-synthesizing' : 'Synthesizing';
+    const MIN_HINT_MS = 1500;
+    let _hintShownAt = 0;
+    let _hintRestoreTimer = null;
+    const _setTypingText = (txt) => {
+      if (_charId !== sessionCharId) return;
+      const el = document.querySelector('#cv-typing-indicator .cv-typing-text');
+      if (el) el.innerHTML = `${txt}<span class="cv-cursor"></span>`;
+    };
+    const _onToolStart = (toolName) => {
+      if (_hintRestoreTimer) { clearTimeout(_hintRestoreTimer); _hintRestoreTimer = null; }
+      const hint = ToolRegistry.getHint(toolName);
+      _hintShownAt = Date.now();
+      _setTypingText(hint || _defaultHint);
+    };
+    const _onToolEnd = () => {
+      const elapsed = Date.now() - _hintShownAt;
+      const remain = Math.max(0, MIN_HINT_MS - elapsed);
+      if (_hintRestoreTimer) clearTimeout(_hintRestoreTimer);
+      _hintRestoreTimer = setTimeout(() => {
+        _setTypingText(_defaultHint);
+        _hintRestoreTimer = null;
+      }, remain);
+    };
 
     try {
       const activeApi = await DB.api.getActive();
@@ -18650,7 +18975,7 @@ function _renderImgPreviewBar() {
         // 若发起时就已经在后台（极少见），立即触发
         if (document.hidden) _bgResolve('__BG__');
 
-        const _fetchPromise = ApiHelper.chatCompletion(activeApi, fullMessages, _ac.signal)
+        const _fetchPromise = ApiHelper.chatWithTools(activeApi, fullMessages, ToolRegistry.getSchemas(), _ac.signal, _onToolStart, _onToolEnd)
           .then(r => ({ ok: true, r }))
           .catch(e => ({ ok: false, e }));
 
@@ -18675,8 +19000,11 @@ function _renderImgPreviewBar() {
           response = _winner.r;
         }
       } else {
-        // 没开开关 / 云端不可用 → 完全是原来的前端流程
-        response = await ApiHelper.chatCompletion(activeApi, fullMessages);
+        // 没开开关 / 云端不可用 → 完全是原来的前端流程(带工具,纯前端不走云端)
+        response = await ApiHelper.chatWithTools(
+          activeApi, fullMessages, ToolRegistry.getSchemas(), undefined,
+          _onToolStart, _onToolEnd
+        );
       }
       if (typeof KeepAliveModule !== 'undefined') KeepAliveModule.stop(); // 关闭保活
       // ===========================
@@ -18934,12 +19262,18 @@ function _renderImgPreviewBar() {
           // 👇 核心修复：普通文本兜底，并剥离 Quote 标签生成 UI
           let textContent = src;
           let quoteRef    = null;
+          let quoteTrans  = '';
           if (quoteMatch) {
-            quoteRef    = { name: 'Quote', text: quoteMatch[1] };
+            // 引用文本里若混入了翻译括号，抽干净：引用区只显示外语原话，译文并入正文
+            const _qt = _extractTranslation(quoteMatch[1].trim());
+            quoteRef    = { name: 'Quote', text: _qt.content };
+            quoteTrans  = _qt.translation;
             textContent = src.slice(quoteMatch[0].length).trim();
           }
-          displayContent = textContent;
-          msgParts = [{ type: 'text', content: textContent, ...(quoteRef ? { quoteRef } : {}) }];
+          const _trS = _extractTranslation(textContent);
+          const _mergedTransS = [quoteTrans, _trS.translation].filter(Boolean).join(' ');
+          displayContent = _trS.content;
+          msgParts = [{ type: 'text', content: _trS.content, ...(_mergedTransS ? { translation: _mergedTransS } : {}), ...(quoteRef ? { quoteRef } : {}) }];
         }
 
         const novelOnly = novelPrompts.length > 0 && !strippedText.trim() && msgParts.length === 1 && msgParts[0].type === 'text' && !isRecall && !audioMatch && !xferMatch;
@@ -19218,6 +19552,15 @@ ${dialogueFlow.trim()}
 内容提要：${p.data.title ? '【'+p.data.title+'】' : ''}${p.data.content.slice(0, 80)}...
 （提示：你可以根据这篇帖子的内容跟我展开讨论，或者发表你的看法、吐槽）`;
       }
+      if (p.type === 'xhs_share') {
+          const d = p.data || {};
+          const likeStr = d.likes != null ? `，获赞 ${d.likes}` : '';
+          return `[我给你分享了一篇小红书帖子]
+博主：${d.author || '佚名'}${likeStr}
+标题：${d.title || '（无标题）'}
+正文：${(d.content || '').slice(0, 300)}
+（提示：你可以像刷到这篇帖子一样，跟我聊聊它、发表看法或吐槽，但不要复述这段提示本身。）`;
+      }
       // 🌟 Fix: 同理，assistant 历史里的转账回填成协议标签 [TRANSFER:金额:备注]
       if (p.type === 'transfer')      return m.role === 'assistant'
                                         ? `[TRANSFER:${p.amount}:${p.memo || ''}]`
@@ -19400,6 +19743,10 @@ ${dialogueFlow.trim()}
       ? `# 时区、时间与语言感知\n用户当前的本地时间是 ${now.getFullYear()}年${now.getMonth()+1}月${now.getDate()}日 ${_weekDay(now)} ${_fmtTime(now)}。${timeGapPrompt}\n【时差与母语规则】：如果某角色的档案设定身处其他国家或地区，该角色必须自行推算其所在地的真实时间并遵循当地作息；如果该角色是外国人，其发言必须优先使用母语或本国语言（除非档案注明精通中文）。\n`
       : `# 语言感知\n【母语规则】：如果某角色是外国人，其发言必须优先使用母语或本国语言（除非档案注明精通中文）。\n`;
 
+    const translateCtx = _translateEnabled
+      ? `# 翻译附带规则（已开启）\n当任何角色用外语（或粤语等方言）发言时，必须在该句后紧跟一段全角圆括号包裹的中文翻译，例如「I miss you.（想见你。）」。翻译要自然传神、贴合该角色语气，不要机翻直译。括号中文只显示在屏幕译文区、不影响外语正文；说中文时则无需添加。\n⚠️【翻译格式铁律】：中文翻译括号【必须】和它翻译的那句外语写在**同一个气泡**里、紧贴外语正文之后；【绝对禁止】把翻译单独拆成另一条气泡，也禁止用 ||| 把外语和它的翻译分开。语音条 [AUDIO:秒:内容] 内的外语同理——翻译括号要写在 [AUDIO] 标签内部的内容里，例如 [AUDIO:5:あのね…（那个…）]。\n`
+      : '';
+
     const worldLoreSection = worldBookBlock ? `\n# 世界背景知识\n${worldBookBlock}\n` : '';
 
     // ── 🌟 假 user（分身/冒充者）档案与扮演指令 ──
@@ -19572,6 +19919,7 @@ ${c?.mbti ? 'MBTI：' + c.mbti : ''}
 绝对禁止角色之间泄露彼此的私密记忆或性格特征。
 
 ${timeCtx}
+${translateCtx}
 # 角色档案
 ${charProfiles}
 ${ghostSection}
@@ -19600,6 +19948,7 @@ ${histSection}
 **格式：** [角色名]: [QUOTE:被引用的原话片段]你的回复内容
 **示例：** 
 [Alice]: [QUOTE:这雨下得没完没了]就是啊，衣服都干不了。 ||| [Bob]: [QUOTE:衣服都干不了]让你买个烘干机你偏不。
+⚠️【引用 + 外语注意】：[QUOTE:...] 方括号里只放被引用的原话本身，**不要**在方括号内塞中文翻译括号。若你的回复正文是外语，中文翻译括号要写在方括号**外面**的回复正文里，例如：[QUOTE:I miss you]Me too.（我也是。）——绝不能写成 [QUOTE:I miss you（我想你）]。
 
 # 高级行为：实时撤回 (Real-time Withdrawal)
 偶尔可以"撤回"刚说的话，展现冲动、打错字或发错群的真实感。**极少使用**。
@@ -19702,7 +20051,9 @@ function _buildSystemPrompt(histMsgs, novelImgOn = false, worldBookBlock = '', t
 
    const languageCtx = `# 语言习惯与设定铁律 (Language Iron Rule)
 【绝对母语优先】：请仔细阅读你的档案背景。如果你的角色设定是外国人（如欧美人、日本人等），或档案中明确包含了外语对话示例，你【必须且只能】使用该外语（如英语、日语等）进行回复！
-⚠️ 警告：即使我（用户）用中文和你说话，你也必须用你的母语回复我！除非你的档案里明确写了“精通中文”或“会说中文”，否则【绝对禁止】自动把回复翻译成中文！`;
+⚠️ 警告：即使我（用户）用中文和你说话，你也必须用你的母语回复我！除非你的档案里明确写了“精通中文”或“会说中文”，否则【绝对禁止】自动把回复翻译成中文！${_translateEnabled ? `
+【翻译附带规则·已开启】：当你用外语（或粤语等方言）说话时，必须在该句外语后面紧跟一段全角圆括号包裹的中文翻译，例如：「Je t'aime。（我爱你。）」。翻译要自然传神、贴合人设语气，不要机翻直译。括号里的中文只会显示在屏幕译文区、不影响你的外语正文。若你本来就说中文，则无需添加括号。
+⚠️【翻译格式铁律】：中文翻译括号【必须】和它翻译的那句外语写在**同一个气泡**里、紧贴外语正文之后；【绝对禁止】把翻译单独拆成另一条气泡，也禁止用 ||| 把外语和它的翻译分开。错误示范：「Developer.」「（开发者。）」分成两条——这是错的；正确：「Developer.（开发者。）」写在一起。` : ''}`;
 
     const charName = _char?.name || '角色';
     const charPersona = _char?.persona || '';
@@ -19944,6 +20295,7 @@ ${emoteBlock}
 
 **示例：**
 [QUOTE:今天特别累]听到你说累，我第一反应就是想让你把头靠过来。
+⚠️【引用 + 外语注意】：[QUOTE:...] 方括号里只放被引用的原话本身，**不要**在方括号内塞中文翻译括号。若你的回复正文是外语，中文翻译括号要写在方括号**外面**的回复正文里，例如：[QUOTE:I miss you]Me too.（我也是。）——绝不能写成 [QUOTE:I miss you（我想你）]。
 
 现在，请作为【${charName}】，绝对禁止任何动作描写和心理活动。开始你的表演。${_detectOverusedBehaviors(histMsgs)}`;
   }
@@ -19961,9 +20313,45 @@ ${emoteBlock}
 
       // 检查是否含图片 part
       const imgPart = parts.find(p => p.type === 'image');
-          
+
+      // 🌟 小红书卡片封面：若是多模态且 3 轮内，把封面图真正喂给模型"看"
+      const xhsPart = parts.find(p => p.type === 'xhs_share');
+      let _xhsVisionDone = false;
+      if (xhsPart && m.role === 'user' && xhsPart.data && xhsPart.data.cover && window.XhsShare) {
+        const xhsAge = currentRound - (xhsPart.sentRound ?? m._round ?? 0);
+        if (xhsAge < 3) {
+          try {
+            const proxied = XhsShare.proxiedImg(xhsPart.data.cover);
+            const resp = await fetch(proxied);
+            const blob = await resp.blob();
+            const b64 = await new Promise((res, rej) => {
+              const r = new FileReader();
+              r.onload = () => res(String(r.result).split(',')[1]);
+              r.onerror = rej;
+              r.readAsDataURL(blob);
+            });
+            if (b64) {
+              const d = xhsPart.data;
+              const caption = `[我分享了一篇小红书帖子，下面这张图是它的封面]\n博主：${d.author || ''}　标题：${d.title || ''}　点赞：${d.likes ?? ''}`;
+              msgContent = [
+                { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${b64}` } },
+                { type: 'text', text: caption },
+              ];
+              _xhsVisionDone = true;
+              console.log('[XHS Vision] ✅ 封面图已转 base64 喂给模型');
+            }
+          } catch (e) {
+            console.warn('[XHS Vision] 封面图读取失败，回退文字', e);
+          }
+        }
+      }
+
+      // 🌟 小红书封面视觉已处理，跳过下面的图片/文本分支，避免覆盖 msgContent
+          if (_xhsVisionDone) {
+            // 什么都不做，msgContent 已是视觉数组
+          }
           // 🌟 核心拦截：表情包专门走语义通道，省 Token 且极速，不触发普通图片降级警告
-          if (imgPart && imgPart.description && imgPart.description.startsWith('[表情包:')) {
+          else if (imgPart && imgPart.description && imgPart.description.startsWith('[表情包:')) {
             msgContent = _formatMsgForAI(m);
             // 屏蔽普通图片的警告日志，打印专门的表情包日志
             console.log(`[IMG] 🎭 检测到表情包，已直接转为语义标签喂给AI: ${msgContent}`);
@@ -20185,6 +20573,33 @@ function back() {
 	      .trim();
 	  }
 
+	// ── 翻译随回复一起出：从外语正文里抽出全角圆括号包裹的中文译文 ──
+	//   协议：角色说外语时，紧跟一段全角圆括号中文翻译，如 "Je t'aime。（我爱你。）"
+	//   返回 { content, translation }：content 为去掉译文括号后的外语正文，translation 为合并后的中文译文。
+	//   仅当正文确实含外语、且括号内主要是中文时才抽取，避免误伤角色正常使用的中文括号注释。
+	function _extractTranslation(raw) {
+	    const text = String(raw || '');
+	    // 正文里没有外语字母/假名/谚文，就没有翻译可言，原样返回
+	    const hasForeign = /[a-zA-ZÀ-ÿぁ-ヿㄱ-퟿]/.test(text);
+	    if (!hasForeign) return { content: text, translation: '' };
+
+	    const translations = [];
+	    // 匹配全角圆括号段；逐段判断括号内是否“以中文为主”，是则视为译文抽走
+	    const content = text.replace(/（([^（）]*)）/g, (m, inner) => {
+	        const pure = inner.replace(/[^\u4e00-\u9fa5a-zA-ZÀ-ÿぁ-ヿㄱ-퟿]/g, '');
+	        if (!pure) return m; // 括号里没有实义文字（如表情、标点），保留
+	        const han = (pure.match(/[\u4e00-\u9fa5]/g) || []).length;
+	        if (han / pure.length >= 0.6) {       // 中文占比≥60% → 判定为翻译，抽走
+	            translations.push(inner.trim());
+	            return '';
+	        }
+	        return m;                             // 否则是正常括号内容，保留
+	    }).replace(/\s{2,}/g, ' ').trim();
+
+	    return { content: content || text, translation: translations.join(' ') };
+	}
+
+
 	function _splitAiBubbles(raw) {
 	    let text = String(raw || '').replace(/<\|split\|>/g, '|||');
 	    
@@ -20218,10 +20633,18 @@ function back() {
 	        if (/\n/.test(rest)) {
 	            segs = rest.split(/\n+/).map(s => s.trim()).filter(Boolean);
 	        } else {
-	            // 策略 A：按句末标点切
-	            let sentences = rest.match(/[^。！？…~.!?]+[。！？…~.!?]+/g);
-	            // 策略 B：无标点流——多空格/Tab、以及夹在两个汉字间的单空格都视为断句
-	            if (!sentences || sentences.length <= 1) {
+	            // 🌟 外语语境判定：正文里外语字母/假名/谚文占比偏高时，绝不按英文句号 .!? 切，
+	            //    否则外语句子和它后面的（中文翻译）括号会被切碎、掉格式、丢翻译。
+	            const foreignChars = (rest.match(/[a-zA-ZÀ-ÿぁ-ヿㄱ-퟿]/g) || []).length;
+	            const pureLen = (rest.replace(/[^\u4e00-\u9fa5a-zA-ZÀ-ÿぁ-ヿㄱ-퟿]/g, '') || '').length || 1;
+	            const isForeignCtx = foreignChars / pureLen >= 0.4;
+
+	            // 策略 A：按句末标点切（外语语境只认中文句末标点，半角 .!? 不参与切割）
+	            let sentences = isForeignCtx
+	                ? rest.match(/[^。！？…~]+[。！？…~]+/g)
+	                : rest.match(/[^。！？…~.!?]+[。！？…~.!?]+/g);
+	            // 策略 B：无标点流（外语语境跳过，避免按词拆碎外语）
+	            if ((!sentences || sentences.length <= 1) && !isForeignCtx) {
 	                const englishChars = (rest.match(/[a-zA-Z]/g) || []).length;
 	                const isEnglishContext = englishChars > rest.length * 0.5;
 	                if (!isEnglishContext) {
@@ -20231,8 +20654,8 @@ function back() {
 	                    if (sp.length > 1) sentences = sp;
 	                }
 	            }
-	            // 策略 C：实在切不开且超过 40 字，按逗号强切
-	            if ((!sentences || sentences.length <= 1) && rest.length > 40) {
+	            // 策略 C：实在切不开且超过 40 字，按逗号强切（外语语境跳过）
+	            if ((!sentences || sentences.length <= 1) && rest.length > 40 && !isForeignCtx) {
 	                sentences = rest.match(/[^，,]+[，,]*/g);
 	            }
 	            if (sentences && sentences.length > 1) {
@@ -20326,6 +20749,27 @@ if (!isRecall && !isHtml && !isQuote && !isAudio && !isEmote && !isTransfer && !
 	        }
 	    }
 	    
+	    // 🌟 翻译兜底：模型有时把「（中文翻译）」单独拆成一条气泡（外语在前、翻译独占下一条）。
+	    //   把"整条就是一个纯中文括号"的气泡合并回前一条，避免翻译变成孤立气泡显示。
+	    const _isLoneTransParen = (s) => {
+	        const m = /^（([^（）]*)）$/.exec(String(s).trim());
+	        if (!m) return false;
+	        const pure = m[1].replace(/[^\u4e00-\u9fa5a-zA-ZÀ-ÿぁ-ヿㄱ-퟿]/g, '');
+	        if (!pure) return false;
+	        const han = (pure.match(/[\u4e00-\u9fa5]/g) || []).length;
+	        return han / pure.length >= 0.6;
+	    };
+	    const _PROTECTED_HEAD = /^\[(?:RECALL|HTML|QUOTE|AUDIO|TRANSFER|ACCEPT_TRANSFER|REJECT_TRANSFER|RED_ENVELOPE|LOCATION|EMOTE|CALL|POST|POST_IMG|SET_AVATAR)/i;
+	    const _merged = [];
+	    for (const b of bubbles) {
+	        if (_merged.length && _isLoneTransParen(b) && !_PROTECTED_HEAD.test(_merged[_merged.length - 1])) {
+	            _merged[_merged.length - 1] = `${_merged[_merged.length - 1]}${b.trim()}`;
+	        } else {
+	            _merged.push(b);
+	        }
+	    }
+	    bubbles = _merged;
+
 	    return bubbles;
 	  }
 
@@ -21002,142 +21446,25 @@ if (!isRecall && !isHtml && !isQuote && !isAudio && !isEmote && !isTransfer && !
     } catch(e) { _translateEnabled = false; }
     const t = document.getElementById('cv-translate-toggle');
     if (t) t.classList.toggle('on', _translateEnabled);
+    const feed = document.getElementById('cv-feed');
+    if (feed) feed.classList.toggle('show-translate', _translateEnabled);
   }
 
   async function _toggleTranslate(el) {
     el.classList.toggle('on');
     _translateEnabled = el.classList.contains('on');
     try { await DB.settings.set(_translateKey(), _translateEnabled); } catch(e) {}
-    // 关闭时收起所有已展开的翻译区
-    if (!_translateEnabled) {
-      document.querySelectorAll('#cv-feed .cv-bubble.translate-open').forEach(b => b.classList.remove('translate-open'));
-    }
-    Toast.show(_translateEnabled ? '气泡翻译已开启，点击外语气泡可译' : '气泡翻译已关闭');
+    const feed = document.getElementById('cv-feed');
+    if (feed) feed.classList.toggle('show-translate', _translateEnabled);
+    Toast.show(_translateEnabled ? '翻译已开启，外语消息会随回复附上中文' : '翻译已关闭');
   }
 
-  // ── 点击翻译气泡 ──
-  async function _handleTranslateBubble(bubble) {
+  // ── 点击翻译气泡：译文已随回复预填，仅切换展开/收起 ──
+  function _handleTranslateBubble(bubble) {
     if (!_translateEnabled) return;
-    const labelEl = bubble.querySelector('.cv-translate-label');
-    const textEl  = bubble.querySelector('.cv-translate-text');
-    if (!labelEl || !textEl) return;
-
-    // 已有缓存，直接展开/收起
-    if (bubble.dataset.translated === '1') {
-      bubble.classList.toggle('translate-open');
-      return;
-    }
-
-    // 展开 + 加载中
-    bubble.classList.add('translate-open');
-    labelEl.classList.add('loading');
-    textEl.textContent = '';
-
-   // 提取原文（去掉 translate-wrap、quote-ref，并且去掉群聊特有的发送者名字）
-    const clone = bubble.cloneNode(true);
-    clone.querySelector('.cv-translate-wrap')?.remove();
-    clone.querySelector('.cv-quote-ref')?.remove();
-    clone.querySelector('.cv-sender-name')?.remove(); // 🌟 核心修复：把名字也删掉不让大模型翻译
-    const rawText = (clone.textContent || '').trim();
-
-try {
-      let translated = '';
-      
-      // 🌟 魔法优化：赋予 AI “翻译官人设”，并给出明确的语气指导
-     
-     // 找到 ConvModule 里的 _handleTranslateBubble 函数内部的 llmPrompt 赋值处
-const llmPrompt = `你是一个精通多国语言及中国方言（尤其是粤语）翻译的文学专家。
-请将下面这段内容（可能是外语，也可能是粤语等方言）翻译成自然、流畅的现代标准普通话。
-
-**【翻译铁律：拒绝机翻 (No Machine Translation)】**
-不要做字典的搬运工，要做**情感的传递者**。翻译必须符合中文的语境美感
-- **❌ 禁止直译：** 不要逐字翻译。
-
-**【翻译范例 (Example)】**
-- *场景：暧昧/表白*
-  - 原文: "I miss you."
-  - ❌ 机翻: "我想念你。" (太生硬)
-  - ✅ **灵魂翻译:** "想见你。" / "今晚月色真美。" / "陌上花开了。" (根据人设选择)
-- *场景：傲娇/生气*
-  - 原文: "Whatever."
-  - ❌ 机翻: "无论如何。"
-  - ✅ **灵魂翻译:** "随你便。" / "爱咋咋地。" / "呵。"
-- *场景：日语/敬语*
-  - 原文: "好きです。"
-  - ❌ 机翻: "我喜欢你。"
-  - ✅ **灵魂翻译:** "心悦君兮。" / "这就把命给你。"
-
-【翻译要求】：
-1. 语感高级：符合都市现代人的表达习惯，用词克制、优雅。
-2. 处理方言：如果原文是粤语，请精准转化为普通话，同时保留原本的情绪和语气。
-3. 传递情绪：还原原文的傲娇、温柔、冷峻等情感张力，保持语言的质感。
-4. 纯净输出：绝对不要带任何前言后语，直接给出唯一的中文译文！
-
-【⚠️ 强制输出格式】：
-1. 只输出翻译后的纯文本。
-2. 绝对禁止输出“翻译思路”、“简析”、“注释”或任何解释性文字。
-3. 绝对禁止输出任何前言、后语或引号。
-
-原文如下：
-${rawText}`;
-
-      try {
-        // 1. 优先尝试：使用更大、语感更顶级的模型
-        const freeApi = {
-          url:   'https://api.siliconflow.cn/v1/chat/completions',
-          key:   'sk-huydslnoteyrzmyqhgepoljtytyqsbdnvvzyqcncroygsbsp', 
-          // 🚀 替换为 DeepSeek-V3 (当前最强开源) 或 Qwen2.5-72B-Instruct (比7B聪明十倍，且在硅基流动上也是免费的)
-          model: 'deepseek-ai/DeepSeek-V3', 
-          temp:  0.7 // 🌡️ 温度从 0.5 调到 0.7，让它的用词更鲜活、不那么死板
-        };
-        
-        if (freeApi.key.startsWith('在此填入') || !freeApi.key) {
-          throw new Error('内置免费翻译API未配置，降级处理...');
-        }
-
-        console.log('[Translate] 正在调用高情商翻译大模型...');
-        const result = await ApiHelper.chatCompletion(freeApi,[{ role: 'user', content: llmPrompt }]);
-        translated = (result || '').trim();
-        if (!translated) throw new Error('内置免费LLM返回为空');
-
-      } catch (freeErr) {
-        console.warn('[Translate] 免费LLM失败，尝试降级:', freeErr.message);
-        
-        // 2. 如果 DeepSeek-V3 拥堵报错，自动无缝降级回 72B 免费模型
-        try {
-            const fallbackApi = {
-              url:   'https://api.siliconflow.cn/v1/chat/completions',
-              key:   'sk-huydslnoteyrzmyqhgepoljtytyqsbdnvvzyqcncroygsbsp', 
-              model: 'Qwen/Qwen2.5-72B-Instruct', // 备用方案：用72B大杯模型
-              temp:  0.7
-            };
-            const result = await ApiHelper.chatCompletion(fallbackApi, [{ role: 'user', content: llmPrompt }]);
-            translated = (result || '').trim();
-        } catch (fbErr) {
-            // 3. 最后底线：走用户当前在设置里激活的主力大模型 API
-            const activeApi = await DB.api.getActive();
-            if (!activeApi) throw new Error('免费翻译失败，且用户未激活任何有效API');
-            console.log('[Translate] 正在调用用户激活的主力 API...');
-            const llmResult = await ApiHelper.chatCompletion(activeApi,[{ role: 'user', content: llmPrompt }]);
-            translated = (llmResult || '').trim();
-        }
-      }
-
-      if (!translated) throw new Error('所有翻译尝试均返回空结果');
-      
-      // 去除大模型可能自带的头尾引号
-      translated = translated.replace(/^["'「”]|["'」”]$/g, '');
-
-      textEl.textContent = translated;
-      labelEl.classList.remove('loading');
-      bubble.dataset.translated = '1';
-    } catch(err) {
-      labelEl.classList.remove('loading');
-      textEl.textContent = '翻译失败，点击重试';
-      bubble.dataset.translated = '';
-      console.error('[Translate] 所有翻译层级均失败', err);
-    }
-}
+    if (!bubble.querySelector('.cv-translate-wrap')) return;
+    bubble.classList.toggle('translate-open');
+  }
 
   function _syncVoiceOptionsVisibility() {
     const wrap = document.getElementById('cv-voice-options-wrap');
@@ -21171,8 +21498,45 @@ ${rawText}`;
     }
     const cacheKey  = btn.dataset.cacheKey;
     const transcript = btn.dataset.transcript;
-    const voiceId   = await _getVoiceId();
+    // 🌟 群聊：用该语音条所属角色的 senderId 取其单聊配过的音色；单聊：维持原 _getVoiceId
+    let voiceId;
+    const sid = btn.dataset.senderId;
+    if (_isGroup && sid) {
+      voiceId = await DB.settings.get(`voice-id-${sid}`).catch(() => null);
+      if (!voiceId) { Toast.show('该角色还没配置音色，请到 ta 的单聊设置里填写音色 ID'); return; }
+    } else {
+      voiceId = await _getVoiceId();
+    }
     await VoiceModule.playAudioBubble(cacheKey, transcript, voiceId, btn);
+  }
+
+  // 🎙️ 播放 user 自己的真录音（从 IndexedDB 取 Blob → ObjectURL）
+  async function playUserAudio(btn) {
+    const key = btn.dataset.audioKey;
+    if (!key) return;
+    try {
+      const url = await Assets.getUrl(key);
+      if (!url) { Toast.show('录音已丢失'); return; }
+      if (!_userAudioEl) _userAudioEl = new Audio();
+      const icon = btn.querySelector('i');
+      // 再点一次 = 停止
+      if (!_userAudioEl.paused && _userAudioEl.dataset.key === key) {
+        _userAudioEl.pause();
+        _userAudioEl.currentTime = 0;
+        if (icon) { icon.classList.remove('ph-pause'); icon.classList.add('ph-waveform'); }
+        return;
+      }
+      _userAudioEl.pause();
+      _userAudioEl.src = url;
+      _userAudioEl.dataset.key = key;
+      if (icon) { icon.classList.remove('ph-waveform'); icon.classList.add('ph-pause'); }
+      _userAudioEl.onended = () => { if (icon) { icon.classList.remove('ph-pause'); icon.classList.add('ph-waveform'); } };
+      _userAudioEl.onerror = () => { if (icon) { icon.classList.remove('ph-pause'); icon.classList.add('ph-waveform'); } Toast.show('播放失败'); };
+      await _userAudioEl.play();
+    } catch (e) {
+      console.error('playUserAudio failed', e);
+      Toast.show('播放失败');
+    }
   }
 
   // ── 聊天设置里的试听 ──
@@ -22562,7 +22926,7 @@ if (action === 'quote') {
     document.getElementById('cv-dist-overlay').classList.remove('active');
   }
   
-  return { enter, back, openQuickReply, closeQuickReply,openSettings, closeSettings, openFuncPanel, loadMore, sendUserMsg, sendAndTriggerAI, fetchModels, closeApiModal, confirmApi, openRecallModal, closeRecallModal, collectTransfer, openHangTag, closeHangTag, tearHangTag, sendUserTransfer, sendImgMsg, closeMenu,handleMenuAction,cancelQuote, updateMultiSelectUI, cancelMultiSelect, favoriteSelected, deleteSelected,addEmoteToPreview,_openImgViewer, _openImgViewerFromEl, _viewerDownloadImage, _regenerateNovelFromViewer, toggleAudio, clearWallpaper, clearHistory, deleteChat, _toggleAccordion, _selectRadio, _selectPersona,_removePendingImg,playAudio, previewVoice, _toggleTTS, _toggleNovel, _toggleTranslate, _appendNovelImageMessage, _replaceMessageBubble, _showNovelPending, _hideNovelPending, _toggleAlias,copyDefaultCSS, applyAndSaveCSS, clearCustomCSS, saveCssPreset, confirmSaveCssPreset, applyCssPreset, deleteCssPreset,manualSummarize, clearMemory, archiveToWorldBook, confirmArchive, syncSummary, _onSummaryEdit,openCallRecordModal, closeCallRecordModal,_toggleOfflineMsg, _scrollToBottom, openContextConsole,_splitAiBubbles, openLocModal, closeLocModal, sendLocationMsg, openDistModal, closeDistModal, _removeFace, _setFaceFidelity, _onFaceConsent, _pickFace, refreshGhostUsers };
+  return { enter, back, openQuickReply, closeQuickReply,openSettings, closeSettings, openFuncPanel, loadMore, sendUserMsg, sendAndTriggerAI, fetchModels, closeApiModal, confirmApi, openRecallModal, closeRecallModal, collectTransfer, openHangTag, closeHangTag, tearHangTag, sendUserTransfer, sendImgMsg, closeMenu,handleMenuAction,cancelQuote, updateMultiSelectUI, cancelMultiSelect, favoriteSelected, deleteSelected,addEmoteToPreview,_openImgViewer, _openImgViewerFromEl, _viewerDownloadImage, _regenerateNovelFromViewer, toggleAudio, clearWallpaper, clearHistory, deleteChat, _toggleAccordion, _selectRadio, _selectPersona,_removePendingImg,playAudio, playUserAudio, previewVoice, _toggleTTS, _toggleNovel, _toggleTranslate, _appendNovelImageMessage, _replaceMessageBubble, _showNovelPending, _hideNovelPending, _toggleAlias,copyDefaultCSS, applyAndSaveCSS, clearCustomCSS, saveCssPreset, confirmSaveCssPreset, applyCssPreset, deleteCssPreset,manualSummarize, clearMemory, archiveToWorldBook, confirmArchive, syncSummary, _onSummaryEdit,openCallRecordModal, closeCallRecordModal,_toggleOfflineMsg, _scrollToBottom, openContextConsole,_splitAiBubbles, openLocModal, closeLocModal, sendLocationMsg, openDistModal, closeDistModal, _removeFace, _setFaceFidelity, _onFaceConsent, _pickFace, refreshGhostUsers };
 })();
 /** 供 NovelModule 等脚本用 window 访问；const 不会自动挂到 window */
 window.ConvModule = ConvModule;
@@ -27398,6 +27762,236 @@ try { await GroupStoryModule.init(); } catch(e) { console.warn('groupstory init 
   </div>
 </div>
 </div>
+
+<!-- ════════ 小红书分享模块（自动注入）════════ -->
+<style>
+/* ============================================================================
+ *  ChillOS · 小红书卡片样式  xhs-card.css
+ *  调性：Playfair 标题 / Space Mono 标签 / 暖中性 / 高对比
+ *  颜色尽量用 currentColor + 少量变量，方便接 SKINS
+ * ========================================================================== */
+
+.xhs-card {
+  width: 240px;
+  border: 0.5px solid currentColor;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--xhs-bg, #FBFAF8);
+  color: var(--xhs-fg, #121212);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.06);
+  position: relative;
+}
+
+/* 🌟 用户发出的多 part 消息（含小红书卡片）整体靠右，跟气泡对齐 */
+#conv-screen .cv-msg-row.user .cv-bubbles-wrap { align-items: flex-end; }
+
+.xhs-card-tag {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: 'Space Mono', monospace;
+  font-size: 8px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  backdrop-filter: blur(4px);
+}
+
+.xhs-cover {
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  background: linear-gradient(135deg, #efe9e3, #e2dcd4);
+  overflow: hidden;
+}
+.xhs-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+/* 图裂时收起封面区，只留图文 */
+.xhs-cover--broken { aspect-ratio: auto; height: 0; }
+.xhs-cover--broken img { display: none; }
+
+.xhs-card-body { padding: 12px 14px 14px; }
+
+.xhs-card-title {
+  font-family: 'Playfair Display', serif;
+  font-style: italic;
+  font-weight: 600;
+  font-size: 0.95rem;
+  line-height: 1.3;
+  margin-bottom: 7px;
+  color: currentColor;
+}
+
+.xhs-card-text {
+  font-size: 0.72rem;
+  line-height: 1.55;
+  opacity: 0.82;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;        /* 摘要最多 4 行 */
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.xhs-card-meta {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 0.5px solid currentColor;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-family: 'Space Mono', monospace;
+  font-size: 0.6rem;
+  letter-spacing: 0.5px;
+  opacity: 0.7;
+}
+.xhs-meta-author { font-style: italic; }
+.xhs-meta-like { display: inline-flex; align-items: center; gap: 4px; }
+.xhs-meta-like i { font-size: 0.7rem; }
+
+/* 失败态 */
+.xhs-card--fail {
+  width: 240px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: left;
+}
+.xhs-fail-tag {
+  font-family: 'Space Mono', monospace;
+  font-size: 8px;
+  letter-spacing: 1px;
+  opacity: 0.5;
+}
+.xhs-fail-text { font-size: 0.72rem; line-height: 1.5; opacity: 0.7; }
+
+</style>
+<script>
+/* ============================================================================
+ *  ChillOS · 小红书分享模块  xhs-share.js   (适配你真实架构版)
+ *  你的架构：sendUserMsg() 把消息存进 DB(parts/content) → 角色读 DB → 卡片走 part 渲染
+ *  所以接法不是 hook 全局函数，而是在 sendUserMsg 存库前插一段（见文件末尾补丁）。
+ *
+ *  用前先改：EDGE_URL 填你函数地址（下面已按你截图的项目地址预填，核对一下）。
+ * ========================================================================== */
+(function () {
+  'use strict';
+
+  // 函数地址改为用户在「云端设置」里填，存于 DB.settings('xhs-edge-url')。
+  // 模块加载时异步读一次存进 _edgeUrl，用户保存时通过 XhsShare.setEdgeUrl 更新。
+  let _edgeUrl = '';
+  const USE_IMG_PROXY = true; // 封面图走函数代理绕防盗链
+
+  // 初始化：从设置读已保存的地址
+  (async function () {
+    try {
+      if (typeof DB !== 'undefined' && DB.settings) {
+        const v = await DB.settings.get('xhs-edge-url');
+        if (v) _edgeUrl = String(v).trim().replace(/\/$/, '');
+      }
+    } catch (e) {}
+  })();
+
+  const TARGET_DOMAINS = ['xiaohongshu.com', 'xhslink.com'];
+  const XHS = {};
+
+  XHS.setEdgeUrl = function (url) { _edgeUrl = String(url || '').trim().replace(/\/$/, ''); };
+  XHS.getEdgeUrl = function () { return _edgeUrl; };
+
+  function proxiedImg(rawUrl) {
+    if (!rawUrl) return '';
+    if (!USE_IMG_PROXY || !_edgeUrl) return rawUrl;
+    return _edgeUrl + '?img=' + encodeURIComponent(rawUrl);
+  }
+  XHS.proxiedImg = proxiedImg;
+
+  function hasXhsLink(text) {
+    return TARGET_DOMAINS.some(function (d) { return String(text || '').includes(d); });
+  }
+  XHS.hasXhsLink = hasXhsLink;
+
+  function firstUrl(text) {
+    var m = String(text || '').match(/https?:\/\/[^\s]+/);
+    return m ? m[0] : '';
+  }
+  XHS.firstUrl = firstUrl;
+
+  // ── 调 Edge Function 抓取 ──────────────────────────────────────────────
+  async function fetchPost(url) {
+    if (!_edgeUrl) {
+      return { ok: false, error: '未配置小红书解析函数地址（请在云端设置里填写）' };
+    }
+    try {
+      var resp = await fetch(_edgeUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: url }),
+      });
+      return await resp.json();
+    } catch (e) {
+      console.warn('[XHS] fetch 失败', e);
+      return { ok: false, error: String(e) };
+    }
+  }
+  XHS.fetchPost = fetchPost;
+
+  // ── 给 AI 看的隐藏上下文（拼进消息 content，模型读得到、卡片另 render）──
+  function buildHiddenContext(post) {
+    if (!post || !post.ok) return '';
+    var p = [];
+    if (post.title) p.push('标题:' + post.title);
+    if (post.author) p.push('作者:' + post.author);
+    if (post.content) p.push('正文:' + post.content);
+    if (post.likes != null) p.push('点赞:' + post.likes);
+    if (post.collects != null) p.push('收藏:' + post.collects);
+    return '<已解析的小红书帖子:' + p.join(' | ') + '>';
+  }
+  XHS.buildHiddenContext = buildHiddenContext;
+
+  // ── 卡片 HTML（复用你 cv-forum-share 视觉语言，挂在 xhs_share part）──
+  function buildCardHtml(post) {
+    var esc = function (s) {
+      return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    };
+    if (!post || !post.ok) {
+      return '<div class="xhs-card xhs-card--fail">' +
+        '<div class="xhs-fail-tag">XHS</div>' +
+        '<div class="xhs-fail-text">链接解析失败，可能内容受限或已删除</div></div>';
+    }
+    var cover = post.cover
+      ? '<div class="xhs-cover"><img src="' + esc(proxiedImg(post.cover)) + '" ' +
+        'referrerpolicy="no-referrer" loading="lazy" ' +
+        'onerror="this.parentElement.classList.add(\'xhs-cover--broken\')"/></div>' : '';
+    var like = post.likes != null
+      ? '<span class="xhs-meta-like"><i class="ph-fill ph-heart"></i> ' + esc(post.likes) + '</span>' : '';
+    var author = post.author ? '<span class="xhs-meta-author">@' + esc(post.author) + '</span>' : '';
+    return '<div class="xhs-card">' +
+        '<div class="xhs-card-tag"><i class="ph-fill ph-notebook"></i> 小红书</div>' +
+        cover +
+        '<div class="xhs-card-body">' +
+          (post.title ? '<div class="xhs-card-title">' + esc(post.title) + '</div>' : '') +
+          (post.content ? '<div class="xhs-card-text">' + esc(post.content) + '</div>' : '') +
+          '<div class="xhs-card-meta">' + author + like + '</div>' +
+        '</div></div>';
+  }
+  XHS.buildCardHtml = buildCardHtml;
+
+  window.XhsShare = XHS;
+  console.log('✅ [XHS] 小红书分享模块已载入');
+})();
+</script>
+<!-- ════════ /小红书分享模块 ════════ -->
 
 </body>
 </html>

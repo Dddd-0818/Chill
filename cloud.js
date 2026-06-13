@@ -159,6 +159,20 @@ const CloudModule = (() => {
             </div>
           </div>
 
+          <div class="form-section" style="margin-top:32px;">
+            <div class="section-title">小红书解析 / XHS Parser</div>
+            <div class="input-wrapper" style="margin-bottom:12px;">
+              <label class="label-text">解析函数地址 / XHS Edge URL</label>
+              <input type="text" id="xhs-edge-url" class="input-line" placeholder="https://xxxxx.supabase.co/functions/v1/xhs-fetch">
+            </div>
+            <button class="btn-outline" style="width:100%; border-color:var(--s-text-primary); color:var(--s-text-primary);" onclick="CloudModule.saveXhsUrl()">
+              <i class="ph-bold ph-floppy-disk"></i> 保存地址 / SAVE
+            </button>
+            <div class="cloud-hint-box" style="margin-top:16px;">
+              填入你自己部署的 xhs-fetch 函数地址。聊天里发小红书链接，角色会自动"读到"帖子并显示卡片。留空则关闭此功能。
+            </div>
+          </div>
+
           <!-- 🌟 新增：诊断日志入口 -->
           <div style="margin-top: 40px; margin-bottom: 20px; text-align: center;">
             <button class="btn-outline" style="border:none; font-size:0.65rem; font-family:'Space Mono', monospace; color:var(--s-text-secondary); text-decoration:underline;" onclick="CloudModule.openLogs()">
@@ -269,6 +283,10 @@ const CloudModule = (() => {
       if (savedUrl) document.getElementById('cloud-url').value = savedUrl;
       if (savedKey) document.getElementById('cloud-key').value = savedKey;
       if (savedVapid) document.getElementById('vapid-key').value = savedVapid;
+
+      const savedXhsUrl = await DB.settings.get('xhs-edge-url');
+      const xhsInput = document.getElementById('xhs-edge-url');
+      if (xhsInput && savedXhsUrl) xhsInput.value = savedXhsUrl;
       
       const autoToggle = document.getElementById('cloud-auto-backup');
       if (autoToggle) {
@@ -334,6 +352,19 @@ const CloudModule = (() => {
     _supabaseInstance = null; // 重置实例，确保下次调用使用新配置
     _log('info', '用户手动保存了云端节点配置');
     if (typeof Toast !== 'undefined') Toast.show('节点配置已保存 ✦');
+  }
+
+  // 🌟 保存小红书解析函数地址（存于 DB.settings，前端 XhsShare 模块会读取）
+  async function saveXhsUrl() {
+    try {
+      const url = (document.getElementById('xhs-edge-url').value || '').trim().replace(/\/$/, '');
+      await DB.settings.set('xhs-edge-url', url);
+      if (window.XhsShare && XhsShare.setEdgeUrl) XhsShare.setEdgeUrl(url);
+      _log('info', '用户保存了小红书解析函数地址', url || '(已清空)');
+      if (typeof Toast !== 'undefined') Toast.show(url ? '小红书地址已保存 ✦' : '已清空小红书地址');
+    } catch (e) {
+      _log('error', '保存小红书地址失败', e.message);
+    }
   }
 
   async function clearConnection() {
@@ -796,7 +827,7 @@ const CloudModule = (() => {
     });
   }
 
-  return { init, open, close, syncUp, syncDown, requestPushPermission, toggleAutoBackup, toggleCloudReply, changeBackupInterval, openLogs, saveConnection, clearConnection, submitCloudReply, fetchCloudReply, deleteCloudReply, pollDoneReplies };
+  return { init, open, close, syncUp, syncDown, requestPushPermission, toggleAutoBackup, toggleCloudReply, changeBackupInterval, openLogs, saveConnection, clearConnection, submitCloudReply, fetchCloudReply, deleteCloudReply, pollDoneReplies, saveXhsUrl };
 })();
 
 window.CloudModule = CloudModule;
