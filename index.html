@@ -4954,6 +4954,21 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
           </div>
         </div>
 
+        <!-- 🌟 存储瘦身 -->
+        <div class="form-section">
+          <div class="section-title">存储瘦身 / Slim Storage</div>
+          <button class="btn-outline" onclick="DataModule.slimStorage()" style="margin-bottom:12px;">
+            <i class="ph ph-broom"></i> 扫描并清理无用图片
+          </button>
+          <button class="btn-outline" onclick="DataModule.biggestStorage()" style="margin-bottom:12px;">
+            <i class="ph ph-chart-bar"></i> 大图排行（看谁最占地）
+          </button>
+          <div style="font-size:0.6rem; color:var(--s-text-secondary); line-height:1.5;">
+            * 自动找出「不被任何角色 / 聊天 / 页面引用」的图片（如删角色后残留的头像、撤回的生图）。<br>
+            * 扫描后逐张列出供你勾选，确认前可先打包备份，<b>绝不自动删除</b>。
+          </div>
+        </div>
+
         <button class="btn-danger" style="margin-top:12px; width:100%; padding:16px; border:1px solid rgba(217,58,58,0.3); color:#D93A3A; background:transparent; border-radius:12px; font-weight:600; cursor:pointer;" onclick="DataModule.clearAll()">
           清除全部数据
         </button>
@@ -9788,7 +9803,433 @@ const DataModule = (() => {
     }
   }
 
-  return { refresh, clearAll, exportData, exportPartial, importData, _showDangerConfirm };
+  // ============================================================
+  // 🌟 存储瘦身 — 扫描并清理「孤儿」图片资产
+  //    孤儿 = 不被任何角色 / 聊天 / 页面引用、也不在系统白名单里的图片
+  //    判定法：白名单(按现存实体 id 现算的 key) ∪ 全表序列化里出现过的 key
+  //    命中其一即视为「在用」，其余才允许清理。原则：宁可漏删，绝不误删。
+  // ============================================================
+
+  // 受保护的 key 前缀（桌面图标 / 空间相册等系统位，永不当孤儿）
+  const _SLIM_PROTECT_PREFIX = ['icon-', 'space-img-'];
+  // 受保护的固定单例 key
+  const _SLIM_PROTECT_FIXED = new Set([
+    'wallpaper', 'avatar', 'polaroid-front', 'polaroid-back', 'char-avatar-new'
+  ]);
+
+  function _slimIsProtected(key) {
+    if (_SLIM_PROTECT_FIXED.has(key)) return true;
+    return _SLIM_PROTECT_PREFIX.some(p => key.startsWith(p));
+  }
+
+  function _slimEsc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, m =>
+      ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[m]));
+  }
+
+  function _slimRelAge(ts) {
+    if (!ts) return '';
+    const d = Math.floor((Date.now() - ts) / 86400000);
+    if (d <= 0) return '今天';
+    if (d === 1) return '昨天';
+    if (d < 30) return d + ' 天前';
+    if (d < 365) return Math.floor(d / 30) + ' 个月前';
+    return Math.floor(d / 365) + ' 年前';
+  }
+
+  // 构建「引用索引」：现存实体现算的白名单 live + 全表序列化串 haystack
+  // 若任何一张表无法读取/序列化，则 throw —— 上层据此整体中止，绝不带着残缺判定去删
+  async function _buildReferenceIndex() {
+    const db = await _getRawDB();
+    const allStores = Array.from(db.objectStoreNames);
+
+    // 1) 现算白名单：每个「现存角色」的头像 / 对话壁纸 / 通话壁纸 / 查岗照
+    const live = new Set();
+    if (allStores.includes('characters')) {
+      const chars = await new Promise((res, rej) => {
+        const r = db.transaction('characters', 'readonly').objectStore('characters').getAll();
+        r.onsuccess = e => res(e.target.result || []);
+        r.onerror = e => rej(e.target.error);
+      });
+      for (const c of chars) {
+        const id = c && c.id;
+        if (id == null) continue;
+        live.add(`char-avatar-${id}`);
+        live.add(`conv-wallpaper-${id}`);
+        live.add(`call-wallpaper-${id}`);
+        live.add(`novel-face-${id}`);
+      }
+    }
+
+    // 2) 把 assets 以外的所有表序列化成一个大字符串。某 key 只要作为字段值
+    //    出现在任意记录里就算「在用」。replacer 跳过 Blob，避免把图本身塞进字符串。
+    const replacer = (k, v) => (v instanceof Blob || v instanceof ArrayBuffer) ? undefined : v;
+    let haystack = '';
+    for (const s of allStores) {
+      if (s === 'assets') continue;
+      const recs = await new Promise((res, rej) => {
+        const r = db.transaction(s, 'readonly').objectStore(s).getAll();
+        r.onsuccess = e => res(e.target.result || []);
+        r.onerror = e => rej(e.target.error);   // 单表失败 → 向上抛 → 整体中止
+      });
+      haystack += JSON.stringify(recs, replacer);
+    }
+
+    const records = await new Promise((res, rej) => {
+      const r = db.transaction('assets', 'readonly').objectStore('assets').getAll();
+      r.onsuccess = e => res(e.target.result || []);
+      r.onerror = e => rej(e.target.error);
+    });
+
+    return { live, haystack, records };
+  }
+
+  // 单张图是否「在用」：系统位 / 现存实体 / 任意记录引用，命中其一即在用
+  function _slimIsReferenced(key, live, haystack) {
+    if (_slimIsProtected(key)) return true;
+    if (live.has(key)) return true;
+    if (key && haystack.includes(key)) return true;
+    return false;
+  }
+
+  // 扫描：返回 { orphans, totalAssets, totalBytes, reclaimBytes }
+  async function _scanOrphans() {
+    const { live, haystack, records } = await _buildReferenceIndex();
+    const orphans = [];
+    let totalBytes = 0, reclaimBytes = 0;
+    for (const rec of records) {
+      const key = String(rec.key);
+      const size = rec.size || 0;
+      totalBytes += size;
+      if (_slimIsReferenced(key, live, haystack)) continue;
+      orphans.push({ key, size, mimeType: rec.mimeType, updatedAt: rec.updatedAt });
+      reclaimBytes += size;
+    }
+    orphans.sort((a, b) => b.size - a.size); // 大图排前，占地大户一眼可见
+    return { orphans, totalAssets: records.length, totalBytes, reclaimBytes };
+  }
+
+  // 扫描：所有图按体积降序，每张带 referenced 标记，取前 limit 张
+  async function _scanBiggest(limit = 30) {
+    const { live, haystack, records } = await _buildReferenceIndex();
+    let totalBytes = 0;
+    const all = records.map(rec => {
+      const key = String(rec.key);
+      const size = rec.size || 0;
+      totalBytes += size;
+      return { key, size, mimeType: rec.mimeType, updatedAt: rec.updatedAt,
+               referenced: _slimIsReferenced(key, live, haystack) };
+    });
+    all.sort((a, b) => b.size - a.size);
+    return { items: all.slice(0, limit), totalAssets: records.length, totalBytes };
+  }
+
+  // 缩略图 ObjectURL 生命周期管理（保护 iOS WKWebView 内存）
+  let _slimUrls = new Set();
+  let _slimObserver = null;
+  function _slimRevokeAll() {
+    for (const u of _slimUrls) { try { URL.revokeObjectURL(u); } catch (e) {} }
+    _slimUrls.clear();
+    if (_slimObserver) { try { _slimObserver.disconnect(); } catch (e) {} _slimObserver = null; }
+  }
+
+  async function slimStorage() {
+    Toast.show('正在扫描图片引用关系…', 3000);
+    let result;
+    try {
+      result = await _scanOrphans();
+    } catch (e) {
+      console.error('slim scan error', e);
+      Toast.show('扫描未完成，为安全起见已中止，未删除任何数据');
+      return;
+    }
+    const { orphans, totalAssets, totalBytes, reclaimBytes } = result;
+    if (orphans.length === 0) {
+      Toast.show('没有发现可清理的图片，存储很干净 ✨');
+      return;
+    }
+    _openSlimModal(orphans, totalAssets, totalBytes, reclaimBytes);
+  }
+
+  function _openSlimModal(orphans, totalAssets, totalBytes, reclaimBytes) {
+    const selected = new Set(orphans.map(o => o.key)); // 默认全选
+
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay show';
+    overlay.style.cssText = 'z-index:9999;align-items:center;justify-content:center;display:flex;background:rgba(0,0,0,0.6);backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);';
+    overlay.innerHTML = `
+      <div style="background:var(--bg-card,#fff);border:0.5px solid rgba(18,18,18,0.1);border-radius:28px;padding:24px 20px 20px;box-shadow:0 40px 80px rgba(0,0,0,0.2);max-width:380px;width:92%;max-height:82vh;display:flex;flex-direction:column;position:relative;overflow:hidden;">
+        <div style="position:absolute;top:-34px;right:-12px;font-family:'Playfair Display',serif;font-size:180px;font-style:italic;font-weight:300;color:rgba(18,18,18,0.04);line-height:1;pointer-events:none;z-index:0;">S</div>
+        <div style="position:relative;z-index:1;text-align:center;">
+          <h2 style="font-family:'Playfair Display',serif;font-size:1.7rem;font-weight:500;font-style:italic;color:var(--text-main,#121212);line-height:1.2;">Slim Storage</h2>
+          <p style="font-size:0.72rem;color:var(--text-sub,#999);margin-top:6px;line-height:1.6;">找到 <b style="color:var(--text-main,#121212);">${orphans.length}</b> 张未被任何角色 / 聊天 / 页面引用的图片<br>可回收 <b style="color:#D93A3A;">${_fmtBytes(reclaimBytes)}</b> · 当前共 ${_fmtBytes(totalBytes)} / ${totalAssets} 项</p>
+        </div>
+        <div style="position:relative;z-index:1;display:flex;align-items:center;justify-content:space-between;margin:16px 2px 8px;">
+          <button id="slim-toggle-all" style="background:transparent;border:none;font-size:0.7rem;color:var(--text-main,#121212);font-weight:600;cursor:pointer;text-decoration:underline;text-underline-offset:3px;">全不选</button>
+          <label style="display:flex;align-items:center;gap:6px;font-size:0.7rem;color:var(--text-sub,#777);cursor:pointer;user-select:none;">
+            <input type="checkbox" id="slim-backup" checked style="accent-color:#121212;width:14px;height:14px;">删除前打包备份
+          </label>
+        </div>
+        <div id="slim-list" style="position:relative;z-index:1;overflow-y:auto;flex:1;margin:0 -4px;padding:0 4px;-webkit-overflow-scrolling:touch;"></div>
+        <div style="position:relative;z-index:1;display:flex;gap:12px;margin-top:16px;">
+          <button id="slim-cancel" style="flex:1;padding:14px 0;border-radius:100px;background:transparent;border:0.5px solid rgba(18,18,18,0.2);color:var(--text-main,#121212);font-weight:600;font-size:0.85rem;cursor:pointer;">取消</button>
+          <button id="slim-confirm" style="flex:1.4;padding:14px 0;border-radius:100px;background:#D93A3A;border:none;color:#fff;font-weight:600;font-size:0.85rem;cursor:pointer;box-shadow:0 8px 20px rgba(217,58,58,0.2);">清理选中 (${selected.size})</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+
+    const listEl = overlay.querySelector('#slim-list');
+    const confirmBtn = overlay.querySelector('#slim-confirm');
+    const toggleAllBtn = overlay.querySelector('#slim-toggle-all');
+
+    function _syncConfirm() {
+      confirmBtn.textContent = `清理选中 (${selected.size})`;
+      confirmBtn.style.opacity = selected.size ? '1' : '0.45';
+      confirmBtn.style.pointerEvents = selected.size ? 'auto' : 'none';
+    }
+
+    // 懒加载缩略图：进入视口才生成 ObjectURL，离开即回收
+    _slimObserver = new IntersectionObserver(entries => {
+      for (const en of entries) {
+        const img = en.target;
+        const key = img.dataset.key;
+        if (en.isIntersecting) {
+          if (img.dataset.loaded) continue;
+          img.dataset.loaded = '1';
+          DB.assets.get(key).then(rec => {
+            if (!rec || !rec.blob) return;
+            const u = URL.createObjectURL(rec.blob);
+            _slimUrls.add(u);
+            img.src = u;
+            img.dataset.url = u;
+          }).catch(() => {});
+        } else if (img.dataset.url) {
+          try { URL.revokeObjectURL(img.dataset.url); } catch (e) {}
+          _slimUrls.delete(img.dataset.url);
+          img.removeAttribute('src');
+          img.dataset.url = '';
+          img.dataset.loaded = '';
+        }
+      }
+    }, { root: listEl, rootMargin: '150px' });
+
+    for (const o of orphans) {
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;align-items:center;gap:12px;padding:10px 4px;border-bottom:0.5px solid rgba(18,18,18,0.06);';
+      row.innerHTML = `
+        <input type="checkbox" checked style="accent-color:#121212;width:16px;height:16px;flex-shrink:0;">
+        <div style="width:44px;height:44px;border-radius:10px;background:rgba(18,18,18,0.05);flex-shrink:0;overflow:hidden;display:flex;align-items:center;justify-content:center;">
+          <img data-key="${_slimEsc(o.key)}" style="width:100%;height:100%;object-fit:cover;" alt="">
+        </div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:0.72rem;color:var(--text-main,#121212);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:'Space Mono',monospace;">${_slimEsc(o.key)}</div>
+          <div style="font-size:0.62rem;color:var(--text-sub,#aaa);margin-top:2px;">${_fmtBytes(o.size)} · ${_slimRelAge(o.updatedAt)}</div>
+        </div>
+      `;
+      const cb = row.querySelector('input[type=checkbox]');
+      cb.addEventListener('change', () => {
+        if (cb.checked) selected.add(o.key); else selected.delete(o.key);
+        _syncConfirm();
+      });
+      listEl.appendChild(row);
+      _slimObserver.observe(row.querySelector('img'));
+    }
+
+    toggleAllBtn.addEventListener('click', () => {
+      const allSelected = selected.size === orphans.length;
+      listEl.querySelectorAll('input[type=checkbox]').forEach(b => { b.checked = !allSelected; });
+      selected.clear();
+      if (!allSelected) orphans.forEach(o => selected.add(o.key));
+      toggleAllBtn.textContent = allSelected ? '全选' : '全不选';
+      _syncConfirm();
+    });
+
+    overlay.querySelector('#slim-cancel').addEventListener('click', () => {
+      _slimRevokeAll();
+      overlay.remove();
+    });
+
+    confirmBtn.addEventListener('click', async () => {
+      if (!selected.size) return;
+      const doBackup = overlay.querySelector('#slim-backup').checked;
+      const keys = orphans.filter(o => selected.has(o.key)).map(o => o.key);
+      _slimRevokeAll();
+      overlay.remove();
+      await _executeSlim(keys, doBackup);
+    });
+  }
+
+  async function _executeSlim(keys, doBackup) {
+    try {
+      if (doBackup) {
+        Toast.show('正在打包备份…', 3000);
+        const fflateAPI = typeof fflate !== 'undefined' ? fflate : window.fflate;
+        const zipObj = {};
+        const manifest = [];
+        for (const key of keys) {
+          const rec = await DB.assets.get(key);
+          if (rec && rec.blob) {
+            const mt = rec.mimeType || '';
+            const ext = mt.includes('png') ? 'png' : mt.includes('webp') ? 'webp' : mt.includes('gif') ? 'gif' : 'jpg';
+            const buf = await rec.blob.arrayBuffer();
+            zipObj[`${key}.${ext}`] = new Uint8Array(buf);
+            manifest.push({ key, mimeType: rec.mimeType, size: rec.size });
+          }
+        }
+        zipObj['_manifest.json'] = fflateAPI.strToU8(JSON.stringify(
+          { note: 'ChillOS 瘦身清理前的孤儿图片备份', count: manifest.length, items: manifest }, null, 2));
+        await new Promise((res, rej) => {
+          fflateAPI.zip(zipObj, { level: 0 }, (err, zipped) => {
+            if (err) return rej(err);
+            const blob = new Blob([zipped], { type: 'application/zip' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+            a.href = url; a.download = `ChillOS_Orphans_${dateStr}.zip`; a.click();
+            URL.revokeObjectURL(url); res();
+          });
+        });
+      }
+
+      Toast.show('正在清理…', 3000);
+      let done = 0;
+      for (const key of keys) {
+        try { await Assets.remove(key); done++; } catch (e) { console.warn('slim remove fail', key, e); }
+      }
+      await refresh();
+      Toast.show(`已清理 ${done} 张图片 🧹`);
+    } catch (e) {
+      console.error('executeSlim error', e);
+      Toast.show('清理过程出错：' + (e.message || e));
+    }
+  }
+
+  // ============================================================
+  // 🌟 大图排行 — 按体积列出最占地的图片，标注「在用 / 可清理」
+  //    在用的图删了会破坏角色/聊天，故只展示；孤儿可就地勾选清理。
+  // ============================================================
+  async function biggestStorage() {
+    Toast.show('正在统计图片体积…', 3000);
+    let result;
+    try {
+      result = await _scanBiggest(30);
+    } catch (e) {
+      console.error('biggest scan error', e);
+      Toast.show('统计未完成，请稍后再试');
+      return;
+    }
+    const { items, totalAssets, totalBytes } = result;
+    if (!items.length) {
+      Toast.show('当前没有任何图片资产');
+      return;
+    }
+    _openBiggestModal(items, totalAssets, totalBytes);
+  }
+
+  function _openBiggestModal(items, totalAssets, totalBytes) {
+    const cleanable = items.filter(o => !o.referenced);
+    const selected = new Set(); // 排行里默认不选，避免误删（孤儿可手动勾）
+
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay show';
+    overlay.style.cssText = 'z-index:9999;align-items:center;justify-content:center;display:flex;background:rgba(0,0,0,0.6);backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);';
+    overlay.innerHTML = `
+      <div style="background:var(--bg-card,#fff);border:0.5px solid rgba(18,18,18,0.1);border-radius:28px;padding:24px 20px 20px;box-shadow:0 40px 80px rgba(0,0,0,0.2);max-width:380px;width:92%;max-height:82vh;display:flex;flex-direction:column;position:relative;overflow:hidden;">
+        <div style="position:absolute;top:-34px;right:-12px;font-family:'Playfair Display',serif;font-size:180px;font-style:italic;font-weight:300;color:rgba(18,18,18,0.04);line-height:1;pointer-events:none;z-index:0;">B</div>
+        <div style="position:relative;z-index:1;text-align:center;">
+          <h2 style="font-family:'Playfair Display',serif;font-size:1.7rem;font-weight:500;font-style:italic;color:var(--text-main,#121212);line-height:1.2;">Biggest Files</h2>
+          <p style="font-size:0.72rem;color:var(--text-sub,#999);margin-top:6px;line-height:1.6;">最占地的 <b style="color:var(--text-main,#121212);">${items.length}</b> 张图片 · 共 ${_fmtBytes(totalBytes)} / ${totalAssets} 项<br><span style="color:#3a7d5a;">●</span> 在用（删会破坏角色/聊天） &nbsp; <span style="color:#D93A3A;">●</span> 可清理</p>
+        </div>
+        <div id="big-list" style="position:relative;z-index:1;overflow-y:auto;flex:1;margin:14px -4px 0;padding:0 4px;-webkit-overflow-scrolling:touch;"></div>
+        <div style="position:relative;z-index:1;display:flex;gap:12px;margin-top:16px;">
+          <button id="big-close" style="flex:1;padding:14px 0;border-radius:100px;background:transparent;border:0.5px solid rgba(18,18,18,0.2);color:var(--text-main,#121212);font-weight:600;font-size:0.85rem;cursor:pointer;">关闭</button>
+          <button id="big-clean" style="flex:1.4;padding:14px 0;border-radius:100px;background:#D93A3A;border:none;color:#fff;font-weight:600;font-size:0.85rem;cursor:pointer;box-shadow:0 8px 20px rgba(217,58,58,0.2);opacity:0.45;pointer-events:none;">清理选中 (0)</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+
+    const listEl = overlay.querySelector('#big-list');
+    const cleanBtn = overlay.querySelector('#big-clean');
+
+    function _syncClean() {
+      cleanBtn.textContent = `清理选中 (${selected.size})`;
+      cleanBtn.style.opacity = selected.size ? '1' : '0.45';
+      cleanBtn.style.pointerEvents = selected.size ? 'auto' : 'none';
+    }
+
+    _slimObserver = new IntersectionObserver(entries => {
+      for (const en of entries) {
+        const img = en.target;
+        const key = img.dataset.key;
+        if (en.isIntersecting) {
+          if (img.dataset.loaded) continue;
+          img.dataset.loaded = '1';
+          DB.assets.get(key).then(rec => {
+            if (!rec || !rec.blob) return;
+            const u = URL.createObjectURL(rec.blob);
+            _slimUrls.add(u);
+            img.src = u;
+            img.dataset.url = u;
+          }).catch(() => {});
+        } else if (img.dataset.url) {
+          try { URL.revokeObjectURL(img.dataset.url); } catch (e) {}
+          _slimUrls.delete(img.dataset.url);
+          img.removeAttribute('src');
+          img.dataset.url = '';
+          img.dataset.loaded = '';
+        }
+      }
+    }, { root: listEl, rootMargin: '150px' });
+
+    items.forEach((o, idx) => {
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:10px 4px;border-bottom:0.5px solid rgba(18,18,18,0.06);';
+      const tag = o.referenced
+        ? '<span style="color:#3a7d5a;font-size:0.6rem;font-weight:600;">在用</span>'
+        : '<span style="color:#D93A3A;font-size:0.6rem;font-weight:600;">可清理</span>';
+      const cbHtml = o.referenced
+        ? '<div style="width:16px;flex-shrink:0;"></div>'
+        : '<input type="checkbox" style="accent-color:#121212;width:16px;height:16px;flex-shrink:0;">';
+      row.innerHTML = `
+        <span style="font-family:'Space Mono',monospace;font-size:0.62rem;color:var(--text-sub,#bbb);width:18px;text-align:right;flex-shrink:0;">${idx + 1}</span>
+        ${cbHtml}
+        <div style="width:44px;height:44px;border-radius:10px;background:rgba(18,18,18,0.05);flex-shrink:0;overflow:hidden;display:flex;align-items:center;justify-content:center;">
+          <img data-key="${_slimEsc(o.key)}" style="width:100%;height:100%;object-fit:cover;" alt="">
+        </div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:0.72rem;color:var(--text-main,#121212);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:'Space Mono',monospace;">${_slimEsc(o.key)}</div>
+          <div style="font-size:0.62rem;color:var(--text-sub,#aaa);margin-top:2px;"><b style="color:var(--text-main,#121212);">${_fmtBytes(o.size)}</b> · ${_slimRelAge(o.updatedAt)} · ${tag}</div>
+        </div>
+      `;
+      const cb = row.querySelector('input[type=checkbox]');
+      if (cb) {
+        cb.addEventListener('change', () => {
+          if (cb.checked) selected.add(o.key); else selected.delete(o.key);
+          _syncClean();
+        });
+      }
+      listEl.appendChild(row);
+      _slimObserver.observe(row.querySelector('img'));
+    });
+
+    overlay.querySelector('#big-close').addEventListener('click', () => {
+      _slimRevokeAll();
+      overlay.remove();
+    });
+
+    cleanBtn.addEventListener('click', async () => {
+      if (!selected.size) return;
+      const keys = [...selected];
+      _slimRevokeAll();
+      overlay.remove();
+      // 排行里清理的也默认先打包备份，安全一致
+      await _executeSlim(keys, true);
+    });
+  }
+
+  return { refresh, clearAll, exportData, exportPartial, importData, slimStorage, biggestStorage, _showDangerConfirm };
 })();
 
 // ============================================================
