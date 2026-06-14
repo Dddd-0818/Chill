@@ -8948,6 +8948,7 @@ const ApiHelper = (() => {
   async function chatWithTools(apiProfile, messages, tools, signal, onToolStart, onToolEnd, maxRounds = 5) {
     const url = buildUrl(apiProfile.url, 'chat');
     const msgs = [...messages];
+    let lastContent = ''; // 留住模型最后说过的一句人话,兜底时不至于空手而归
 
     for (let round = 0; round < maxRounds; round++) {
       const body = {
@@ -8969,12 +8970,25 @@ const ApiHelper = (() => {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       const msg = data.choices?.[0]?.message;
-      if (!msg) return '';
+      if (!msg) return lastContent || '';
 
       // 模型没要调工具 → 直接返回最终回复
       if (!msg.tool_calls || !msg.tool_calls.length) {
-        return msg.content ?? '';
+        return msg.content ?? lastContent ?? '';
       }
+
+      // 有些模型边带话边调工具,先把这句留住
+      if (msg.content) lastContent = msg.content;
+
+      // 诊断:每轮在调哪些工具(死循环时直接看这行就知道卡在哪)
+      console.warn(`[chatWithTools] round ${round} 模型要求调工具:`,
+        msg.tool_calls.map(c => c.function?.name).join(', '));
+
+      // 关键修复:部分中转返回的 tool_call 缺 id,回填时 tool_call_id 对不上,
+      //          模型会认为工具没执行 → 反复重调 → 跑满轮次。这里给它补一个。
+      msg.tool_calls.forEach((c, i) => {
+        if (!c.id) c.id = `call_${round}_${i}`;
+      });
 
       // 模型要调工具:先把它这条 assistant 消息原样放回历史
       msgs.push(msg);
@@ -9002,8 +9016,29 @@ const ApiHelper = (() => {
         try { onToolEnd(); } catch(_) {}
       }
     }
-    // 超过循环上限的兜底
-    return '(工具调用轮次过多,已中止)';
+
+    // 跑满轮次的兜底:强制模型不许再调工具,必须出一句文字收尾,
+    // 而不是甩给用户一个冷冰冰的"轮次过多"气泡。
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiProfile.key}` },
+        body: JSON.stringify({
+          model: apiProfile.model,
+          messages: msgs,
+          temperature: parseFloat(apiProfile.temp),
+          tool_choice: 'none',
+        }),
+        signal,
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const c = data.choices?.[0]?.message?.content;
+        if (c) return c;
+      }
+    } catch (_) {}
+
+    return lastContent || '(工具调用轮次过多,已中止)';
   }
 
   return { buildUrl, fetchModels, chatCompletion, chatWithTools };
@@ -9062,12 +9097,19 @@ ToolRegistry.register(
     },
   },
   async ({ city }) => {
+    if (!city) return '没有指定要查询的城市。';
     // 1. 城市名 → 经纬度(取多个候选,优先人口最多的,避开冷门同名地点)
-    const geoRes = await fetch(
-      `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=10`
-    );
-    const geo = await geoRes.json();
-    const list = geo.results || [];
+    let list;
+    try {
+      const geoRes = await fetch(
+        `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=10`
+      );
+      if (!geoRes.ok) return `查询 ${city} 天气失败(地理服务 HTTP ${geoRes.status}),请直接照常回复,无需重复调用。`;
+      const geo = await geoRes.json();
+      list = geo.results || [];
+    } catch (e) {
+      return `查询 ${city} 天气失败(网络异常),请直接照常回复,无需重复调用本工具。`;
+    }
     if (!list.length) return `找不到城市:${city}`;
     // 有人口数据的里挑最大的;都没有就退回第一个
     const withPop = list.filter(p => typeof p.population === 'number');
@@ -9076,11 +9118,17 @@ ToolRegistry.register(
       : list[0];
 
     // 2. 经纬度 → 当前天气
-    const wRes = await fetch(
-      `https://api.open-meteo.com/v1/forecast?latitude=${place.latitude}&longitude=${place.longitude}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m`
-    );
-    const w = await wRes.json();
-    const cur = w.current;
+    let cur;
+    try {
+      const wRes = await fetch(
+        `https://api.open-meteo.com/v1/forecast?latitude=${place.latitude}&longitude=${place.longitude}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m`
+      );
+      if (!wRes.ok) return `获取 ${city} 天气失败(HTTP ${wRes.status}),请直接照常回复,无需重复调用。`;
+      const w = await wRes.json();
+      cur = w.current;
+    } catch (e) {
+      return `获取 ${city} 天气失败(网络异常),请直接照常回复,无需重复调用本工具。`;
+    }
     if (!cur) return `获取 ${city} 天气失败`;
 
     const codeMap = {
@@ -9841,11 +9889,16 @@ const DataModule = (() => {
   //    命中其一即视为「在用」，其余才允许清理。原则：宁可漏删，绝不误删。
   // ============================================================
 
-  // 受保护的 key 前缀（桌面图标 / 空间相册等系统位，永不当孤儿）
-  const _SLIM_PROTECT_PREFIX = ['icon-', 'space-img-'];
+  // 受保护的 key 前缀（系统位 / 身份头像，永不当孤儿）
+  //   icon- 桌面图标 / space-img- 空间相册
+  //   persona-avatar- 人设头像 / hero-avatar- 动态主页头像
+  //   注意：char-avatar- 不在此列 —— 在世角色的头像由 live 白名单按现存 id 精确保护，
+  //         已删角色的残留头像则应允许回收，故不能用前缀一刀切。
+  const _SLIM_PROTECT_PREFIX = ['icon-', 'space-img-', 'persona-avatar-', 'hero-avatar-'];
   // 受保护的固定单例 key
   const _SLIM_PROTECT_FIXED = new Set([
-    'wallpaper', 'avatar', 'polaroid-front', 'polaroid-back', 'char-avatar-new'
+    'wallpaper', 'avatar', 'polaroid-front', 'polaroid-back', 'char-avatar-new',
+    'persona-avatar-preview' // 人设头像编辑临时位
   ]);
 
   function _slimIsProtected(key) {
@@ -9909,6 +9962,26 @@ const DataModule = (() => {
       if (Array.isArray(gcList)) for (const id of gcList) { if (id != null) validCtx.add(String(id)); }
     } catch (e) {}
 
+    // 1b) 身份头像类显式纳入白名单（不靠 haystack 模糊匹配，避免误判可清理）
+    //     - 动态主页：global-profile.avatarKey / bgKey
+    //     - 用户人设：user-personas[].imgKey
+    try {
+      const prof = await DB.settings.get('global-profile');
+      if (prof) {
+        if (prof.avatarKey) live.add(String(prof.avatarKey));
+        if (prof.bgKey) live.add(String(prof.bgKey));
+      }
+    } catch (e) {}
+    try {
+      const personas = await DB.settings.get('user-personas');
+      if (Array.isArray(personas)) {
+        for (const p of personas) {
+          if (p && p.imgKey) live.add(String(p.imgKey));
+          if (p && p.img) live.add(String(p.img)); // 兼容旧字段名
+        }
+      }
+    } catch (e) {}
+
     // 2) 把 assets 以外的所有表序列化成一个大字符串。某 key 只要作为字段值
     //    出现在任意记录里就算「在用」。replacer 跳过 Blob，避免把图本身塞进字符串。
     //    messages 表特殊处理：只纳入「归属仍存在」的消息，残留孤儿消息不算有效引用。
@@ -9939,6 +10012,27 @@ const DataModule = (() => {
     return false;
   }
 
+  // 「大图」体积闸门：只有不小于此值的在用图，才允许按时间清理。
+  //   聊天/剧情配图普遍 1MB+（占地大户），其它地方（世界书/相册等）多为 KB 级。
+  //   用体积兜底，天然把零碎小图挡在可删名单之外，省去逐类型甄别、更不易误删。
+  const _SLIM_BIG_BYTES = 0.5 * 1024 * 1024; // 0.5 MB
+
+  // 单张图的清理分类 —— 删除安全性的唯一判定口径：
+  //   'protected' 头像/面具/系统位/壁纸 → 永不可删（不论多旧多大）
+  //   'orphan'    无人引用的孤儿(含已删角色残留) → 无条件可删
+  //   'content'   在用的大配图(聊天/剧情图) → 够旧才可删，删了只裂图不丢字
+  //   'small'     在用的小图(KB 级) → 不值当删，按受保护处理，不进可删名单
+  function _slimCategory(key, size, live, haystack) {
+    // 受保护身份位：前缀白名单 + 现算 live 白名单（头像/壁纸/人设/主页等）
+    if (_slimIsProtected(key)) return 'protected';
+    if (live.has(key)) return 'protected';
+    // 走到这里说明不是身份位。看是否仍被任意记录引用。
+    const referenced = !!(key && haystack.includes(key));
+    if (!referenced) return 'orphan';          // 没人用 → 孤儿，随便删
+    if (size >= _SLIM_BIG_BYTES) return 'content'; // 在用大图 → 够旧可删
+    return 'small';                            // 在用小图 → 不动它
+  }
+
   // 扫描：返回 { orphans, totalAssets, totalBytes, reclaimBytes }
   async function _scanOrphans() {
     const { live, haystack, records } = await _buildReferenceIndex();
@@ -9956,8 +10050,10 @@ const DataModule = (() => {
     return { orphans, totalAssets: records.length, totalBytes, reclaimBytes };
   }
 
-  // 扫描：所有图按体积降序，每张带 referenced 标记，取前 limit 张
-  async function _scanBiggest(limit = 30) {
+  // 扫描：所有图按体积降序，每张带 referenced 标记
+  //   limit 仅用于「默认展示张数」，但返回全量 items，供面板内时间筛选/全选使用
+  //   （行内图是 IntersectionObserver 懒加载的，全量渲染也不会爆内存）
+  async function _scanBiggest(limit = 0) {
     const { live, haystack, records } = await _buildReferenceIndex();
     let totalBytes = 0;
     const all = records.map(rec => {
@@ -9965,10 +10061,12 @@ const DataModule = (() => {
       const size = rec.size || 0;
       totalBytes += size;
       return { key, size, mimeType: rec.mimeType, updatedAt: rec.updatedAt,
-               referenced: _slimIsReferenced(key, live, haystack) };
+               referenced: _slimIsReferenced(key, live, haystack),
+               category: _slimCategory(key, size, live, haystack) };
     });
     all.sort((a, b) => b.size - a.size);
-    return { items: all.slice(0, limit), totalAssets: records.length, totalBytes };
+    const items = limit > 0 ? all.slice(0, limit) : all;
+    return { items, totalAssets: records.length, totalBytes };
   }
 
   // 缩略图 ObjectURL 生命周期管理（保护 iOS WKWebView 内存）
@@ -10160,7 +10258,7 @@ const DataModule = (() => {
     Toast.show('正在统计图片体积…', 3000);
     let result;
     try {
-      result = await _scanBiggest(30);
+      result = await _scanBiggest(0); // 0 = 全量，面板内按时间筛选/全选
     } catch (e) {
       console.error('biggest scan error', e);
       Toast.show('统计未完成，请稍后再试');
@@ -10175,8 +10273,14 @@ const DataModule = (() => {
   }
 
   function _openBiggestModal(items, totalAssets, totalBytes) {
-    const cleanable = items.filter(o => !o.referenced);
-    const selected = new Set(); // 排行里默认不选，避免误删（孤儿可手动勾）
+    const selected = new Set(); // 默认不选，避免误删；用户主动勾或「全选」才入选
+    let _ageFilter = 0; // 0=全部, 7/14/30 = 仅显示「早于 N 天前」的图
+
+    // 这张图是否「可被删除」：孤儿无条件可删；大图内容图可删；
+    //   protected（头像/面具/系统位）与 small（在用小图）一律不可删。
+    function _isDeletable(o) {
+      return o.category === 'orphan' || o.category === 'content';
+    }
 
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay show';
@@ -10186,9 +10290,28 @@ const DataModule = (() => {
         <div style="position:absolute;top:-34px;right:-12px;font-family:'Playfair Display',serif;font-size:180px;font-style:italic;font-weight:300;color:rgba(18,18,18,0.04);line-height:1;pointer-events:none;z-index:0;">B</div>
         <div style="position:relative;z-index:1;text-align:center;">
           <h2 style="font-family:'Playfair Display',serif;font-size:1.7rem;font-weight:500;font-style:italic;color:var(--text-main,#121212);line-height:1.2;">Biggest Files</h2>
-          <p style="font-size:0.72rem;color:var(--text-sub,#999);margin-top:6px;line-height:1.6;">最占地的 <b style="color:var(--text-main,#121212);">${items.length}</b> 张图片 · 共 ${_fmtBytes(totalBytes)} / ${totalAssets} 项<br><span style="color:#3a7d5a;">●</span> 在用（删会破坏角色/聊天） &nbsp; <span style="color:#D93A3A;">●</span> 可清理</p>
+          <p style="font-size:0.72rem;color:var(--text-sub,#999);margin-top:6px;line-height:1.6;">共 <b style="color:var(--text-main,#121212);">${items.length}</b> 张图片 · ${_fmtBytes(totalBytes)} / ${totalAssets} 项<br><span style="color:#3a7d5a;">●</span> 保护(头像/小图) &nbsp; <span style="color:#c08400;">●</span> 大图可删 &nbsp; <span style="color:#D93A3A;">●</span> 孤儿可删</p>
         </div>
-        <div id="big-list" style="position:relative;z-index:1;overflow-y:auto;flex:1;margin:14px -4px 0;padding:0 4px;-webkit-overflow-scrolling:touch;"></div>
+
+        <!-- 时间筛选 + 全选 -->
+        <div style="position:relative;z-index:1;margin-top:14px;">
+          <div style="display:flex;gap:6px;background:rgba(18,18,18,0.04);border-radius:100px;padding:3px;">
+            ${[['全部',0],['7天前',7],['14天前',14],['30天前',30]].map(([t,v])=>
+              `<button class="big-age" data-age="${v}" style="flex:1;border:none;background:${v===0?'var(--bg-card,#fff)':'transparent'};color:var(--text-main,#121212);font-size:0.66rem;font-weight:600;padding:7px 0;border-radius:100px;cursor:pointer;box-shadow:${v===0?'0 1px 3px rgba(0,0,0,0.08)':'none'};transition:all 0.15s;">${t}</button>`
+            ).join('')}
+          </div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px;">
+            <span id="big-count" style="font-size:0.64rem;color:var(--text-sub,#aaa);"></span>
+            <button id="big-selall" style="font-size:0.66rem;font-weight:600;color:#121212;background:transparent;border:0.5px solid rgba(18,18,18,0.2);border-radius:100px;padding:5px 14px;cursor:pointer;">全选当前</button>
+          </div>
+        </div>
+
+        <!-- 在用警示（选中在用图时浮现） -->
+        <div id="big-warn" style="display:none;position:relative;z-index:1;margin-top:10px;font-size:0.64rem;line-height:1.5;color:#9a6b00;background:rgba(255,196,0,0.1);border:0.5px solid rgba(255,196,0,0.3);border-radius:12px;padding:9px 12px;">
+          ⚠️ 选中里含 <b id="big-warn-n">0</b> 张仍在用的大图：清理后对应故事/聊天里的图会变成裂图，但<b>文字记录不受影响</b>。确认要删旧图就继续。
+        </div>
+
+        <div id="big-list" style="position:relative;z-index:1;overflow-y:auto;flex:1;margin:12px -4px 0;padding:0 4px;-webkit-overflow-scrolling:touch;"></div>
         <div style="position:relative;z-index:1;display:flex;gap:12px;margin-top:16px;">
           <button id="big-close" style="flex:1;padding:14px 0;border-radius:100px;background:transparent;border:0.5px solid rgba(18,18,18,0.2);color:var(--text-main,#121212);font-weight:600;font-size:0.85rem;cursor:pointer;">关闭</button>
           <button id="big-clean" style="flex:1.4;padding:14px 0;border-radius:100px;background:#D93A3A;border:none;color:#fff;font-weight:600;font-size:0.85rem;cursor:pointer;box-shadow:0 8px 20px rgba(217,58,58,0.2);opacity:0.45;pointer-events:none;">清理选中 (0)</button>
@@ -10199,11 +10322,26 @@ const DataModule = (() => {
 
     const listEl = overlay.querySelector('#big-list');
     const cleanBtn = overlay.querySelector('#big-clean');
+    const countEl = overlay.querySelector('#big-count');
+    const warnEl = overlay.querySelector('#big-warn');
+    const warnNEl = overlay.querySelector('#big-warn-n');
+
+    // 当前时间筛选下「可见」的图
+    function _visibleItems() {
+      if (!_ageFilter) return items;
+      const cut = Date.now() - _ageFilter * 86400000;
+      return items.filter(o => o.updatedAt && o.updatedAt < cut);
+    }
 
     function _syncClean() {
       cleanBtn.textContent = `清理选中 (${selected.size})`;
       cleanBtn.style.opacity = selected.size ? '1' : '0.45';
       cleanBtn.style.pointerEvents = selected.size ? 'auto' : 'none';
+      // 统计选中里有几张是「在用大图」(content) → 决定是否亮裂图警示
+      let inUse = 0;
+      for (const o of items) if (selected.has(o.key) && o.category === 'content') inUse++;
+      if (inUse > 0) { warnEl.style.display = 'block'; warnNEl.textContent = inUse; }
+      else warnEl.style.display = 'none';
     }
 
     _slimObserver = new IntersectionObserver(entries => {
@@ -10230,35 +10368,89 @@ const DataModule = (() => {
       }
     }, { root: listEl, rootMargin: '150px' });
 
-    items.forEach((o, idx) => {
-      const row = document.createElement('div');
-      row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:10px 4px;border-bottom:0.5px solid rgba(18,18,18,0.06);';
-      const tag = o.referenced
-        ? '<span style="color:#3a7d5a;font-size:0.6rem;font-weight:600;">在用</span>'
-        : '<span style="color:#D93A3A;font-size:0.6rem;font-weight:600;">可清理</span>';
-      const cbHtml = o.referenced
-        ? '<div style="width:16px;flex-shrink:0;"></div>'
-        : '<input type="checkbox" style="accent-color:#121212;width:16px;height:16px;flex-shrink:0;">';
-      row.innerHTML = `
-        <span style="font-family:'Space Mono',monospace;font-size:0.62rem;color:var(--text-sub,#bbb);width:18px;text-align:right;flex-shrink:0;">${idx + 1}</span>
-        ${cbHtml}
-        <div style="width:44px;height:44px;border-radius:10px;background:rgba(18,18,18,0.05);flex-shrink:0;overflow:hidden;display:flex;align-items:center;justify-content:center;">
-          <img data-key="${_slimEsc(o.key)}" style="width:100%;height:100%;object-fit:cover;" alt="">
-        </div>
-        <div style="flex:1;min-width:0;">
-          <div style="font-size:0.72rem;color:var(--text-main,#121212);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:'Space Mono',monospace;">${_slimEsc(o.key)}</div>
-          <div style="font-size:0.62rem;color:var(--text-sub,#aaa);margin-top:2px;"><b style="color:var(--text-main,#121212);">${_fmtBytes(o.size)}</b> · ${_slimRelAge(o.updatedAt)} · ${tag}</div>
-        </div>
-      `;
-      const cb = row.querySelector('input[type=checkbox]');
-      if (cb) {
-        cb.addEventListener('change', () => {
-          if (cb.checked) selected.add(o.key); else selected.delete(o.key);
-          _syncClean();
-        });
+    // 按当前筛选重绘列表
+    function _renderList() {
+      // 清掉上一批观察的图，避免泄漏
+      try { _slimObserver.disconnect(); } catch (e) {}
+      for (const u of _slimUrls) { try { URL.revokeObjectURL(u); } catch (e) {} }
+      _slimUrls.clear();
+      listEl.innerHTML = '';
+
+      const vis = _visibleItems();
+      const delitems = vis.filter(_isDeletable);
+      const delBytes = delitems.reduce((s, o) => s + (o.size || 0), 0);
+      countEl.textContent = `当前 ${vis.length} 张 · 可删 ${delitems.length} 张 (${_fmtBytes(delBytes)})`;
+
+      if (!vis.length) {
+        listEl.innerHTML = '<div style="text-align:center;color:var(--text-sub,#bbb);font-size:0.72rem;padding:30px 0;">该时间段没有图片</div>';
+        return;
       }
-      listEl.appendChild(row);
-      _slimObserver.observe(row.querySelector('img'));
+
+      vis.forEach((o, idx) => {
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:10px 4px;border-bottom:0.5px solid rgba(18,18,18,0.06);';
+        const deletable = _isDeletable(o);
+        let tag;
+        if (o.category === 'orphan') {
+          tag = '<span style="color:#D93A3A;font-size:0.6rem;font-weight:600;">孤儿·可删</span>';
+        } else if (o.category === 'content') {
+          tag = '<span style="color:#c08400;font-size:0.6rem;font-weight:600;">大图·可删</span>';
+        } else if (o.category === 'small') {
+          tag = '<span style="color:#3a7d5a;font-size:0.6rem;font-weight:600;">在用·小图</span>';
+        } else {
+          tag = '<span style="color:#3a7d5a;font-size:0.6rem;font-weight:600;">受保护</span>';
+        }
+        const checked = selected.has(o.key) ? 'checked' : '';
+        // 不可删的图：复选框禁用 + 整行降透明度，明确「删不了」是规则不是 bug
+        const cbAttr = deletable ? `${checked}` : 'disabled';
+        const cbStyle = deletable
+          ? 'accent-color:#121212;width:16px;height:16px;flex-shrink:0;'
+          : 'width:16px;height:16px;flex-shrink:0;opacity:0.3;cursor:not-allowed;';
+        if (!deletable) row.style.opacity = '0.55';
+        row.innerHTML = `
+          <span style="font-family:'Space Mono',monospace;font-size:0.62rem;color:var(--text-sub,#bbb);width:18px;text-align:right;flex-shrink:0;">${idx + 1}</span>
+          <input type="checkbox" ${cbAttr} style="${cbStyle}">
+          <div style="width:44px;height:44px;border-radius:10px;background:rgba(18,18,18,0.05);flex-shrink:0;overflow:hidden;display:flex;align-items:center;justify-content:center;">
+            <img data-key="${_slimEsc(o.key)}" style="width:100%;height:100%;object-fit:cover;" alt="">
+          </div>
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:0.72rem;color:var(--text-main,#121212);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:'Space Mono',monospace;">${_slimEsc(o.key)}</div>
+            <div style="font-size:0.62rem;color:var(--text-sub,#aaa);margin-top:2px;"><b style="color:var(--text-main,#121212);">${_fmtBytes(o.size)}</b> · ${_slimRelAge(o.updatedAt)} · ${tag}</div>
+          </div>
+        `;
+        const cb = row.querySelector('input[type=checkbox]');
+        if (deletable) {
+          cb.addEventListener('change', () => {
+            if (cb.checked) selected.add(o.key); else selected.delete(o.key);
+            _syncClean();
+          });
+        }
+        listEl.appendChild(row);
+        _slimObserver.observe(row.querySelector('img'));
+      });
+    }
+
+    // 时间分段切换
+    overlay.querySelectorAll('.big-age').forEach(btn => {
+      btn.addEventListener('click', () => {
+        _ageFilter = Number(btn.dataset.age);
+        overlay.querySelectorAll('.big-age').forEach(b => {
+          const on = b === btn;
+          b.style.background = on ? 'var(--bg-card,#fff)' : 'transparent';
+          b.style.boxShadow = on ? '0 1px 3px rgba(0,0,0,0.08)' : 'none';
+        });
+        _renderList();
+      });
+    });
+
+    // 全选当前可见中「可删」的图（受保护/小图永远跳过）
+    overlay.querySelector('#big-selall').addEventListener('click', () => {
+      const vis = _visibleItems().filter(_isDeletable);
+      const allSel = vis.length > 0 && vis.every(o => selected.has(o.key));
+      // 已全选则取消，否则全选（仅对当前可见、可删集合操作）
+      vis.forEach(o => { if (allSel) selected.delete(o.key); else selected.add(o.key); });
+      _renderList();
+      _syncClean();
     });
 
     overlay.querySelector('#big-close').addEventListener('click', () => {
@@ -10268,12 +10460,19 @@ const DataModule = (() => {
 
     cleanBtn.addEventListener('click', async () => {
       if (!selected.size) return;
-      const keys = [...selected];
+      // 最后一道闸：无论 UI 状态如何，只放行真正可删的 key（孤儿/大图），
+      //   受保护的头像面具即便意外混进 selected 也绝不删除。
+      const delSet = new Set(items.filter(o => _isDeletable(o)).map(o => o.key));
+      const keys = [...selected].filter(k => delSet.has(k));
+      if (!keys.length) { Toast.show('选中的图均受保护，未删除任何数据'); return; }
       _slimRevokeAll();
       overlay.remove();
-      // 排行里清理的也默认先打包备份，安全一致
+      // 清理的都默认先打包备份，安全一致
       await _executeSlim(keys, true);
     });
+
+    _renderList();
+    _syncClean();
   }
 
   return { refresh, clearAll, exportData, exportPartial, importData, slimStorage, biggestStorage, _showDangerConfirm };
@@ -11465,7 +11664,8 @@ ${char.mbti  ? `- MBTI：${char.mbti}` : ''}
 
 // ============================================================
 // PersonaModule — 用户面具管理
-// DB: settings key 'user-personas' → [{id,name,bio,img(assetKey),backstory}]
+// DB: settings key 'user-personas' → [{id,name,bio,imgKey(assetKey),backstory}]
+//     注：早期注释曾写作字段名 img，实际实现自始至终用 imgKey；瘦身扫描两者都兜以防老数据残留
 //     settings key 'user-active-persona' → id
 // 头像存 Assets，key: persona-avatar-{id}
 // ============================================================
