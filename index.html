@@ -8881,13 +8881,19 @@ const Router = (() => {
 // ApiHelper — 智能 URL 拼接 + 请求封装
 // ============================================================
 const ApiHelper = (() => {
-  // 匹配更广泛的后缀，包含智谱的 v4
+  // 匹配更广泛的后缀，包含智谱的 v4、火山引擎的 /api/v3
   const KNOWN_SUFFIXES = [
+    '/api/v3/chat/completions', '/api/v3/images/generations', '/api/v3/embeddings', '/api/v3/models',
     '/v1/images/generations', '/v1/chat/completions', '/v1/completions', '/v1/embeddings', '/v1/models',
     '/v4/chat/completions', '/v4/images/generations', '/v4/embeddings', '/v4/models',
-    '/chat/completions', '/completions', '/embeddings', '/models',
+    '/api/v3', '/chat/completions', '/completions', '/embeddings', '/models',
     '/v1', '/v4'
   ];
+
+  // 火山引擎（豆包/方舟 Ark）用 /api/v3 规范，需单独识别
+  function isVolcengine(input) {
+    return /volces\.com/i.test(input || '') || /\/api\/v3(\/|$)/i.test(input || '');
+  }
 
   function getRootUrl(input) {
     let url = (input || '').trim().replace(/\/+$/, '');
@@ -8902,9 +8908,14 @@ const ApiHelper = (() => {
 
   function buildUrl(input, type = 'chat') {
     const root = getRootUrl(input);
-    // 智能判断 API 版本：如果是智谱的域名，走 /v4 规范；其他的默认走 /v1 规范
-    const apiVersion = root.includes('open.bigmodel.cn') ? '/v4' : '/v1';
-    
+    // 智能判断 API 版本：
+    //   智谱 open.bigmodel.cn → /v4
+    //   火山引擎 Ark(volces.com 或带 /api/v3) → /api/v3
+    //   其他默认 → /v1
+    let apiVersion = '/v1';
+    if (root.includes('open.bigmodel.cn')) apiVersion = '/v4';
+    else if (isVolcengine(input) || isVolcengine(root)) apiVersion = '/api/v3';
+
     const paths = {
       chat:       `${apiVersion}/chat/completions`,
       models:     `${apiVersion}/models`,
@@ -8916,6 +8927,11 @@ const ApiHelper = (() => {
   }
 
   async function fetchModels(apiUrl, apiKey) {
+    // 火山引擎 Ark 没有 OpenAI 风格的 /models 列表接口，
+    // 模型位是「接入点 ID(ep-xxx)」或模型名，需用户自行填写，这里直接提示。
+    if (isVolcengine(apiUrl)) {
+      throw new Error('火山引擎不支持拉取模型列表，请手动填写接入点ID(ep-开头)或模型名(如 doubao-pro-32k)');
+    }
     const url = buildUrl(apiUrl, 'models');
     const res = await fetch(url, {
       headers: { Authorization: `Bearer ${apiKey}` }

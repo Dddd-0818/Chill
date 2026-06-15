@@ -1932,6 +1932,11 @@ ${fieldRules}
     if (!_activeStory) return;
     const stats = await _wrapStats();
     const summary = await _getWrapSummary();
+    let hasBak = false;
+    try {
+      const b = await DB.settings.get(`gstory-wrap-cursor-bak-${_activeStory.id}`);
+      hasBak = (b !== undefined && b !== null);
+    } catch (e) {}
     const root = _ensureDialogRoot();
     root.classList.remove('gs-sheet-mode');
     root.innerHTML = `
@@ -1945,8 +1950,12 @@ ${fieldRules}
           </div>
           <div class="gs-wrap-field">
             <div class="gs-wrap-flabel">杀青最近未归档的前 <b>N</b> 条</div>
-            <input type="number" class="gs-dlg-input gs-wrap-num" id="gs-wrap-n" min="1" max="${stats.unwrapped}" value="${stats.unwrapped}" ${stats.unwrapped ? '' : 'disabled'}>
-            <button class="gs-dlg-btn primary gs-wrap-run" id="gs-wrap-run" ${stats.unwrapped ? '' : 'disabled'}>提炼并杀青</button>
+            <input type="number" class="gs-dlg-input gs-wrap-num" id="gs-wrap-n" min="1" max="${stats.unwrapped}" value="${Math.min(stats.unwrapped, 20)}" ${stats.unwrapped ? '' : 'disabled'}>
+            <div class="gs-wrap-btnrow">
+              <button class="gs-dlg-btn ghost gs-wrap-all" id="gs-wrap-all" ${stats.unwrapped ? '' : 'disabled'}>全部</button>
+              <button class="gs-dlg-btn primary gs-wrap-run" id="gs-wrap-run" ${stats.unwrapped ? '' : 'disabled'}>提炼并杀青</button>
+            </div>
+            ${hasBak ? `<button class="gs-dlg-btn ghost gs-wrap-undo" id="gs-wrap-undo">↩ 撤销上次杀青（换个模型重来）</button>` : ''}
           </div>
           <div class="gs-wrap-field">
             <div class="gs-wrap-flabel">剧情档案 <span class="gs-wrap-hint-tag">可编辑</span></div>
@@ -1976,16 +1985,102 @@ ${fieldRules}
         if (!n || n < 1) { Toast.show('请输入有效条数'); return; }
         runBtn.disabled = true; runBtn.textContent = '提炼中…';
         const ok = await _runWrap(n);
-        if (ok) { close(); openWrapPanel(); }   // 重开刷新统计与档案
+        if (ok === true) { close(); openWrapPanel(); }   // 重开刷新统计与档案
         else { runBtn.disabled = false; runBtn.textContent = '提炼并杀青'; }
       };
     }
+
+    // 「全部」：把条数拉满
+    const allBtn = root.querySelector('#gs-wrap-all');
+    if (allBtn && !allBtn.disabled) {
+      allBtn.onclick = () => {
+        const numEl = root.querySelector('#gs-wrap-n');
+        if (numEl) numEl.value = stats.unwrapped;
+      };
+    }
+
+    // 撤销上次杀青 → 恢复备份，重开面板让用户换模型 / 改 N 重来
+    const undoBtn = root.querySelector('#gs-wrap-undo');
+    if (undoBtn) {
+      undoBtn.onclick = () => {
+        _confirmDialog({
+          title: '撤销上次杀青',
+          sub: 'UNDO LAST WRAP',
+          body: '把档案与断点恢复到上次提炼之前？恢复后可换个模型、改条数重新杀青。（只能撤销最近一次）',
+          okText: '撤销',
+          onOk: async () => {
+            const done = await _undoWrap();
+            if (done) { close(); openWrapPanel(); }
+          },
+        });
+      };
+    }
+
     root.onclick = (e) => { if (e.target === root) close(); };
     requestAnimationFrame(() => root.classList.add('active'));
   }
 
-  // 执行一次增量杀青：取「断点后的前 N 条」→ 带现有档案增量提炼 → 更新档案与断点
-  async function _runWrap(n) {
+  // 执行增量杀青（自动降级 + 清队列）：
+  //   目标是把「最近未归档的前 target 条」全部归档进去。
+  //   一旦某批被截断就把该批条数砍半重试；某批成功后,若目标还没杀完,自动接着杀下一批。
+  //   用户只需点一次,拆批与续杀全自动。
+  async function _runWrap(target) {
+    let remaining = Math.max(1, Math.floor(target));   // 还想杀掉的条数
+    let size = remaining;                               // 当前批尝试的条数
+    let truncatedOnce = false;
+    let wrappedTotal = 0;                               // 已成功归档的条数
+    let batches = 0;
+    const MAX_BATCHES = 40;                             // 兜底:防极端情况无限磨
+
+    while (remaining >= 1) {
+      if (batches >= MAX_BATCHES) {
+        Toast.show(`已归档 ${wrappedTotal} 条,剩余请再点一次「提炼并杀青」继续`);
+        return wrappedTotal > 0;
+      }
+      const take = Math.min(size, remaining);
+      const r = await _runWrapOnce(take);
+
+      if (r === true) {
+        wrappedTotal += take;
+        remaining -= take;
+        batches++;
+        // 还有剩余 → 继续,沿用当前(可能已降级的)批量,避免又从大批量撞墙
+        continue;
+      }
+
+      if (r === 'truncated') {
+        truncatedOnce = true;
+        if (size === 1) {
+          // 单条都装不下:模型输出上限太低 / 单楼层信息量爆炸
+          if (wrappedTotal > 0) {
+            Toast.show(`已归档 ${wrappedTotal} 条,但有单条剧情超出模型输出上限,剩余未杀。建议换输出更长的模型`);
+          } else {
+            Toast.show('单条剧情都超出模型输出上限,请换输出更长的模型,或拆短该楼层');
+          }
+          // 已经杀进去一些也算部分成功,让面板刷新
+          return wrappedTotal > 0;
+        }
+        const next = Math.max(1, Math.floor(size / 2));
+        console.warn(`[GroupStory] 杀青降级:${size} 条截断 → 改试 ${next} 条`);
+        Toast.show(`内容过长,自动改试 ${next} 条…`);
+        size = next;
+        continue;
+      }
+
+      // 其它失败（网络/API/空返回）：_runWrapOnce 内已提示
+      // 若之前已成功杀过几批,算部分成功;否则彻底失败
+      return wrappedTotal > 0;
+    }
+
+    if (truncatedOnce || batches > 1) {
+      Toast.show(`已分 ${batches} 批归档共 ${wrappedTotal} 条 ✦`);
+    }
+    return true;
+  }
+
+  // 执行一次单批提炼（不降级）：取「断点后的前 N 条」→ 提炼 → 更新档案与断点
+  // 返回 true=成功 / 'truncated'=被截断 / false=其它失败
+  async function _runWrapOnce(n) {
     try {
       const activeApi = await _getStoryApi();
       if (!activeApi) { Toast.show('请先配置并激活 API'); return false; }
@@ -2009,34 +2104,31 @@ ${fieldRules}
         return `[${_fmtFull(m.timestamp)}] ${who}：${text}`;
       }).join('\n');
 
-      const prompt = `[系统最高任务：群像剧本杀青归档（增量式）]
-你是一位顶级的电影剧本场记与档案管理员。请根据【已有档案】和【新增场记】，生成一份更新后的、更完整的、包含所有关键细节的剧情档案。
+      const prompt = `[系统最高任务：群像剧本杀青归档（本批增量）]
+你是一位顶级的电影剧本场记与档案管理员。下面是一段新增的剧情场记，请把它整理成一段独立、完整、保真的剧情档案片段。这段片段会被原样追加到既有档案之后，所以你**只需处理本批新增内容**，不要复述、不要回顾、也不要重写之前的剧情。
 
-【已有档案】（之前归档的剧情，为空则代表首次归档）：
-${prevSummary || '（暂无，这是故事的开端）'}
-
-【新增场记】（请无缝续写并融合进已有档案）：
+【本批新增场记】：
 ${log}
 
 【核心叙事规则】：
-1. **融合与扩写**：将【新增场记】的每个关键情节、重要对话、情感转折，以电影剧本摘要的风格，按时间线自然融入并续写到【已有档案】中，形成时间连贯、逻辑通顺的完整剧情。
-2. **绝不遗漏**：首要任务是【保真】而非【概括】。禁止为缩减字数删除重要对话、细节或心理活动。新增内容多，档案篇幅也相应增加。
+1. **只写本批**：仅整理上面这段新增场记，禁止脑补或重述之前的剧情。
+2. **绝不遗漏**：首要任务是【保真】而非【概括】。禁止为缩减字数删除重要对话、细节或心理活动。
 3. **第三人称**：使用客观第三人称叙事，用角色真实姓名。
 4. **带时间戳**：在关键情节转折处，以【YYYY-MM-DD HH:mm】格式精确标注事件时间点。
 5. **文笔**：像专业编剧，用词精准，有文学性和情感张力。
 
 【输出格式】：直接返回纯文本，不要 JSON、不要 Markdown 代码块、不要任何前后缀说明。结构如下——
 
-先是【剧情正文】：按上述规则写出的完整剧情档案。
+先是【剧情正文】：按上述规则写出的本批剧情档案。
 
-然后空一行，附上【关键锚点】清单，逐条罗列整个故事（含已有档案 + 本次新增）中所有绝对不能遗忘的要点，每条一行、以「· 」开头，涵盖但不限于：
+然后空一行，附上【关键锚点】清单，**只罗列本批新增**带来的、绝对不能遗忘的要点，每条一行、以「· 」开头，涵盖但不限于：
 · 角色之间定下的约定与承诺
 · 交换或赠予的关键信物
 · 揭示的秘密、身世、隐情
 · 重要的情感里程碑（关系的确认、转折、裂痕）
 · 影响后续剧情的关键信息或伏笔
 · 角色当前的处境、心境与彼此关系的最新状态
-（若本次新增带来了新的锚点，务必补进清单；已有锚点也要保留，形成一份持续累积的完整清单。）`;
+（若本批没有产生某类锚点，对应条目可省略，不要为了凑格式而编造。）`;
 
       // 杀青独立请求：不走全局 chatCompletion，自带 max_tokens、temperature 兜底与详细报错，
       // 并用 system+user 两条消息（部分中转站拒绝纯 system 请求 → 400）。
@@ -2049,7 +2141,7 @@ ${log}
         const url = root + ver + '/chat/completions';
         let temp = parseFloat(api.temp);
         if (isNaN(temp)) temp = 0.7;
-        const body = { model: api.model, messages, temperature: temp, max_tokens: 8000 };
+        const body = { model: api.model, messages, temperature: temp, max_tokens: 16000 };
         const res = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${api.key}` },
@@ -2061,22 +2153,46 @@ ${log}
           throw new Error(`HTTP ${res.status}${detail ? ' · ' + detail : ''}`);
         }
         const data = await res.json();
-        return data.choices?.[0]?.message?.content ?? '';
+        const choice = data.choices?.[0] || {};
+        return {
+          content: choice.message?.content ?? '',
+          finish: choice.finish_reason || '',
+        };
       };
-      const raw = await _wrapChat(activeApi, [
+      const resp = await _wrapChat(activeApi, [
         { role: 'system', content: '你是一位顶级的电影剧本场记与档案管理员，擅长把零散的剧情场记整理成时间连贯、细节完整的剧情档案。' },
         { role: 'user', content: prompt },
       ]);
-      const newSummary = (raw || '').trim();
-      if (!newSummary) { Toast.show('提炼失败：返回为空'); return false; }
+      const piece = (resp.content || '').trim();
+      if (!piece) { Toast.show('提炼失败：返回为空'); return false; }
+
+      // ── 截断检测：被 max_tokens 截断时绝不写入，保护旧档案不被半截内容污染 ──
+      if (resp.finish === 'length') {
+        console.warn('[GroupStory] wrap 单批截断 finish_reason=length，本批 n=' + n + '，放弃写入，旧档案保留');
+        return 'truncated';
+      }
 
       const newCursor = Number(batch[batch.length - 1].id);
+
+      // ── 追加式拼接：旧档案绝不重写，只把本批新总结接到后面 ──
+      const stamp = _fmtFull(batch[batch.length - 1].timestamp);
+      const block = `─────  归档 · 至 ${stamp}  ─────\n${piece}`;
+      const newSummary = prevSummary
+        ? `${prevSummary}\n\n${block}`
+        : block;
+
+      // ── 写入前先备份上一版（档案 + 断点），留后悔药 / 支持撤销 ──
+      try {
+        await DB.settings.set(`gstory-wrap-summary-bak-${_activeStory.id}`, prevSummary || '');
+        await DB.settings.set(`gstory-wrap-cursor-bak-${_activeStory.id}`, stats.cursor || 0);
+      } catch (e) {}
+
       await DB.settings.set(`gstory-wrap-summary-${_activeStory.id}`, newSummary);
       await DB.settings.set(`gstory-wrap-cursor-${_activeStory.id}`, newCursor);
       // ===== DEBUG LOG (杀青) =====
       console.groupCollapsed('%c[群像] 杀青提炼', 'color:#2c7a3d;font-weight:700');
       console.log('📝 本次杀青条数:', batch.length, '| 新断点 id:', newCursor);
-      console.log('🤖 AI 返回的档案:\n', newSummary);
+      console.log('🤖 AI 本批新增片段:\n', piece);
       console.groupEnd();
       // =====================
       Toast.show(`已杀青 ${batch.length} 条 ✦`);
@@ -2089,7 +2205,30 @@ ${log}
     }
   }
 
-  // ───────────────────────── 收据配色 ─────────────────────────
+  // 撤销上一次杀青：把档案与断点恢复到上次提炼之前（仅能回退一步，备份只存最近一版）
+  async function _undoWrap() {
+    try {
+      const bakSum = await DB.settings.get(`gstory-wrap-summary-bak-${_activeStory.id}`);
+      const bakCur = await DB.settings.get(`gstory-wrap-cursor-bak-${_activeStory.id}`);
+      if (bakSum === undefined && bakCur === undefined) {
+        Toast.show('没有可撤销的备份');
+        return false;
+      }
+      await DB.settings.set(`gstory-wrap-summary-${_activeStory.id}`, bakSum || '');
+      await DB.settings.set(`gstory-wrap-cursor-${_activeStory.id}`, Number(bakCur) || 0);
+      // 备份已消费，清掉，避免重复撤销退过头
+      try { await DB.settings.del(`gstory-wrap-summary-bak-${_activeStory.id}`); } catch (e) {}
+      try { await DB.settings.del(`gstory-wrap-cursor-bak-${_activeStory.id}`); } catch (e) {}
+      await _loadMessages();
+      Toast.show('已撤销上次杀青 ✦');
+      return true;
+    } catch (e) {
+      console.error('[GroupStory] undo wrap error:', e.message || e);
+      Toast.show('撤销失败');
+      return false;
+    }
+  }
+
   // 应用配色到 CSS 变量（实时生效）
   function _applyRcColors() {
     const screen = document.getElementById(SCREEN_ID);
@@ -3692,8 +3831,11 @@ ${log}
 #${SCREEN_ID} .gs-wrap-flabel b{color:#8a2c2c;}
 #${SCREEN_ID} .gs-wrap-hint-tag{font-family:"Space Mono",monospace;font-size:7px;font-weight:700;color:rgba(0,0,0,.25);letter-spacing:1px;padding:1px 5px;border:.5px solid rgba(0,0,0,.08);border-radius:3px;margin-left:4px;}
 #${SCREEN_ID} .gs-wrap-num{text-align:center;font-family:"Space Mono",monospace;font-size:15px;font-weight:700;margin-bottom:8px;}
-#${SCREEN_ID} .gs-wrap-run{width:100%;height:38px;}
-#${SCREEN_ID} .gs-wrap-run:disabled{opacity:.35;cursor:not-allowed;}
+#${SCREEN_ID} .gs-wrap-btnrow{display:flex;gap:8px;}
+#${SCREEN_ID} .gs-wrap-all{width:64px;height:38px;flex-shrink:0;}
+#${SCREEN_ID} .gs-wrap-run{flex:1;height:38px;}
+#${SCREEN_ID} .gs-wrap-run:disabled,#${SCREEN_ID} .gs-wrap-all:disabled{opacity:.35;cursor:not-allowed;}
+#${SCREEN_ID} .gs-wrap-undo{width:100%;height:34px;margin-top:8px;font-size:10px;color:rgba(0,0,0,.5);}
 #${SCREEN_ID} .gs-wrap-archive{font-size:12px;line-height:1.6;max-height:200px;}
 
 
