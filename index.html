@@ -8943,6 +8943,41 @@ const ApiHelper = (() => {
     return models;
   }
 
+  // ── 脱敏 API 错误捕手 ──
+  // 把上游返回的错误体读出来,但只放行「错误元信息」(状态码/错误类型/token 数字),
+  // 任何可能回显用户 prompt 的长文本一律打码,绝不把提示词原文带出来。
+  async function _apiErr(res) {
+    let raw = '';
+    try { raw = await res.text(); } catch (_) {}
+    let info = '';
+    try {
+      const j = JSON.parse(raw);
+      const e = j.error || j;                       // OpenAI/兼容站常见结构
+      const code = e.code || e.type || j.code || ''; // 如 invalid_request_error / context_length_exceeded
+      let msg = (e.message || j.message || '').toString();
+      // 🔒 脱敏:从 message 里只抠出「数字+关键字」这类安全片段,其余打码
+      // 1) 抠 token/长度类数字证据(这是判超限的关键,且不含 prompt 内容)
+      const nums = msg.match(/\b\d[\d,]{2,}\b/g) || [];
+      // 2) 抠已知安全关键词(都是 API 报错术语,不含用户内容)
+      const KW = ['context','length','token','maximum','exceed','limit','reduce',
+                  'invalid','request','model','not found','permission','rate',
+                  'quota','billing','overloaded','timeout','unsupported','message','role'];
+      const hits = KW.filter(k => msg.toLowerCase().includes(k));
+      const numStr = nums.length ? ` 数值[${[...new Set(nums)].slice(0,4).join('/')}]` : '';
+      const kwStr  = hits.length ? ` 关键词[${[...new Set(hits)].slice(0,6).join(',')}]` : '';
+      // 若关键词/数字啥都没抠到,说明 message 可能整段是被 echo 的内容,直接整段打码只留长度
+      const tail = (hits.length || nums.length) ? `${kwStr}${numStr}`
+                                                : ` (报错体${msg.length}字,已隐藏)`;
+      info = `${code ? '类型:'+code : ''}${tail}`.trim();
+    } catch (_) {
+      // 非 JSON(如网关 HTML 报错页):只报长度,不外泄正文
+      info = raw ? `(非JSON报错 ${raw.length}字)` : '';
+    }
+    const er = new Error(`HTTP ${res.status}${info ? ' · '+info : ''}`);
+    er._apiStatus = res.status;
+    return er;
+  }
+
   async function chatCompletion(apiProfile, messages, signal) {
     const url = buildUrl(apiProfile.url, 'chat');
     const res = await fetch(url, {
@@ -8951,7 +8986,7 @@ const ApiHelper = (() => {
       body: JSON.stringify({ model: apiProfile.model, messages, temperature: parseFloat(apiProfile.temp) }),
       signal,
     });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    if (!res.ok) throw await _apiErr(res);
     const data = await res.json();
     return data.choices?.[0]?.message?.content ?? '';
   }
@@ -8983,7 +9018,7 @@ const ApiHelper = (() => {
         body: JSON.stringify(body),
         signal,
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) throw await _apiErr(res);
       const data = await res.json();
       const msg = data.choices?.[0]?.message;
       if (!msg) return lastContent || '';
