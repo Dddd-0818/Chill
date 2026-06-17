@@ -8881,19 +8881,13 @@ const Router = (() => {
 // ApiHelper — 智能 URL 拼接 + 请求封装
 // ============================================================
 const ApiHelper = (() => {
-  // 匹配更广泛的后缀，包含智谱的 v4、火山引擎的 /api/v3
+  // 匹配更广泛的后缀，包含智谱的 v4
   const KNOWN_SUFFIXES = [
-    '/api/v3/chat/completions', '/api/v3/images/generations', '/api/v3/embeddings', '/api/v3/models',
     '/v1/images/generations', '/v1/chat/completions', '/v1/completions', '/v1/embeddings', '/v1/models',
     '/v4/chat/completions', '/v4/images/generations', '/v4/embeddings', '/v4/models',
-    '/api/v3', '/chat/completions', '/completions', '/embeddings', '/models',
+    '/chat/completions', '/completions', '/embeddings', '/models',
     '/v1', '/v4'
   ];
-
-  // 火山引擎（豆包/方舟 Ark）用 /api/v3 规范，需单独识别
-  function isVolcengine(input) {
-    return /volces\.com/i.test(input || '') || /\/api\/v3(\/|$)/i.test(input || '');
-  }
 
   function getRootUrl(input) {
     let url = (input || '').trim().replace(/\/+$/, '');
@@ -8910,11 +8904,9 @@ const ApiHelper = (() => {
     const root = getRootUrl(input);
     // 智能判断 API 版本：
     //   智谱 open.bigmodel.cn → /v4
-    //   火山引擎 Ark(volces.com 或带 /api/v3) → /api/v3
     //   其他默认 → /v1
     let apiVersion = '/v1';
     if (root.includes('open.bigmodel.cn')) apiVersion = '/v4';
-    else if (isVolcengine(input) || isVolcengine(root)) apiVersion = '/api/v3';
 
     const paths = {
       chat:       `${apiVersion}/chat/completions`,
@@ -8927,11 +8919,6 @@ const ApiHelper = (() => {
   }
 
   async function fetchModels(apiUrl, apiKey) {
-    // 火山引擎 Ark 没有 OpenAI 风格的 /models 列表接口，
-    // 模型位是「接入点 ID(ep-xxx)」或模型名，需用户自行填写，这里直接提示。
-    if (isVolcengine(apiUrl)) {
-      throw new Error('火山引擎不支持拉取模型列表，请手动填写接入点ID(ep-开头)或模型名(如 doubao-pro-32k)');
-    }
     const url = buildUrl(apiUrl, 'models');
     const res = await fetch(url, {
       headers: { Authorization: `Bearer ${apiKey}` }
@@ -19946,6 +19933,15 @@ function _renderImgPreviewBar() {
              content: `[System 引擎调度]: （用户暂未回复）请顺着刚才的话题自然地继续往下说，可以补充细节、开启新话题、吐槽或者发个表情包。表现出真人在聊天时“连发消息”或“自顾自往下聊”的真实状态，不要干等。`
          });
       }
+
+      // 🧼 兜底:消毒后若历史为空 / 末条不是 user,补一条 user,
+      //    确保 payload 至少有一条 user 消息且以 user 收尾(防 400 invalid_argument)
+      if (apiMessages.length === 0 || apiMessages[apiMessages.length - 1].role !== 'user') {
+        apiMessages.push({
+          role: 'user',
+          content: '（继续我们刚才的对话。）'
+        });
+      }
       
       // 🖨️ [DEBUG] 华丽折叠版：打印完整上下文与系统提示词
       console.groupCollapsed(`[AI Payload] ✦ 发送给【${sessionCharName}】的完整上下文 ↴`);
@@ -21007,6 +21003,13 @@ ${emoteBlock}
         merged.push({ ...msg });
       }
     }
+
+    // 🧼 出关消毒 — 防 400 invalid_argument（同单聊逻辑）
+    // 去掉开头连续 assistant（首条须为 user），并保证以 user 收尾
+    while (merged.length && merged[0].role === 'assistant') merged.shift();
+    if (merged.length === 0 || merged[merged.length - 1].role !== 'user') {
+      merged.push({ role: 'user', content: '（请群里的角色继续自然地往下聊。）' });
+    }
     return merged;
   }
 
@@ -21328,14 +21331,22 @@ ${emoteBlock}
           try {
             const proxied = XhsShare.proxiedImg(xhsPart.data.cover);
             const resp = await fetch(proxied);
+            // 🔒 闸1：HTTP 必须成功。小红书封面链接有时效,过期会返回 403/404 的
+            //        HTML 错误页(fetch 不抛异常),不拦就会把报错页当图片塞进去 → 400 invalid_argument
+            if (!resp.ok) throw new Error('cover HTTP ' + resp.status);
             const blob = await resp.blob();
+            // 🔒 闸2：必须是真图片。MIME 要以 image/ 开头,且体积像张图(>1KB);
+            //        失效链接常返回 text/html 错误页或几十字节空响应,在此拦下
+            if (!blob.type.startsWith('image/')) throw new Error('cover not image: ' + blob.type);
+            if (blob.size < 1024) throw new Error('cover too small: ' + blob.size);
             const b64 = await new Promise((res, rej) => {
               const r = new FileReader();
               r.onload = () => res(String(r.result).split(',')[1]);
               r.onerror = rej;
               r.readAsDataURL(blob);
             });
-            if (b64) {
+            // 🔒 闸3：base64 长度兜底,过短必是坏数据
+            if (b64 && b64.length > 512) {
               const d = xhsPart.data;
               const caption = `[我分享了一篇小红书帖子，下面这张图是它的封面]\n博主：${d.author || ''}　标题：${d.title || ''}　点赞：${d.likes ?? ''}`;
               msgContent = [
@@ -21464,7 +21475,54 @@ ${emoteBlock}
         result.push({ role: m.role, content: msgContent });
       }
     }
-    return result;
+
+    // ════════════════════════════════════════════════════════════
+    // 🧼 出关消毒闸 — 防 400 invalid_argument
+    // 上游已收紧参数校验:空 content / 空数组 / 角色不交替 / 首条非 user
+    // 都会被拒。轮数拉高时更易卷进脏消息,这里统一兜底,发出去必须是合法结构。
+    // ════════════════════════════════════════════════════════════
+    const _isEmptyContent = (c) => {
+      if (c == null) return true;
+      if (typeof c === 'string') return !c.trim();
+      if (Array.isArray(c)) {
+        if (c.length === 0) return true;
+        // 数组里若没有任何「有内容的块」(文本非空 / 有图片url)则视为空
+        return !c.some(p =>
+          (p.type === 'text' && (p.text || '').trim()) ||
+          (p.type === 'image_url' && p.image_url && p.image_url.url)
+        );
+      }
+      return false; // 其它类型(对象)放行,交给上游判断
+    };
+
+    // 1) 剔除空 content 的消息
+    let cleaned = result.filter(m => !_isEmptyContent(m.content));
+
+    // 2) 去掉开头连续的 assistant —— 多数严格站点要求首条必须是 user
+    while (cleaned.length && cleaned[0].role === 'assistant') cleaned.shift();
+
+    // 3) 强制 user/assistant 交替:相邻同角色就把 content 合并进前一条,
+    //    避免「连续两条 user」或「连续两条 assistant」触发 invalid_argument
+    const merged = [];
+    for (const m of cleaned) {
+      const prev = merged[merged.length - 1];
+      if (prev && prev.role === m.role) {
+        // 同角色 → 合并文本(两边都规整成数组再拼,保留图文)
+        const toArr = (c) => Array.isArray(c) ? c.slice()
+                          : [{ type: 'text', text: String(c) }];
+        const pa = toArr(prev.content);
+        const ca = toArr(m.content);
+        prev.content = [...pa, ...ca];
+        // 若合并后全是纯文本,压扁回字符串,省 token 也更兼容
+        if (prev.content.every(p => p.type === 'text')) {
+          prev.content = prev.content.map(p => p.text).join('\n');
+        }
+      } else {
+        merged.push({ role: m.role, content: m.content });
+      }
+    }
+
+    return merged;
   }
   // ── 加载更多 ──
   async function loadMore() {
@@ -27801,19 +27859,61 @@ ${newMessagesLog}
   ]
 }`;
 
-        const response = await ApiHelper.chatCompletion(api,[{ role: 'user', content: prompt }]);
-        const cleaned = response.replace(/```json|```/g, '').trim();
-        const start = cleaned.indexOf('{');
-       const end = cleaned.lastIndexOf('}');
-        if (start === -1 || end === -1) throw new Error('AI未能返回有效的JSON格式');
-        
-        // 🌟 终极防线修复：仅将双引号内容内部的意外物理回车进行转义，绝不破坏外层 JSON 的缩进排版！
-        let jsonStr = cleaned.substring(start, end + 1);
-        jsonStr = jsonStr.replace(/"([^"\\]*(?:\\.[^"\\]*)*)"/g, function(match) {
-            return match.replace(/\r?\n/g, '\\n');
-        });
-        
-        const data = JSON.parse(jsonStr);
+        // 🌟 从模型返回文本中稳健地提取并解析 JSON 对象
+        //    - 剥掉 markdown 代码块围栏
+        //    - 用括号配对找到第一个【完整】的 {...}，避免正文里的 } 把范围截歪
+        //    - 仅转义字符串双引号内的物理换行，不破坏外层排版
+        function _extractWrapJson(response) {
+            const cleaned = String(response || '').replace(/```json|```/g, '').trim();
+            const start = cleaned.indexOf('{');
+            if (start === -1) {
+                const head = cleaned.slice(0, 200) || '（空响应）';
+                throw new Error('AI未返回JSON（模型实际开头："' + head + '"）');
+            }
+            // 括号配对：跳过字符串内的花括号，找到与 start 匹配的右括号
+            let depth = 0, end = -1, inStr = false, esc = false;
+            for (let i = start; i < cleaned.length; i++) {
+                const ch = cleaned[i];
+                if (esc) { esc = false; continue; }
+                if (ch === '\\') { esc = true; continue; }
+                if (ch === '"') { inStr = !inStr; continue; }
+                if (inStr) continue;
+                if (ch === '{') depth++;
+                else if (ch === '}') { depth--; if (depth === 0) { end = i; break; } }
+            }
+            // 配对失败（多半被截断）则退回到最后一个 }
+            if (end === -1) end = cleaned.lastIndexOf('}');
+            if (end === -1 || end < start) {
+                const head = cleaned.slice(0, 200);
+                throw new Error('JSON不完整或被截断（模型实际开头："' + head + '"）');
+            }
+            let jsonStr = cleaned.substring(start, end + 1);
+            // 仅将双引号内部的意外物理回车转义，绝不破坏外层 JSON 的缩进排版
+            jsonStr = jsonStr.replace(/"([^"\\]*(?:\\.[^"\\]*)*)"/g, function(match) {
+                return match.replace(/\r?\n/g, '\\n');
+            });
+            try {
+                return JSON.parse(jsonStr);
+            } catch (pe) {
+                const head = jsonStr.slice(0, 200);
+                throw new Error('JSON解析失败（' + pe.message + '）。模型片段："' + head + '"');
+            }
+        }
+
+        let data;
+        try {
+            const response = await ApiHelper.chatCompletion(api, [{ role: 'user', content: prompt }]);
+            data = _extractWrapJson(response);
+        } catch (firstErr) {
+            // 🌟 模型偶发不吐 JSON：自动重试一次，并强化格式约束
+            console.warn('[StoryChat] 杀青首次解析失败，自动重试：', firstErr.message);
+            const retryMessages = [
+                { role: 'user', content: prompt },
+                { role: 'user', content: '上一次输出无法被解析为 JSON。请【只】返回一个合法的 JSON 对象，不要任何前后说明文字、不要 markdown 代码块围栏，直接以 { 开头、以 } 结尾。' }
+            ];
+            const retryResp = await ApiHelper.chatCompletion(api, retryMessages);
+            data = _extractWrapJson(retryResp); // 仍失败则抛出带原文的错误，由外层 catch 显示
+        }
         
         // 🌟 核心增强：将关键事件清单漂亮地格式化并追加到主叙事文案的末尾
         let finalSummary = data.summary;
