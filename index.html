@@ -32,6 +32,7 @@
 <script src="updater.js"></script>
 <script src="fab-style.js"></script>
 <script src="import-migrate.js"></script>
+<script src="memory-rag.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700;800&family=Great+Vibes&family=Libre+Barcode+39+Text&family=Noto+Sans+SC:wght@300;400;500;700&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,700&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
@@ -4489,6 +4490,10 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
     <div class="icon-cell" id="icon-groupstory">
     <div class="icon-box" data-icon-id="14"><i class="ph ph-users-three"></i></div>
     <span class="icon-label">群像</span>
+</div>
+    <div class="icon-cell" id="icon-memrag">
+    <div class="icon-box" data-icon-id="15"><i class="ph ph-brain"></i></div>
+    <span class="icon-label">记忆库</span>
 </div>
       </div>
     </div>
@@ -9424,7 +9429,8 @@ const ICON_DEFAULTS =[
   'ph ph-cloud',            // 11 云端
   'ph ph-question',         // 12 索引
   'ph ph-newspaper',        // 13 观测志
-  'ph ph-users-three'       // 14 群像
+  'ph ph-users-three',      // 14 群像
+  'ph ph-brain'             // 15 记忆库
 ];
 
 let _pendingIconId = null;
@@ -10726,6 +10732,15 @@ document.getElementById('icon-groupstory')?.addEventListener('click', () => {
   }
 });
 
+// 记忆库
+document.getElementById('icon-memrag')?.addEventListener('click', () => {
+  if (typeof MemoryRAG !== 'undefined') {
+    MemoryRAG.open();
+  } else {
+    Toast.show('记忆库模块未加载，请检查 memory-rag.js 是否存在');
+  }
+});
+
 // 查手机
 document.getElementById('icon-phone')?.addEventListener('click', () => {
   if (typeof SubjectsModule !== 'undefined') { // ✨ 修改模块名
@@ -11921,6 +11936,7 @@ const PersonaModule = (() => {
     getActiveId: () => _activeId
   };
 })();
+if (typeof window !== 'undefined') window.PersonaModule = PersonaModule;
 // ============================================================
 // FeedModule — 动态广场生态 (修复头像掉帧与实时刷新)
 // ============================================================
@@ -19330,7 +19346,18 @@ function _renderImgPreviewBar() {
      } catch(e) {}
      // 关闭时间感知时，不注入基于现实时间差的“距离上次 X 小时”提示
      if (!gcTimePerceptionOn) timeGapPrompt = '';
-     const systemPrompt = _buildGroupSystemPromptAll(gcMeta, histMsgs, worldBookBlock, timeGapPrompt, crossWindowMsgs, schedulesMap, gcTimePerceptionOn);
+     let systemPrompt = _buildGroupSystemPromptAll(gcMeta, histMsgs, worldBookBlock, timeGapPrompt, crossWindowMsgs, schedulesMap, gcTimePerceptionOn);
+
+     // 🌙 记忆库 P0:群聊召回 — 取群内全体成员的相关记忆,拼到 system prompt 尾部
+     if (window.MemoryRAG && await MemoryRAG.isEnabled()) {
+       try {
+         const _memberIds = (gcMeta.members || []).map(String);
+         const gcMem = await MemoryRAG.recall(_memberIds, { sources: ['single','group'] });
+         if (gcMem && gcMem.trim()) {
+           systemPrompt += `\n\n【长期记忆 · 群成员相关】\n${gcMem}`;
+         }
+       } catch(e) { console.warn('[MemoryRAG] 群聊召回失败', e); }
+     }
      
       // 🌟 核心修复：彻底抛弃重复的 apiMessages 拼接！
       
@@ -19684,6 +19711,20 @@ function _renderImgPreviewBar() {
 
         if (parsedItems.length > 1) await _sleep(400);
       }
+
+      // 🌙 记忆库 P0:群聊抽取 — 一轮结束后,把最近几条群聊对话抽成离散记忆,归到全体成员名下
+      if (window.MemoryRAG && await MemoryRAG.isEnabled()) {
+        try {
+          const recent = await DB.messages.getPage(gcId, 0, 6).catch(() => []);
+          const _userName = _persona?.name || '用户';
+          // nameMap:把每个成员 charId 映射到名字,让 flattenTurn 正确标注谁说的
+          const nameMap = {};
+          for (const m of gcMembers) { if (m && m.id != null) nameMap[String(m.id)] = m.name || ('#'+m.id); }
+          const turnText = MemoryRAG.flattenTurn(recent, _userName, nameMap);
+          const _memberNames = gcMembers.map(m => m && (m.name || ('#'+m.id))).filter(Boolean);
+          MemoryRAG.extract(turnText, gcMeta.members.map(String), { source: 'group', timeline_id: 'main', userName: _userName, memberNames: _memberNames });
+        } catch(e) { console.warn('[MemoryRAG] 群聊抽取失败', e); }
+      }
     } catch(err) {
       console.error(`[ConvModule] 群聊 AI 回复失败:`, err);
       Toast.show(`群聊回复失败: ${err.message}`);
@@ -19793,7 +19834,16 @@ function _renderImgPreviewBar() {
       try { novelImgOnForPrompt = (await DB.settings.get(`novel-toggle-${sessionCharId}`)) === true; } catch (e) {}
       
     let memorySummary = '';
-      try { const mem = await MemoryModule.load(sessionCharId); memorySummary = mem.summary || ''; } catch(e) {}
+      // 🌙 记忆库 P0:开启则用离散 top-k 召回(token 恒定),否则走旧的潜意识总结
+      if (window.MemoryRAG && await MemoryRAG.isEnabled()) {
+        try {
+          const recentTexts = (histMsgs || []).map(m => m.content || '').filter(Boolean);
+          memorySummary = await MemoryRAG.recall([sessionCharId], { excludeRecentTexts: recentTexts });
+        } catch(e) { console.warn('[MemoryRAG] recall 失败,回退旧记忆', e); }
+      }
+      if (!memorySummary) {
+        try { const mem = await MemoryModule.load(sessionCharId); memorySummary = mem.summary || ''; } catch(e) {}
+      }
 
       // 🌟 防失忆补丁：读取持久化的线下记忆碎片 (带智能去重机制)
       let offlineMemoryStr = '';
@@ -20423,6 +20473,13 @@ function _renderImgPreviewBar() {
             const activeApi = await DB.api.getActive();
             MemoryModule.summarize(sessionCharId, activeApi, sessionCharName, sessionPersonaName, allMsgs);
           }
+        }
+        // 🌙 记忆库 P0:并联离散抽取(用记忆库自己的 API 池,不占用 activeApi)
+        if (window.MemoryRAG && await MemoryRAG.isEnabled()) {
+          const recent = await DB.messages.getPage(sessionCharId, 0, 4).catch(() => []);
+          const nameMap = { [String(sessionCharId)]: sessionCharName };
+          const turnText = MemoryRAG.flattenTurn(recent, sessionPersonaName, nameMap);
+          MemoryRAG.extract(turnText, [sessionCharId], { source: 'single', timeline_id: 'main', userName: sessionPersonaName });
         }
       } catch(e) {}
     }, 1000);
