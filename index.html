@@ -33,6 +33,7 @@
 <script src="fab-style.js"></script>
 <script src="import-migrate.js"></script>
 <script src="memory-rag.js"></script>
+<script src="api-log.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700;800&family=Great+Vibes&family=Libre+Barcode+39+Text&family=Noto+Sans+SC:wght@300;400;500;700&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,700&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
@@ -5028,6 +5029,18 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
             <label class="toggle-switch">
               <input type="checkbox" id="sys-toggle-fab"
                 onchange="FABModule.setEnabled(this.checked)">
+              <div class="toggle-track"></div>
+              <div class="toggle-thumb"></div>
+            </label>
+          </div>
+          <div class="toggle-row">
+            <div class="toggle-row-info">
+              <div class="toggle-row-label">API 调用日志</div>
+              <div class="toggle-row-desc">记录每次调用 · 排查多扣费(默认关)</div>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="sys-toggle-apilog"
+                onchange="ApiLogModule.setEnabled(this.checked)">
               <div class="toggle-track"></div>
               <div class="toggle-thumb"></div>
             </label>
@@ -28872,6 +28885,7 @@ async function initApp() {
   try { await WBModule.init(); } catch(e) { console.warn('wb init failed', e); }
   try { await FABStyleModule.init(); } catch(e){ console.warn('fabstyle init failed', e); }
   try { await FABModule.init(); } catch(e) { console.warn('fab init failed', e); }
+  try { await ApiLogModule.init(); } catch(e) { console.warn('apilog init failed', e); }
 // 动态广场初始化
   try { await FeedModule.init(); } catch(e) { console.warn('feed init failed', e); }
 // 论坛
