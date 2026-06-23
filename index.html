@@ -34,6 +34,7 @@
 <script src="import-migrate.js"></script>
 <script src="memory-rag.js"></script>
 <script src="api-log.js"></script>
+<script src="dream.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700;800&family=Great+Vibes&family=Libre+Barcode+39+Text&family=Noto+Sans+SC:wght@300;400;500;700&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,700&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
@@ -4495,6 +4496,10 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
     <div class="icon-cell" id="icon-memrag">
     <div class="icon-box" data-icon-id="15"><i class="ph ph-brain"></i></div>
     <span class="icon-label">记忆库</span>
+</div>
+    <div class="icon-cell" id="icon-dream">
+    <div class="icon-box" data-icon-id="16"><i class="ph ph-moon-stars"></i></div>
+    <span class="icon-label">梦境</span>
 </div>
       </div>
     </div>
@@ -9443,7 +9448,8 @@ const ICON_DEFAULTS =[
   'ph ph-question',         // 12 索引
   'ph ph-newspaper',        // 13 观测志
   'ph ph-users-three',      // 14 群像
-  'ph ph-brain'             // 15 记忆库
+  'ph ph-brain',            // 15 记忆库
+  'ph ph-moon-stars'        // 16 梦境
 ];
 
 let _pendingIconId = null;
@@ -10751,6 +10757,15 @@ document.getElementById('icon-memrag')?.addEventListener('click', () => {
     MemoryRAG.open();
   } else {
     Toast.show('记忆库模块未加载，请检查 memory-rag.js 是否存在');
+  }
+});
+
+// 梦境
+document.getElementById('icon-dream')?.addEventListener('click', () => {
+  if (typeof DreamModule !== 'undefined') {
+    DreamModule.open();
+  } else {
+    Toast.show('梦境模块未加载，请检查 dream.js 是否存在');
   }
 });
 
