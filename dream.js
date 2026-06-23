@@ -83,7 +83,7 @@ const DreamModule = (() => {
         #dream-root #btn-char-back {
             position: absolute;
              top: max(20px, calc(env(safe-area-inset-top) + 10px));
-            top: 20px; left: 20px;
+            left: 20px;
             z-index: 20;
             background: transparent;
             border: none;
@@ -283,7 +283,7 @@ const DreamModule = (() => {
         #dream-root .top-nav {
             position: absolute;
             top: max(20px, calc(env(safe-area-inset-top) + 10px));
-            top: 20px; left: 20px; right: 20px;
+            left: 20px; right: 20px;
             display: flex;
             justify-content: space-between;
             align-items: center;
