@@ -1079,25 +1079,94 @@ const DreamModule = (() => {
 
   /* ================================================================
      2. 状态 / 配置
+     —— 权威存储在 DB.settings（随完整备份导出/还原）；
+        内存缓存 _dreamCache / settings 供同步读取，写入异步落盘。
      ================================================================ */
+  const DREAMS_KEY  = (cid) => `chill_dreams:${cid}`;   // DB.settings 的 key
+  const SETTINGS_KEY = 'chill_dream_settings';
+  // 旧版 localStorage key（仅用于一次性迁移）
   const LS_DREAMS   = (cid) => `chill_dreams:${cid}`;
   const LS_SETTINGS = 'chill_dream_settings';
 
-  // 做梦偏好（三个开关），默认：图开、乐关、呓语开
-  function loadSettings() {
-    try {
-      const raw = JSON.parse(localStorage.getItem(LS_SETTINGS) || '{}');
-      return {
-        image:   raw.image !== false,
-        music:   raw.music === true,
-        whisper: raw.whisper !== false,
-        imgPos:  raw.imgPos || '',
-        imgNeg:  raw.imgNeg || ''
-      };
-    } catch { return { image: true, music: false, whisper: true, imgPos:'', imgNeg:'' }; }
+  let _dreamCache = {};        // { [cid]: dream[] } 内存缓存
+  let _migrated   = false;     // 防重复迁移
+
+  function _normSettings(raw) {
+    raw = raw || {};
+    return {
+      image:   raw.image !== false,
+      music:   raw.music === true,
+      whisper: raw.whisper !== false,
+      imgPos:  raw.imgPos || '',
+      imgNeg:  raw.imgNeg || ''
+    };
   }
-  function saveSettings(s) { localStorage.setItem(LS_SETTINGS, JSON.stringify(s)); }
-  let settings = loadSettings();
+
+  // 做梦偏好（三个开关），默认：图开、乐关、呓语开。先给同步默认值，init 时从 DB 覆盖
+  let settings = _normSettings({});
+
+  // 把旧 localStorage 数据搬进 DB.settings，搬完即删，只跑一次
+  async function migrateFromLS() {
+    if (_migrated) return;
+    _migrated = true;
+    try {
+      // 1) 做梦偏好
+      const lsSet = localStorage.getItem(LS_SETTINGS);
+      if (lsSet != null) {
+        try {
+          const parsed = JSON.parse(lsSet);
+          // DB 里没有才搬，避免覆盖新数据
+          const exist = await DB.settings.get(SETTINGS_KEY).catch(() => null);
+          if (exist == null) await DB.settings.set(SETTINGS_KEY, _normSettings(parsed));
+        } catch {}
+        localStorage.removeItem(LS_SETTINGS);
+      }
+      // 2) 各角色的梦：扫所有 chill_dreams:* 的 localStorage key
+      const keys = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith('chill_dreams:')) keys.push(k);
+      }
+      for (const k of keys) {
+        const cid = k.slice('chill_dreams:'.length);
+        try {
+          const arr = JSON.parse(localStorage.getItem(k) || '[]');
+          const exist = await DB.settings.get(DREAMS_KEY(cid)).catch(() => null);
+          if (exist == null && Array.isArray(arr) && arr.length) {
+            await DB.settings.set(DREAMS_KEY(cid), arr.slice(0, 50));
+          }
+        } catch {}
+        localStorage.removeItem(k);
+      }
+    } catch (e) { console.warn('[Dream] migrate from LS failed', e); }
+  }
+
+  // 启动加载：迁移 → 把 DB 里的偏好 + 全部梦灌进内存缓存
+  async function loadAllFromDB() {
+    await migrateFromLS();
+    try {
+      const s = await DB.settings.get(SETTINGS_KEY).catch(() => null);
+      settings = _normSettings(s);
+    } catch { settings = _normSettings({}); }
+    // 预载所有角色的梦进缓存（按当前角色列表）
+    try {
+      const chars = await DB.characters.getAll().catch(() => []);
+      _dreamCache = {};
+      for (const c of (chars || [])) {
+        const cid = String(c.id);
+        try {
+          const arr = await DB.settings.get(DREAMS_KEY(cid)).catch(() => null);
+          if (Array.isArray(arr)) _dreamCache[cid] = arr;
+        } catch {}
+      }
+    } catch (e) { console.warn('[Dream] preload dreams failed', e); }
+  }
+
+  function saveSettings(s) {
+    settings = _normSettings(s);
+    DB.settings.set(SETTINGS_KEY, settings).catch(e => console.warn('[Dream] saveSettings', e));
+  }
+
 
   // 网易云配乐配置：复用单人剧情那份 sc-netease-config（StoryMusic 读的就是这个 key）
   const NETEASE_KEY = 'sc-netease-config';
@@ -1299,15 +1368,17 @@ const DreamModule = (() => {
   }
 
   /* ================================================================
-     5. 梦的存取（localStorage，per 角色）
+     5. 梦的存取（DB.settings，per 角色，读走内存缓存）
      ================================================================ */
   function readDreams(cid) {
-    try { return JSON.parse(localStorage.getItem(LS_DREAMS(cid)) || '[]'); }
-    catch { return []; }
+    const arr = _dreamCache[String(cid)];
+    return Array.isArray(arr) ? arr : [];
   }
   function writeDreams(cid, arr) {
-    const capped = arr.slice(0, 50); // 上限 50，超了砍尾
-    localStorage.setItem(LS_DREAMS(cid), JSON.stringify(capped));
+    const key = String(cid);
+    const capped = (Array.isArray(arr) ? arr : []).slice(0, 50); // 上限 50，超了砍尾
+    _dreamCache[key] = capped;        // 同步更新缓存
+    DB.settings.set(DREAMS_KEY(key), capped).catch(e => console.warn('[Dream] writeDreams', e)); // 异步落盘
   }
 
   /* ================================================================
@@ -1817,6 +1888,7 @@ ${material}
   async function open() {
     inject();
     root.style.display = 'block';
+    await loadAllFromDB();   // 先把偏好+梦从 DB 灌进缓存（含旧 localStorage 一次性迁移）
     // 每次打开都回到星野 + 刷新
     $('screen-dreams').classList.remove('active');
     if ($('view-detail').classList.contains('active')) closeDetail(true);
