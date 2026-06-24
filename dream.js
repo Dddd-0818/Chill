@@ -10,6 +10,12 @@ const DreamModule = (() => {
   let root = null;
   const state = { processing: false };
 
+  // 省电模式：默认关。开启后减粒子、去光晕、限帧，缓解安卓卡顿
+  const ECO_KEY = 'chill_dream_eco';
+  let ecoMode = false;
+  // 粒子引擎对外控制句柄（由 initParticles 填充）
+  let particleEngine = null;
+
   // ---------- 样式 ----------
   const STYLE = `        /* =====================================================
            CSS 变量（来自梦境页）
@@ -102,6 +108,32 @@ const DreamModule = (() => {
         }
         #btn-char-back i { font-size: 17px; }
         #btn-char-back:active { color: rgba(255,255,255,0.95); }
+
+        /* 省电模式开关（右上角，呼应返回键） */
+        #dream-root #btn-eco {
+            position: absolute;
+            top: max(20px, calc(env(safe-area-inset-top) + 10px));
+            right: 20px;
+            z-index: 20;
+            background: transparent;
+            border: none;
+            color: rgba(255, 255, 255, 0.35);
+            font-family: var(--font-gothic);
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            padding: 4px 0;
+            transition: color 0.2s;
+        }
+        #dream-root #btn-eco i { font-size: 16px; }
+        #dream-root #btn-eco:active { color: rgba(255,255,255,0.9); }
+        /* 开启态：暖金高亮，跟梦境金色呼应 */
+        #dream-root #btn-eco.on { color: rgba(255, 220, 130, 0.9); }
 
         /* 横向滚动 */
         #dream-root .scroll-gallery {
@@ -735,6 +767,11 @@ const DreamModule = (() => {
             <i class="ph-bold ph-caret-left"></i> Back
         </button>
 
+        <!-- 右上角省电模式开关（默认关，安卓卡顿用） -->
+        <button id="btn-eco" aria-label="省电模式" title="省电模式：减轻卡顿">
+            <i class="ph ph-leaf"></i> <span id="eco-label">Eco</span>
+        </button>
+
         <!-- 横向滚动角色区 -->
         <div class="scroll-gallery" id="scrollContainer">
             <div class="gallery-wrapper" id="galleryWrapper"></div>
@@ -953,15 +990,57 @@ const DreamModule = (() => {
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     let width, height;
-    const fireflies = [], nebulas = [], meteors = [];
+    let fireflies = [], nebulas = [], meteors = [];
+    let rafId = null;
+    let running = false;
+    let lastFrame = 0;
+
+    // 当前档位参数
+    function tier() {
+      return ecoMode
+        ? { fireflyCount: 45, nebulaCount: 4, meteorCount: 2, glow: false, fps: 30, lighter: false }
+        : { fireflyCount: 150, nebulaCount: 8, meteorCount: 3, glow: true, fps: 60, lighter: true };
+    }
+
+    // —— 预渲染发光精灵：把「带光晕的点」画一次到离屏 canvas，之后 drawImage 贴，
+    //    彻底避免每帧 shadowBlur（安卓最贵的操作）——
+    const spriteCache = {}; // key: `${colorKey}` -> canvas
+    function getGlowSprite(rgb, glow) {
+      const key = rgb + (glow ? '_g' : '_p');
+      if (spriteCache[key]) return spriteCache[key];
+      const S = glow ? 16 : 6;        // 精灵尺寸：发光版留出光晕余量
+      const oc = document.createElement('canvas');
+      oc.width = oc.height = S;
+      const octx = oc.getContext('2d');
+      const cx = S / 2;
+      if (glow) {
+        const g = octx.createRadialGradient(cx, cx, 0, cx, cx, cx);
+        g.addColorStop(0,   `rgba(${rgb},1)`);
+        g.addColorStop(0.4, `rgba(${rgb},0.6)`);
+        g.addColorStop(1,   `rgba(${rgb},0)`);
+        octx.fillStyle = g;
+        octx.fillRect(0, 0, S, S);
+      } else {
+        // 省电：实心小圆，无光晕
+        octx.beginPath();
+        octx.arc(cx, cx, cx - 1, 0, Math.PI * 2);
+        octx.fillStyle = `rgba(${rgb},0.9)`;
+        octx.fill();
+      }
+      spriteCache[key] = oc;
+      return oc;
+    }
 
     function resize() {
       const r = root.getBoundingClientRect();
       width = canvas.width = r.width || 390;
       height = canvas.height = r.height || 844;
+      // 尺寸变了，星云渐变缓存失效，重建
+      nebulas.forEach(n => n._buildGradient && n._buildGradient());
     }
+    window.removeEventListener('resize', resize); // 防多次 init 叠加监听
     window.addEventListener('resize', resize);
-    resize();
+
       class Firefly {
           constructor() { this.reset(); this.y = Math.random() * height; }
           reset() {
@@ -969,9 +1048,8 @@ const DreamModule = (() => {
               this.y      = height + Math.random() * 100;
               this.size   = Math.random() * 1.5 + 0.5;
               const isGold = Math.random() > 0.7;
-              this.color   = isGold
-                  ? `rgba(255, 230, 100, ${Math.random() * 0.8 + 0.2})`
-                  : `rgba(255, 255, 255, ${Math.random() * 0.5 + 0.1})`;
+              this.rgb     = isGold ? '255,230,100' : '255,255,255';
+              this.alpha   = isGold ? (Math.random() * 0.8 + 0.2) : (Math.random() * 0.5 + 0.1);
               this.speedY  = -(Math.random() * 0.3 + 0.1);
               this.speedX  = (Math.random() - 0.5) * 0.2;
               this.angle   = Math.random() * Math.PI * 2;
@@ -983,14 +1061,12 @@ const DreamModule = (() => {
               this.x += Math.sin(this.angle) * this.swing + this.speedX;
               if (this.y < -10) this.reset();
           }
-          draw() {
-              ctx.beginPath();
-              ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
-              ctx.fillStyle   = this.color;
-              ctx.shadowBlur  = this.size * 3;
-              ctx.shadowColor = this.color;
-              ctx.fill();
-              ctx.shadowBlur = 0;
+          draw(glow) {
+              const sprite = getGlowSprite(this.rgb, glow);
+              const d = this.size * (glow ? 6 : 3);  // 贴图直径
+              ctx.globalAlpha = this.alpha;
+              ctx.drawImage(sprite, this.x - d / 2, this.y - d / 2, d, d);
+              ctx.globalAlpha = 1;
           }
       }
 
@@ -1003,6 +1079,14 @@ const DreamModule = (() => {
               this.color = colors[Math.floor(Math.random() * colors.length)];
               this.vx = (Math.random() - 0.5) * 0.2;
               this.vy = (Math.random() - 0.5) * 0.2;
+              this._grad = null;
+              this._buildGradient();
+          }
+          // 渐变只在创建/resize 时建一次，不每帧重建
+          _buildGradient() {
+              const g = ctx.createRadialGradient(0, 0, 0, 0, 0, this.radius);
+              g.addColorStop(0, this.color); g.addColorStop(1, 'transparent');
+              this._grad = g;
           }
           update() {
               this.x += this.vx; this.y += this.vy;
@@ -1010,12 +1094,14 @@ const DreamModule = (() => {
               if (this.y < -this.radius || this.y > height + this.radius) this.vy *= -1;
           }
           draw() {
+              // 用 translate 把缓存渐变搬到当前位置
+              ctx.save();
+              ctx.translate(this.x, this.y);
+              ctx.fillStyle = this._grad;
               ctx.beginPath();
-              const g = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.radius);
-              g.addColorStop(0, this.color); g.addColorStop(1, 'transparent');
-              ctx.fillStyle = g;
-              ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+              ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
               ctx.fill();
+              ctx.restore();
           }
       }
 
@@ -1054,26 +1140,66 @@ const DreamModule = (() => {
           }
       }
 
-      for (let i = 0; i < 150; i++) fireflies.push(new Firefly());
-      for (let i = 0; i < 8;   i++) nebulas.push(new Nebula());
-      for (let i = 0; i < 3;   i++) meteors.push(new Meteor());
+    // 按当前档位（重）建粒子
+    function build() {
+      resize();
+      const t = tier();
+      fireflies = []; nebulas = []; meteors = [];
+      for (let i = 0; i < t.fireflyCount; i++) fireflies.push(new Firefly());
+      for (let i = 0; i < t.nebulaCount;  i++) nebulas.push(new Nebula());
+      for (let i = 0; i < t.meteorCount;  i++) meteors.push(new Meteor());
+    }
 
-      function animate() {
-          ctx.clearRect(0, 0, width, height);
-          ctx.globalCompositeOperation = 'lighter';
-          nebulas.forEach(n => { n.update(); n.draw(); });
-          fireflies.forEach(f => { f.update(); f.draw(); });
-          ctx.globalCompositeOperation = 'source-over';
-          meteors.forEach(m => { m.update(); m.draw(); });
-          if (Math.random() < 0.005) {
-              const idle = meteors.find(m => !m.active);
-              if (idle) idle.spawn();
-          }
-          requestAnimationFrame(animate);
+    function frame(ts) {
+      if (!running) return;
+      rafId = requestAnimationFrame(frame);
+      const t = tier();
+      // 限帧：省电档 30fps
+      const interval = 1000 / t.fps;
+      if (ts - lastFrame < interval - 1) return;
+      lastFrame = ts;
+
+      ctx.clearRect(0, 0, width, height);
+      if (t.lighter) ctx.globalCompositeOperation = 'lighter';
+      nebulas.forEach(n => { n.update(); n.draw(); });
+      fireflies.forEach(f => { f.update(); f.draw(t.glow); });
+      ctx.globalCompositeOperation = 'source-over';
+      meteors.forEach(m => { m.update(); m.draw(); });
+      if (Math.random() < 0.005) {
+          const idle = meteors.find(m => !m.active);
+          if (idle) idle.spawn();
       }
-      animate();
+    }
 
+    function start() {
+      if (running) return;
+      running = true;
+      lastFrame = 0;
+      rafId = requestAnimationFrame(frame);
+    }
+    function stop() {
+      running = false;
+      if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+    }
 
+    build();
+    start();
+
+    // 对外句柄：暂停/恢复/切档
+    particleEngine = {
+      pause: stop,
+      resume: start,
+      // 切换省电档：清空精灵缓存（颜色键带档位）+ 按新档重建粒子
+      applyTier() { build(); }
+    };
+
+    // 页面息屏/切后台自动暂停，省电省发热
+    const onVis = () => {
+      if (document.hidden) stop();
+      else if (root && root.style.display !== 'none') start();
+    };
+    document.removeEventListener('visibilitychange', onVis);
+    document.addEventListener('visibilitychange', onVis);
   }
 
 
@@ -1165,6 +1291,30 @@ const DreamModule = (() => {
   function saveSettings(s) {
     settings = _normSettings(s);
     DB.settings.set(SETTINGS_KEY, settings).catch(e => console.warn('[Dream] saveSettings', e));
+  }
+
+  // —— 省电模式 ——
+  async function loadEco() {
+    try { ecoMode = (await DB.settings.get(ECO_KEY).catch(() => null)) === true; }
+    catch { ecoMode = false; }
+    return ecoMode;
+  }
+  function syncEcoUI() {
+    const btn = $('btn-eco');
+    if (!btn) return;
+    btn.classList.toggle('on', ecoMode);
+    const icon = btn.querySelector('i');
+    const label = $('eco-label');
+    if (icon) icon.className = ecoMode ? 'ph-fill ph-leaf' : 'ph ph-leaf';
+    if (label) label.textContent = ecoMode ? 'Eco On' : 'Eco';
+  }
+  async function toggleEco() {
+    ecoMode = !ecoMode;
+    try { await DB.settings.set(ECO_KEY, ecoMode); } catch {}
+    syncEcoUI();
+    // 重建粒子到新档位
+    if (particleEngine && particleEngine.applyTier) particleEngine.applyTier();
+    if (typeof Toast !== 'undefined') Toast.show(ecoMode ? '省电模式已开启，星野已简化' : '省电模式已关闭');
   }
 
 
@@ -1873,6 +2023,7 @@ ${material}
   function bindAll() {
     $('btn-back-to-chars')?.addEventListener('click', hideDreamScreen);
     $('btn-char-back')?.addEventListener('click', close);
+    $('btn-eco')?.addEventListener('click', toggleEco);
     $('btn-sleep')?.addEventListener('click', lullToSleep);
     $('btn-back')?.addEventListener('click', () => closeDetail(false));
     $('btn-dream-del')?.addEventListener('click', deleteDream);
@@ -1886,8 +2037,12 @@ ${material}
 
   /* ---------- 对外入口 ---------- */
   async function open() {
+    await loadEco();         // 先确定档位，inject() 里的 initParticles 才会按对的档建粒子
     inject();
     root.style.display = 'block';
+    syncEcoUI();
+    if (particleEngine && particleEngine.applyTier) particleEngine.applyTier(); // 按当前档位（重）建
+    if (particleEngine && particleEngine.resume) particleEngine.resume(); // 恢复动画
     await loadAllFromDB();   // 先把偏好+梦从 DB 灌进缓存（含旧 localStorage 一次性迁移）
     // 每次打开都回到星野 + 刷新
     $('screen-dreams').classList.remove('active');
@@ -1896,6 +2051,7 @@ ${material}
   }
   function close() {
     stopAllAudio();
+    if (particleEngine && particleEngine.pause) particleEngine.pause(); // 关闭后停止动画，省电省发热
     if (root) root.style.display = 'none';
   }
 
