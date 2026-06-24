@@ -142,6 +142,8 @@ const MusicModule = (() => {
       #music-root .ms-art-card:hover .ms-art-cover { filter:grayscale(0%); transform:scale(1.05); }
       #music-root .ms-art-edit-btn { position:absolute; bottom:5px; right:5px; background:rgba(0,0,0,0.7); width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:#fff; font-size:0.9rem; backdrop-filter:blur(2px); }
       #music-root .ms-art-edit-btn:active { background:#fff; color:#000; }
+      #music-root .ms-art-del-btn { position:absolute; top:5px; right:5px; background:rgba(0,0,0,0.7); width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:rgba(255,255,255,0.6); font-size:0.85rem; backdrop-filter:blur(2px); transition:all 0.2s; }
+      #music-root .ms-art-del-btn:active { background:rgba(220,60,60,0.9); color:#fff; }
       #music-root .ms-art-info { flex:1; display:flex; flex-direction:column; justify-content:space-between; padding:2px 0; }
       #music-root .ms-art-top { display:flex; justify-content:space-between; align-items:flex-start; }
       #music-root .ms-art-num { font-family:var(--ms-font-en); font-size:0.9rem; color:rgba(255,255,255,0.3); font-weight:700; }
@@ -935,6 +937,31 @@ const MusicModule = (() => {
     if (typeof Toast !== 'undefined') Toast.show('歌词已删除');
   }
 
+  async function _deletePlaylist(pl) {
+    // 级联删除：清理歌单内所有歌曲的音频和歌词
+    for (const song of (pl.songs || [])) {
+      try { await MusicDB.del('audio', song.id); } catch(e) {}
+      try { await MusicDB.del('lyrics', song.lrcId || `lrc_${song.id}`); } catch(e) {}
+      if (_blobCache.has(song.id)) { URL.revokeObjectURL(_blobCache.get(song.id)); _blobCache.delete(song.id); }
+    }
+    // 从 IndexedDB 删除歌单记录
+    try { await MusicDB.del('playlists', pl.id); } catch(e) { console.warn('[MusicModule] 删除歌单记录失败:', e); }
+    // 从内存数组移除
+    _localPlaylists = _localPlaylists.filter(p => p.id !== pl.id);
+    // 如果当前正在播放该歌单里的歌，停止播放
+    if (_currentPlaylistObj?.id === pl.id) {
+      const audio = _$('ms-audio');
+      if (audio) { audio.pause(); audio.src = ''; }
+      _isPlaying = false;
+      _currentPlaylist = [];
+      _currentPlaylistObj = null;
+      _currentIdx = -1;
+      _updatePlayUI();
+    }
+    _renderLocalPlaylists();
+    if (typeof Toast !== 'undefined') Toast.show('歌单已删除');
+  }
+
   // ================================================================
   // 智能 LRC 文件名匹配
   // ================================================================
@@ -1337,6 +1364,7 @@ const MusicModule = (() => {
       el.innerHTML = `
         <div class="ms-art-cover-wrap">
           <div class="ms-art-cover" id="ms-lpl-cover-${i}" style="background-image:url('${pl.cover}')"></div>
+          ${pl.id !== 'l1' ? `<div class="ms-art-del-btn" id="ms-lpl-del-${i}" title="删除歌单"><i class="ph ph-trash"></i></div>` : ''}
           <div class="ms-art-edit-btn" id="ms-lpl-edit-${i}"><i class="ph ph-camera"></i></div>
         </div>
         <div class="ms-art-info">
@@ -1350,6 +1378,11 @@ const MusicModule = (() => {
           </div>
         </div>`;
       el.onclick = () => _openSongList(pl);
+      const delBtn = el.querySelector(`#ms-lpl-del-${i}`);
+      if (delBtn) delBtn.onclick = e => {
+        e.stopPropagation();
+        if (confirm(`确认删除歌单「${pl.name}」？\n歌单内所有歌曲将一并删除。`)) _deletePlaylist(pl);
+      };
       el.querySelector(`#ms-lpl-edit-${i}`).onclick = e => {
         e.stopPropagation();
         _uploadImgTargetId = `ms-lpl-cover-${i}`;
