@@ -521,11 +521,24 @@ const CloudModule = (() => {
       _log('info', '本地数据提取完毕，开始向 Supabase 写入 chill_sync 表...');
       if (!isSilent && btn) btn.innerHTML = '<i class="ph-light ph-spinner" style="animation:spin 1s linear infinite"></i> 上传神经突触...';
       
-      const { error: dbErr } = await supabase
-        .from('chill_sync')
-        .upsert({ id: 'main_backup', data: payload, updated_at: new Date() });
-        
-      if (dbErr) throw new Error(dbErr.message);
+      // 先存 meta 行（_meta + assets_meta 索引，很小）
+      const { error: metaErr } = await supabase.from('chill_sync').upsert({
+        id: 'main_backup',
+        data: { _meta: payload._meta, assets_meta: payload.assets_meta },
+        updated_at: new Date()
+      });
+      if (metaErr) throw new Error(metaErr.message);
+
+      // 按 objectStore 逐个 upsert（避免单次操作超出 statement_timeout）
+      for (const storeName of stores) {
+        if (storeName === 'assets') continue;
+        const { error: storeErr } = await supabase.from('chill_sync').upsert({
+          id: `main_backup_${storeName}`,
+          data: payload[storeName] || [],
+          updated_at: new Date()
+        });
+        if (storeErr) _log('warn', `写入 ${storeName} 失败`, storeErr.message);
+      }
       _log('info', '✅ chill_sync 表数据上传成功！');
 
       let current = 0;
@@ -573,17 +586,24 @@ const CloudModule = (() => {
     try {
       btn.innerHTML = '<i class="ph-light ph-spinner" style="animation:spin 1s linear infinite"></i> 连接数据库...';
       
-      const { data: syncRecords, error: dbErr } = await supabase
-        .from('chill_sync')
-        .select('data')
-        .eq('id', 'main_backup')
-        .single(); 
+      // 拉主 meta 行
+      const { data: metaRecord, error: metaErr } = await supabase
+        .from('chill_sync').select('data').eq('id', 'main_backup').single();
+      if (metaErr) throw new Error(metaErr.message);
+      if (!metaRecord?.data) throw new Error('未在云端找到主备份数据');
 
-      if (dbErr) throw new Error(dbErr.message);
-      if (!syncRecords || !syncRecords.data) throw new Error('未在云端找到主备份数据');
-      
+      // 拉各 store 行（新版分行格式）
+      const { data: storeRecords } = await supabase
+        .from('chill_sync').select('id, data').like('id', 'main_backup_%');
+
+      // 合并（向后兼容旧版：旧版 main_backup 里有完整数据，storeRecords 为空时直接用）
+      const cloudData = { ...metaRecord.data };
+      for (const row of (storeRecords || [])) {
+        const storeName = row.id.replace('main_backup_', '');
+        cloudData[storeName] = row.data;
+      }
+
       _log('info', '✅ 云端数据库拉取成功，准备清空本地 IndexedDB...');
-      const cloudData = syncRecords.data;
 
       await DB.clearAll();
       const db = await _getRawDB();

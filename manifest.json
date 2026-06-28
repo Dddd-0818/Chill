@@ -1,15 +1,12 @@
 {
-  "id": "/Chill/",
   "name": "Chill Mono OS",
   "short_name": "Chill OS",
-  "description": "Chill Mono OS — AI companion PWA, keeping it simple & chill.",
   "start_url": "/Chill/",
   "scope": "/Chill/",
   "display": "standalone",
   "background_color": "#fafafa",
   "theme_color": "#fafafa",
   "orientation": "portrait",
-  "categories": ["lifestyle", "entertainment"],
   "icons": [
     {
       "src": "android-chrome-192x192.png",
