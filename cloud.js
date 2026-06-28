@@ -692,22 +692,35 @@ const CloudModule = (() => {
     try {
       await DB.settings.set('cloud-vapid', vapidInput);
       const reg = await navigator.serviceWorker.ready;
-      
-      let subscription = await reg.pushManager.getSubscription();
-      if (!subscription) {
-        _log('info', '正在通过 VAPID 向浏览器申请订阅通道...');
-        subscription = await reg.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: urlBase64ToUint8Array(vapidInput)
-        });
+
+      // 强制刷新：先清掉旧订阅（iOS APNs endpoint 会静默轮转，必须重新拿）
+      const oldSub = await reg.pushManager.getSubscription();
+      if (oldSub) {
+        _log('info', '检测到旧订阅，先清除再重新订阅...');
+        await oldSub.unsubscribe();
       }
+      _log('info', '正在通过 VAPID 向浏览器申请全新订阅通道...');
+      const subscription = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(vapidInput)
+      });
 
       const subData = JSON.parse(JSON.stringify(subscription));
       await DB.settings.set('push-subscription', subData);
-      
+
       _log('info', '✅ 设备令牌订阅成功！', subData);
-      Toast.show('设备令牌生成成功！信使已就位 ✦');
-      
+      Toast.show('设备令牌生成成功！正在同步到云端...', 3000);
+
+      // 自动把新 endpoint 同步到 chill_sync，云函数才能读到最新地址
+      try {
+        await syncUp(true);
+        _log('info', '✅ 推送订阅端点已同步到云端备份');
+        Toast.show('设备令牌已同步到云端，信使就位 ✦');
+      } catch(syncErr) {
+        _log('warn', '推送订阅同步云端失败，请手动备份一次', syncErr.message);
+        Toast.show('令牌已生成，请手动备份一次确保云端生效');
+      }
+
       reg.showNotification('Chill OS', {
         body: '神经链路对接完成，设备加密令牌已锁定。',
         icon: 'apple-touch-icon.png'
