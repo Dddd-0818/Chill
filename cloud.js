@@ -809,8 +809,28 @@ const CloudModule = (() => {
 
         _log('info', `执行阅后即焚: 删除云端信件 ID ${record.id}`);
         await supabase.from('cloud_offline_messages').delete().eq('id', record.id);
-        
+
         await DB.settings.set(`last-interaction-${charId}`, Date.now());
+
+        // app 在后台时用已知可用的 SW postMessage 路径弹系统通知
+        if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
+          try {
+            const char = await DB.characters.get(Number(charId)).catch(() => null);
+            const charName = char?.name || 'Chill OS';
+            const lastBubble = bubbles[bubbles.length - 1] || '';
+            const cleanMsg = lastBubble.replace(/\[.*?\]/g, '').trim() || '[收到新消息]';
+            const reg = await navigator.serviceWorker.ready;
+            if (navigator.serviceWorker.controller) {
+              navigator.serviceWorker.controller.postMessage({
+                type: 'SHOW_NOTIFICATION', title: charName, body: cleanMsg,
+                icon: 'apple-touch-icon.png', tag: 'cloud-msg-' + record.id
+              });
+            } else {
+              reg.showNotification(charName, { body: cleanMsg, icon: 'apple-touch-icon.png',
+                vibrate: [200, 100, 200], tag: 'cloud-msg-' + record.id, renotify: true });
+            }
+          } catch(_) {}
+        }
       }
 
       if (typeof NotifModule !== 'undefined') NotifModule.refresh();
@@ -825,7 +845,20 @@ const CloudModule = (() => {
     _log('info', 'CloudModule 初始化...');
     // 首次加载时查收离线信件
     await checkOfflineMessages();
-    
+
+    // Supabase Realtime：监听 cloud_offline_messages 新消息
+    // 不依赖 Web Push——只要 app 后台存活（KeepAlive 跑着），新消息就能立刻触发通知
+    try {
+      const supabase = await _getSupabaseSilent();
+      if (supabase) {
+        supabase.channel('cloud-offline-messages-watch')
+          .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'cloud_offline_messages' },
+            () => { checkOfflineMessages(); })
+          .subscribe();
+        _log('info', '✅ Realtime 监听 cloud_offline_messages 已挂载');
+      }
+    } catch(e) { _log('warn', 'Realtime 订阅失败', e.message); }
+
     // 监听应用可见性变化
     document.addEventListener('visibilitychange', async () => {
       // 1. 切回前台：检查是否有信件
