@@ -711,10 +711,18 @@ const CloudModule = (() => {
       _log('info', '✅ 设备令牌订阅成功！', subData);
       Toast.show('设备令牌生成成功！正在同步到云端...', 3000);
 
-      // 自动把新 endpoint 同步到 chill_sync，云函数才能读到最新地址
+      // 直接把订阅写入 main_backup.data.settings，云函数从那里读
       try {
-        await syncUp(true);
-        _log('info', '✅ 推送订阅端点已同步到云端备份');
+        const supabase = await _getSupabaseSilent();
+        if (!supabase) throw new Error('未连接云端');
+        const { data: existingRow } = await supabase.from('chill_sync').select('data').eq('id', 'main_backup').single();
+        const currentData = existingRow?.data || {};
+        const settings = Array.isArray(currentData.settings) ? currentData.settings : [];
+        const idx = settings.findIndex(s => s.key === 'push-subscription');
+        if (idx >= 0) settings[idx] = { key: 'push-subscription', value: subData };
+        else settings.push({ key: 'push-subscription', value: subData });
+        await supabase.from('chill_sync').upsert({ id: 'main_backup', data: { ...currentData, settings }, updated_at: new Date() });
+        _log('info', '✅ 推送订阅已直接写入 main_backup.settings，云函数可读');
         Toast.show('设备令牌已同步到云端，信使就位 ✦');
       } catch(syncErr) {
         _log('warn', '推送订阅同步云端失败，请手动备份一次', syncErr.message);
