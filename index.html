@@ -6206,6 +6206,17 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
         </div>
       </div>
     </div>
+    <!-- 🌟 CSS预设应用范围确认弹窗 -->
+    <div class="cv-modal-overlay" id="cv-css-apply-overlay" style="z-index: 202;">
+      <div class="cv-mag-modal" style="text-align: left;">
+        <h2 class="cv-mod-title" style="margin-bottom: 10px;">Apply Style</h2>
+        <p style="font-size:0.78rem; color:#666; margin-bottom:28px; line-height:1.6;">是否将此样式应用到全部角色？</p>
+        <div class="cv-mod-actions">
+          <button class="cv-btn-mod-cancel" onclick="ConvModule.applyCssPresetConfirm(false)">仅当前</button>
+          <button class="cv-btn-mod-confirm" onclick="ConvModule.applyCssPresetConfirm(true)">全部角色</button>
+        </div>
+      </div>
+    </div>
      <!-- 邀请新角色入群弹窗 -->
     <div class="gc-overlay" id="gc-invite-overlay" style="z-index: 350;">
       <div class="gc-modal">
@@ -16760,6 +16771,7 @@ const ConvModule = (() => {
   let _currentQuote = null;
   let _isMultiSelectMode = false;
   let _selectedMsgIds = new Set();
+  let _pendingCssPresetId = null;
 
   // ── 群聊状态 ──
   let _isGroup = false;
@@ -22470,15 +22482,30 @@ if (!isRecall && !isHtml && !isQuote && !isAudio && !isEmote && !isTransfer && !
   }
 
   async function applyCssPreset(id) {
+    _pendingCssPresetId = id;
+    document.getElementById('cv-css-apply-overlay').classList.add('active');
+  }
+
+  async function applyCssPresetConfirm(applyAll) {
+    document.getElementById('cv-css-apply-overlay').classList.remove('active');
+    const id = _pendingCssPresetId;
+    _pendingCssPresetId = null;
+    if (!id) return;
     try {
       const presets = await DB.settings.get(_cssPresetsKey()) || [];
       const p = presets.find(x => x.id === id);
-      if (p) {
-        const ta = document.getElementById('cv-custom-css-input');
-        if (ta) ta.value = p.css;
+      if (!p) return;
+      const ta = document.getElementById('cv-custom-css-input');
+      if (ta) ta.value = p.css;
+      if (applyAll) {
+        const chars = await DB.characters.getAll();
+        await Promise.all(chars.map(c => DB.settings.set(`char-css-${c.id}`, p.css)));
+        _injectCustomCSS(p.css);
+        Toast.show(`已应用到全部 ${chars.length} 个角色`);
+      } else {
         applyAndSaveCSS();
       }
-    } catch(e){}
+    } catch(e) { console.error('[applyCssPreset]', e); }
   }
 
   async function deleteCssPreset(id) {
@@ -24091,7 +24118,7 @@ if (action === 'quote') {
     document.getElementById('cv-dist-overlay').classList.remove('active');
   }
   
-  return { enter, back, openQuickReply, closeQuickReply,openSettings, closeSettings, openFuncPanel, loadMore, sendUserMsg, sendAndTriggerAI, fetchModels, closeApiModal, confirmApi, openRecallModal, closeRecallModal, collectTransfer, openHangTag, closeHangTag, tearHangTag, sendUserTransfer, sendImgMsg, closeMenu,handleMenuAction,cancelQuote, updateMultiSelectUI, cancelMultiSelect, favoriteSelected, deleteSelected,addEmoteToPreview,_openImgViewer, _openImgViewerFromEl, _viewerDownloadImage, _regenerateNovelFromViewer, toggleAudio, clearWallpaper, clearHistory, deleteChat, _toggleAccordion, _selectRadio, _selectPersona,_removePendingImg,playAudio, playUserAudio, previewVoice, _toggleTTS, _toggleFeedVoice, _toggleNovel, _toggleTranslate, _appendNovelImageMessage, _replaceMessageBubble, _showNovelPending, _hideNovelPending, _toggleAlias,copyDefaultCSS, applyAndSaveCSS, clearCustomCSS, saveCssPreset, confirmSaveCssPreset, applyCssPreset, deleteCssPreset,manualSummarize, clearMemory, archiveToWorldBook, confirmArchive, syncSummary, _onSummaryEdit,openCallRecordModal, closeCallRecordModal,_toggleOfflineMsg, _scrollToBottom, openContextConsole,_splitAiBubbles, openLocModal, closeLocModal, sendLocationMsg, openDistModal, closeDistModal, _removeFace, _setFaceFidelity, _onFaceConsent, _pickFace, refreshGhostUsers };
+  return { enter, back, openQuickReply, closeQuickReply,openSettings, closeSettings, openFuncPanel, loadMore, sendUserMsg, sendAndTriggerAI, fetchModels, closeApiModal, confirmApi, openRecallModal, closeRecallModal, collectTransfer, openHangTag, closeHangTag, tearHangTag, sendUserTransfer, sendImgMsg, closeMenu,handleMenuAction,cancelQuote, updateMultiSelectUI, cancelMultiSelect, favoriteSelected, deleteSelected,addEmoteToPreview,_openImgViewer, _openImgViewerFromEl, _viewerDownloadImage, _regenerateNovelFromViewer, toggleAudio, clearWallpaper, clearHistory, deleteChat, _toggleAccordion, _selectRadio, _selectPersona,_removePendingImg,playAudio, playUserAudio, previewVoice, _toggleTTS, _toggleFeedVoice, _toggleNovel, _toggleTranslate, _appendNovelImageMessage, _replaceMessageBubble, _showNovelPending, _hideNovelPending, _toggleAlias,copyDefaultCSS, applyAndSaveCSS, clearCustomCSS, saveCssPreset, confirmSaveCssPreset, applyCssPreset, applyCssPresetConfirm, deleteCssPreset,manualSummarize, clearMemory, archiveToWorldBook, confirmArchive, syncSummary, _onSummaryEdit,openCallRecordModal, closeCallRecordModal,_toggleOfflineMsg, _scrollToBottom, openContextConsole,_splitAiBubbles, openLocModal, closeLocModal, sendLocationMsg, openDistModal, closeDistModal, _removeFace, _setFaceFidelity, _onFaceConsent, _pickFace, refreshGhostUsers };
 })();
 /** 供 NovelModule 等脚本用 window 访问；const 不会自动挂到 window */
 window.ConvModule = ConvModule;
