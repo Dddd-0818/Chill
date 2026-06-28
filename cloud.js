@@ -692,43 +692,22 @@ const CloudModule = (() => {
     try {
       await DB.settings.set('cloud-vapid', vapidInput);
       const reg = await navigator.serviceWorker.ready;
-
-      // 强制刷新：先清掉旧订阅（iOS APNs endpoint 会静默轮转，必须重新拿）
-      const oldSub = await reg.pushManager.getSubscription();
-      if (oldSub) {
-        _log('info', '检测到旧订阅，先清除再重新订阅...');
-        await oldSub.unsubscribe();
+      
+      let subscription = await reg.pushManager.getSubscription();
+      if (!subscription) {
+        _log('info', '正在通过 VAPID 向浏览器申请订阅通道...');
+        subscription = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(vapidInput)
+        });
       }
-      _log('info', '正在通过 VAPID 向浏览器申请全新订阅通道...');
-      const subscription = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(vapidInput)
-      });
 
       const subData = JSON.parse(JSON.stringify(subscription));
       await DB.settings.set('push-subscription', subData);
-
+      
       _log('info', '✅ 设备令牌订阅成功！', subData);
-      Toast.show('设备令牌生成成功！正在同步到云端...', 3000);
-
-      // 直接把订阅写入 main_backup.data.settings，云函数从那里读
-      try {
-        const supabase = await _getSupabaseSilent();
-        if (!supabase) throw new Error('未连接云端');
-        const { data: existingRow } = await supabase.from('chill_sync').select('data').eq('id', 'main_backup').single();
-        const currentData = existingRow?.data || {};
-        const settings = Array.isArray(currentData.settings) ? currentData.settings : [];
-        const idx = settings.findIndex(s => s.key === 'push-subscription');
-        if (idx >= 0) settings[idx] = { key: 'push-subscription', value: subData };
-        else settings.push({ key: 'push-subscription', value: subData });
-        await supabase.from('chill_sync').upsert({ id: 'main_backup', data: { ...currentData, settings }, updated_at: new Date() });
-        _log('info', '✅ 推送订阅已直接写入 main_backup.settings，云函数可读');
-        Toast.show('设备令牌已同步到云端，信使就位 ✦');
-      } catch(syncErr) {
-        _log('warn', '推送订阅同步云端失败，请手动备份一次', syncErr.message);
-        Toast.show('令牌已生成，请手动备份一次确保云端生效');
-      }
-
+      Toast.show('设备令牌生成成功！信使已就位 ✦');
+      
       reg.showNotification('Chill OS', {
         body: '神经链路对接完成，设备加密令牌已锁定。',
         icon: 'apple-touch-icon.png'
@@ -817,28 +796,8 @@ const CloudModule = (() => {
 
         _log('info', `执行阅后即焚: 删除云端信件 ID ${record.id}`);
         await supabase.from('cloud_offline_messages').delete().eq('id', record.id);
-
+        
         await DB.settings.set(`last-interaction-${charId}`, Date.now());
-
-        // app 在后台时用已知可用的 SW postMessage 路径弹系统通知
-        if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
-          try {
-            const char = await DB.characters.get(Number(charId)).catch(() => null);
-            const charName = char?.name || 'Chill OS';
-            const lastBubble = bubbles[bubbles.length - 1] || '';
-            const cleanMsg = lastBubble.replace(/\[.*?\]/g, '').trim() || '[收到新消息]';
-            const reg = await navigator.serviceWorker.ready;
-            if (navigator.serviceWorker.controller) {
-              navigator.serviceWorker.controller.postMessage({
-                type: 'SHOW_NOTIFICATION', title: charName, body: cleanMsg,
-                icon: 'apple-touch-icon.png', tag: 'cloud-msg-' + record.id
-              });
-            } else {
-              reg.showNotification(charName, { body: cleanMsg, icon: 'apple-touch-icon.png',
-                vibrate: [200, 100, 200], tag: 'cloud-msg-' + record.id, renotify: true });
-            }
-          } catch(_) {}
-        }
       }
 
       if (typeof NotifModule !== 'undefined') NotifModule.refresh();
@@ -853,20 +812,7 @@ const CloudModule = (() => {
     _log('info', 'CloudModule 初始化...');
     // 首次加载时查收离线信件
     await checkOfflineMessages();
-
-    // Supabase Realtime：监听 cloud_offline_messages 新消息
-    // 不依赖 Web Push——只要 app 后台存活（KeepAlive 跑着），新消息就能立刻触发通知
-    try {
-      const supabase = await _getSupabaseSilent();
-      if (supabase) {
-        supabase.channel('cloud-offline-messages-watch')
-          .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'cloud_offline_messages' },
-            () => { checkOfflineMessages(); })
-          .subscribe();
-        _log('info', '✅ Realtime 监听 cloud_offline_messages 已挂载');
-      }
-    } catch(e) { _log('warn', 'Realtime 订阅失败', e.message); }
-
+    
     // 监听应用可见性变化
     document.addEventListener('visibilitychange', async () => {
       // 1. 切回前台：检查是否有信件
