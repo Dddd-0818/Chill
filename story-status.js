@@ -1000,7 +1000,7 @@ const StoryMusic = (() => {
         const dData = await dRes.json();
         coverUrl = (dData.songs && dData.songs[0] && dData.songs[0].al && dData.songs[0].al.picUrl) || '';
       } catch (e) {}
-      return { id: valid.id, title: meta.name || keyword, artist: (meta.artists && meta.artists[0] && meta.artists[0].name) || 'Unknown', audioUrl: valid.url, coverUrl };
+      return { id: valid.id, title: meta.name || keyword, artist: (meta.artists && meta.artists[0] && meta.artists[0].name) || 'Unknown', audioUrl: (valid.url || '').replace('http://', 'https://'), coverUrl };
     } catch (e) {
       console.warn('[StoryMusic] 网易云抓取失败', e);
       return null;
@@ -1052,7 +1052,7 @@ const StoryMusic = (() => {
           const r = await fetch(`${base}/song/url/v1?id=${songId}&level=exhigh&timerstamp=${Date.now()}${cookieParam}`);
           const d = await r.json();
           const v = d.data && d.data.find(it => it.url && it.url.trim());
-          if (v) { src = v.url; playerEl.dataset.src = src; }
+          if (v) { src = (v.url || '').replace('http://', 'https://'); playerEl.dataset.src = src; }
         } catch (e) {}
       }
     }

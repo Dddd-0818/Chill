@@ -1658,7 +1658,7 @@ if (fwLabelNum) {
     if (song.isCloud && song.id) {
       try {
         const data = await _api(`/song/url/v1?id=${song.id}&level=exhigh&randomCNIP=true`);
-        url = data.data?.[0]?.url || '';
+        url = (data.data?.[0]?.url || '').replace('http://', 'https://');
         if (!song.cover) {
           const detail = await _api(`/song/detail?ids=${song.id}`);
           const pic = detail.songs?.[0]?.al?.picUrl;

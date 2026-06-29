@@ -1372,7 +1372,7 @@ const DreamModule = (() => {
         coverUrl = dData.songs?.[0]?.al?.picUrl || '';
       } catch {}
       const artist = (meta.artists || meta.ar || []).map(a => a.name).filter(Boolean).join('/') || '';
-      return { id: valid.id, title: meta.name || keyword, artist, audioUrl: valid.url, coverUrl };
+      return { id: valid.id, title: meta.name || keyword, artist, audioUrl: (valid.url || '').replace('http://', 'https://'), coverUrl };
     } catch (e) { console.warn('[Dream] netease fetch failed', e); return null; }
   }
 
