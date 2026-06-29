@@ -1675,7 +1675,8 @@ if (fwLabelNum) {
     
     _fetchLyrics(song);
 
-    if (!url) { console.warn('[MusicModule] 无法获取播放链接'); return; }
+    if (!url) { console.warn('[MusicModule] 无法获取播放链接'); if(window.Toast)Toast.show('无法获取播放链接'); return; }
+    audio.onerror = function(){ const c=audio.error; const msg='音频加载失败: '+(c?'code='+c.code+' '+({1:'MEDIA_ERR_ABORTED',2:'MEDIA_ERR_NETWORK',3:'MEDIA_ERR_DECODE',4:'MEDIA_ERR_SRC_NOT_SUPPORTED'}[c.code]||'UNKNOWN'):'unknown')+' url='+url.slice(0,80); console.error('[MusicModule]',msg); if(window.Toast)Toast.show(msg); };
     audio.src = url;
     audio.play().then(() => {
       _isPlaying = true;
@@ -1684,7 +1685,7 @@ if (fwLabelNum) {
       document.querySelectorAll('#ms-song-list-render .ms-song-item').forEach(el => el.classList.remove('playing'));
       const items = document.querySelectorAll('#ms-song-list-render .ms-song-item');
       if (items[idx]) items[idx].classList.add('playing');
-    }).catch(e => { console.warn('[MusicModule] 播放失败', e); _isPlaying = false; _updatePlayUI(); });
+    }).catch(e => { console.warn('[MusicModule] 播放失败', e); if(window.Toast)Toast.show('播放失败: '+e.message); _isPlaying = false; _updatePlayUI(); });
   }
 
   function _togglePlay() {
