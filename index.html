@@ -4956,24 +4956,17 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
               录制 4 秒环境音 → 浏览器内转成 WAV → 发到你自部署的 Edge Function（env-audio-analyze）分析 → 返回标签。原始音频不存储。
             </p>
 
-            <!-- 分析模型：下拉选择，不预选；只列能调音频的型号 -->
+            <!-- 分析模型：从用户自己的中转拉取后选择，不写死任何型号名 -->
             <div class="input-wrapper" style="margin-bottom:8px;">
-              <label class="label-text">分析用模型 / Audio Model（必须支持音频输入）</label>
+              <label class="label-text">分析用模型 / Audio Model（从你的中转拉取后选择）</label>
+              <span class="fetch-link" id="env-audio-fetch-btn" onclick="EnvSenseModule.fetchAudioModels()" style="display:inline-block; margin:4px 0 8px;">点击拉取模型列表</span>
               <select id="env-audio-model" class="select-stylish">
-                <option value="" disabled selected>— 请选择音频模型 —</option>
-                <optgroup label="Gemini · 推荐（中转常见、稳定）">
-                  <option value="gemini-3.5-flash">gemini-3.5-flash —— 推荐，便宜又稳</option>
-                  <option value="gemini-3.1-flash-lite">gemini-3.1-flash-lite —— 最便宜</option>
-                  <option value="gemini-3-flash">gemini-3-flash —— 旧版，可用</option>
-                  <option value="gemini-3.1-pro">gemini-3.1-pro —— 能用但偏贵，没必要</option>
-                </optgroup>
-                <optgroup label="OpenAI 音频模型（需中转支持音频透传）">
-                  <option value="gpt-audio">gpt-audio</option>
-                  <option value="gpt-4o-audio-preview">gpt-4o-audio-preview</option>
-                </optgroup>
+                <option value="" disabled selected>— 先填下面的 Key，再点上方「拉取模型列表」—</option>
               </select>
-              <div style="font-size:0.65rem;color:var(--s-text-secondary);line-height:1.5;margin-top:6px;">
-                ⚠️ 普通聊天模型（gpt-5 / claude / deepseek 等）<b>不能</b>调音频，选了会静默失败、环境音一直为空。中转里没人专门开音频模型，<b>用一个 Gemini Flash 最稳</b>。
+              <div style="font-size:0.65rem;color:var(--s-text-secondary);line-height:1.6;margin-top:6px;">
+                ⚠️ 必须选<b>支持音频输入</b>的模型，否则会报 Model not found / 静默失败。型号名以你中转列表里的为准（各家命名不同）：<br>
+                · <b>能用</b>：Gemini 系几乎都行 —— gemini-2.5 / 3 / 3.1 的 flash、pro 等（如你中转里的 gemini-3.1-pro-preview、gemini-3-flash-preview）；OpenAI 音频专用款 gpt-audio、gpt-4o-audio-preview。<br>
+                · <b>不能用</b>：普通文本模型 —— gpt-5、claude、deepseek、各种 chat 模型，它们不收音频。
               </div>
             </div>
 
@@ -9364,9 +9357,8 @@ const EnvSenseModule = (() => {
     const cdEl = document.getElementById('env-sense-cooldown');
     if (cdEl && cfg.cooldown !== undefined) cdEl.value = cfg.cooldown;
 
-    // 环境音：回填已选模型（key 不回显；edge/base 自动生成、只读展示）
-    const mdlEl = document.getElementById('env-audio-model');
-    if (mdlEl && cfg.audioModel) mdlEl.value = cfg.audioModel;
+    // 环境音：回填已选模型（下拉初始为空，把已存模型放进去并选中；可点「拉取」刷新完整列表）
+    if (cfg.audioModel) _fillAudioModelSelect([cfg.audioModel], cfg.audioModel);
 
     _syncAudioSection();
     _renderStatus(_lastStatus, '最近一次采集'); // 进页面显示上次（聊天/测试）采集结果
@@ -9838,7 +9830,45 @@ const EnvSenseModule = (() => {
     }
   }
 
-  return { init, toggleEnabled, saveOptions, saveAudioConfig, collectFrame, buildPromptBlock, testCollect, _renderStatus };
+  // ── 从用户自己的中转拉取模型列表，填进下拉（复用聊天的 base + 当前框里的 key）──
+  function _fillAudioModelSelect(models, selected) {
+    const sel = document.getElementById('env-audio-model');
+    if (!sel) return;
+    sel.innerHTML = '';
+    const ph = document.createElement('option');
+    ph.value = ''; ph.disabled = true; ph.textContent = '— 请选择音频模型 —';
+    sel.appendChild(ph);
+    let matched = false;
+    (models || []).forEach(m => {
+      const o = document.createElement('option');
+      o.value = m; o.textContent = m;
+      if (m === selected) { o.selected = true; matched = true; }
+      sel.appendChild(o);
+    });
+    if (!matched) ph.selected = true; // 没匹配到已存模型就停在占位
+  }
+
+  async function fetchAudioModels() {
+    const link = document.getElementById('env-audio-fetch-btn');
+    const key = document.getElementById('env-audio-api-key')?.value?.trim();
+    if (!key) { alert('请先在下面填好 API Key，再拉取模型'); return; }
+    const base = await _deriveChatBase();
+    if (!base) { alert('未检测到已激活的聊天 API（接口地址自动复用它）。请先到「设置 → API」配置并激活一个接口。'); return; }
+    const orig = link ? link.textContent : '';
+    if (link) link.textContent = '拉取中…';
+    try {
+      const models = await ApiHelper.fetchModels(base, key); // 走 /v1/models，与聊天栏同款
+      const cfg = await _getCfg();
+      _fillAudioModelSelect(models, cfg.audioModel || '');
+      if (link) link.textContent = `✓ 拉到 ${models.length} 个，下面选一个支持音频的`;
+      setTimeout(() => { if (link) link.textContent = '重新拉取'; }, 2500);
+    } catch(e) {
+      if (link) link.textContent = '拉取失败，点此重试';
+      alert('拉取模型失败：' + (e?.message || e) + '\n（确认 Key 正确，且「设置 → API」里激活的接口地址可用）');
+    }
+  }
+
+  return { init, toggleEnabled, saveOptions, saveAudioConfig, collectFrame, buildPromptBlock, testCollect, fetchAudioModels, _renderStatus };
 })();
 
 // ============================================================
