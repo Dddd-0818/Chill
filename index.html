@@ -8873,6 +8873,44 @@ const Toast = (() => {
 })();
 
 // ============================================================
+// saveFileCompat — 跨平台文件保存
+// APK(Capacitor WebView) 里 a.download 触发的是原生 DownloadListener，
+// 但网页若在 a.click() 后立刻 URL.revokeObjectURL，会掐掉原生桥的异步读取 → 文件存不下。
+// 所以在 APK 环境改为：直接把数据 base64 交给原生桥(AndroidDownload.onData)保存到「下载」文件夹，
+// 完全跳过 a.click/revoke 的时序竞争。非 APK(浏览器/PWA) 走标准 a.download。
+// 用法：saveFileCompat(blobOrUint8Array, 'name.zip', 'application/zip')
+// ============================================================
+async function saveFileCompat(data, filename, mime) {
+  mime = mime || 'application/octet-stream';
+  const blob = (data instanceof Blob) ? data : new Blob([data], { type: mime });
+  const nativeDL = window.AndroidDownload; // 由 APK 的 MainActivity 注入
+  if (nativeDL && typeof nativeDL.onData === 'function') {
+    // APK：blob → base64 → 交给原生保存
+    const base64 = await new Promise((resolve, reject) => {
+      const fr = new FileReader();
+      fr.onload = () => {
+        const d = String(fr.result || '');
+        const i = d.indexOf(',');
+        resolve(i >= 0 ? d.slice(i + 1) : d);
+      };
+      fr.onerror = () => reject(fr.error || new Error('read blob failed'));
+      fr.readAsDataURL(blob);
+    });
+    nativeDL.onData(base64, filename, mime); // 原生弹「已保存到下载」toast
+    return;
+  }
+  // 浏览器 / PWA：标准下载。延迟 revoke，避免个别环境异步读取被掐
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+}
+
+// ============================================================
 // KeepAliveModule — AudioContext 静音振荡器后台保活机制 (防杀进程)
 // 比空白 WAV 更可靠：持续产生音频帧，iOS 会认定为真实 audio session
 // ============================================================
@@ -9676,10 +9714,10 @@ const EnvSenseModule = (() => {
   function _getPosition() {
     return new Promise((resolve, reject) => {
       if (!navigator.geolocation) return reject(new Error('Geolocation not supported'));
-    navigator.geolocation.getCurrentPosition(resolve, reject, {
-        enableHighAccuracy: false,
-        timeout: 20000,
-        maximumAge: 300000
+      navigator.geolocation.getCurrentPosition(resolve, reject, {
+        enableHighAccuracy: false,  // 用网络/基站定位，快，室内也能出（城市级精度对天气/地名完全够）
+        timeout: 20000,             // 8s → 20s，给弱信号更多时间
+        maximumAge: 300000          // 接受 5 分钟内的缓存位置，多数情况秒回、几乎不再超时
       });
     });
   }
@@ -10254,17 +10292,13 @@ const UIModule = (() => {
       }
       
       const fflateAPI = typeof fflate !== 'undefined' ? fflate : window.fflate;
-      fflateAPI.zip(zipObj, { level: 0 }, (err, zipped) => {
-        if (err) throw err;
-        const blob = new Blob([zipped], { type: 'application/zip' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
+      fflateAPI.zip(zipObj, { level: 0 }, async (err, zipped) => {
+        if (err) { Toast.show('导出失败'); console.error(err); return; }
         const dateStr = new Date().toISOString().slice(0,10).replace(/-/g, '');
-        a.href = url;
-        a.download = `ChillOS_Theme_${dateStr}.zip`;
-        a.click();
-        URL.revokeObjectURL(url);
-        Toast.show(`成功导出 ${count} 项美化图片！`);
+        try {
+          await saveFileCompat(zipped, `ChillOS_Theme_${dateStr}.zip`, 'application/zip');
+          Toast.show(`成功导出 ${count} 项美化图片！`);
+        } catch(e) { Toast.show('导出失败'); console.error(e); }
       });
     } catch(e) {
       Toast.show('导出失败');
@@ -10459,17 +10493,13 @@ const DataModule = (() => {
       zipObj['database.json'] = fflateAPI.strToU8(JSON.stringify(backupData));
 
       // 0 压缩率，防崩溃
-      fflateAPI.zip(zipObj, { level: 0 }, (err, zipped) => {
-        if (err) throw err;
-        const blob = new Blob([zipped], { type: 'application/zip' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
+      fflateAPI.zip(zipObj, { level: 0 }, async (err, zipped) => {
+        if (err) { Toast.show('导出失败'); console.error(err); return; }
         const dateStr = new Date().toISOString().slice(0,10).replace(/-/g, '');
-        a.href = url;
-        a.download = `ChillOS_Backup_${dateStr}.zip`;
-        a.click();
-        URL.revokeObjectURL(url);
-        Toast.show('导出成功！');
+        try {
+          await saveFileCompat(zipped, `ChillOS_Backup_${dateStr}.zip`, 'application/zip');
+          Toast.show('导出成功！');
+        } catch(e) { Toast.show('导出失败: ' + e.message); console.error(e); }
       });
 
     } catch (err) {
@@ -10548,17 +10578,13 @@ const DataModule = (() => {
       const fflateAPI = typeof fflate !== 'undefined' ? fflate : window.fflate;
       zipObj['database.json'] = fflateAPI.strToU8(JSON.stringify(backupData));
 
-      fflateAPI.zip(zipObj, { level: 0 }, (err, zipped) => {
-        if (err) throw err;
-        const blob = new Blob([zipped], { type: 'application/zip' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
+      fflateAPI.zip(zipObj, { level: 0 }, async (err, zipped) => {
+        if (err) { Toast.show('导出失败'); console.error(err); return; }
         const dateStr = new Date().toISOString().slice(0,10).replace(/-/g, '');
-        a.href = url;
-        a.download = `ChillOS_CharBackup_${dateStr}.zip`;
-        a.click();
-        URL.revokeObjectURL(url);
-        Toast.show('精简备份导出成功！');
+        try {
+          await saveFileCompat(zipped, `ChillOS_CharBackup_${dateStr}.zip`, 'application/zip');
+          Toast.show('精简备份导出成功！');
+        } catch(e) { Toast.show('导出失败: ' + e.message); console.error(e); }
       });
     } catch (err) {
       console.error(err);
@@ -10999,14 +11025,11 @@ const DataModule = (() => {
         zipObj['_manifest.json'] = fflateAPI.strToU8(JSON.stringify(
           { note: 'ChillOS 瘦身清理前的孤儿图片备份', count: manifest.length, items: manifest }, null, 2));
         await new Promise((res, rej) => {
-          fflateAPI.zip(zipObj, { level: 0 }, (err, zipped) => {
+          fflateAPI.zip(zipObj, { level: 0 }, async (err, zipped) => {
             if (err) return rej(err);
-            const blob = new Blob([zipped], { type: 'application/zip' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
             const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-            a.href = url; a.download = `ChillOS_Orphans_${dateStr}.zip`; a.click();
-            URL.revokeObjectURL(url); res();
+            try { await saveFileCompat(zipped, `ChillOS_Orphans_${dateStr}.zip`, 'application/zip'); res(); }
+            catch(e) { rej(e); }
           });
         });
       }
@@ -15956,14 +15979,13 @@ const NovelModule = (() => {
       Toast.show('请先生成测试图');
       return;
     }
-    const a = document.createElement('a');
-    a.href = src;
-    a.download = `novelai-test-${Date.now()}.png`;
-    a.rel = 'noopener';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    Toast.show('已开始下载');
+    (async () => {
+      try {
+        const blob = await (await fetch(src)).blob();
+        await saveFileCompat(blob, `novelai-test-${Date.now()}.png`, blob.type || 'image/png');
+        Toast.show('已开始下载');
+      } catch(e) { Toast.show('下载失败'); console.error(e); }
+    })();
   }
 
   async function testGenerate() {
@@ -19839,14 +19861,13 @@ function _renderImgPreviewBar() {
     const img = document.getElementById('cv-img-viewer-img');
     const src = img?.src;
     if (!src) return;
-    const a = document.createElement('a');
-    a.href = src;
-    a.download = `chat-img-${Date.now()}.jpg`;
-    a.rel = 'noopener';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    Toast.show('已开始下载');
+    (async () => {
+      try {
+        const blob = await (await fetch(src)).blob();
+        await saveFileCompat(blob, `chat-img-${Date.now()}.jpg`, blob.type || 'image/jpeg');
+        Toast.show('已开始下载');
+      } catch(e) { Toast.show('下载失败'); console.error(e); }
+    })();
   }
 
   async function _regenerateNovelFromViewer() {
@@ -27376,14 +27397,13 @@ await DB.settings.del(`offline-memory-${_realCharId}`);
         const img = document.getElementById('sc-img-viewer-img');
         const src = img?.src;
         if (!src) return;
-        const a = document.createElement('a');
-        a.href = src;
-        a.download = `story-cinematic-${Date.now()}.png`;
-        a.rel = 'noopener';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        Toast.show('已开始下载底片');
+        (async () => {
+          try {
+            const blob = await (await fetch(src)).blob();
+            await saveFileCompat(blob, `story-cinematic-${Date.now()}.png`, blob.type || 'image/png');
+            Toast.show('已开始下载底片');
+          } catch(e) { Toast.show('下载失败'); console.error(e); }
+        })();
     }
 
     function _formatTime(ts) {
