@@ -9676,11 +9676,15 @@ const EnvSenseModule = (() => {
   function _getPosition() {
     return new Promise((resolve, reject) => {
       if (!navigator.geolocation) return reject(new Error('Geolocation not supported'));
-      navigator.geolocation.getCurrentPosition(resolve, reject, {
-        enableHighAccuracy: false,
-        timeout: 8000,
-        maximumAge: 300000
-      });
+     navigator.geolocation.getCurrentPosition(
+  onSuccess,
+  onError,
+  {
+    enableHighAccuracy: false,  // 用网络/基站定位，快，室内也能出（城市级精度对天气/地名完全够）
+    timeout: 20000,             // 8s → 20s，给弱信号更多时间
+    maximumAge: 300000          // 接受 5 分钟内的缓存位置，多数情况秒回、几乎不再超时
+  }
+);
     });
   }
 
