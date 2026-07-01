@@ -4956,42 +4956,45 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg-body);display:flex;jus
               录制 4 秒环境音 → 浏览器内转成 WAV → 发到你自部署的 Edge Function（env-audio-analyze）分析 → 返回标签。原始音频不存储。
             </p>
 
-            <!-- 分析模型：从用户自己的中转拉取后选择，不写死任何型号名 -->
+            <!-- 选一个已有 API 配置（用它的地址+Key，不用手填） -->
             <div class="input-wrapper" style="margin-bottom:8px;">
-              <label class="label-text">分析用模型 / Audio Model（从你的中转拉取后选择）</label>
-              <span class="fetch-link" id="env-audio-fetch-btn" onclick="EnvSenseModule.fetchAudioModels()" style="display:inline-block; margin:4px 0 8px;">点击拉取模型列表</span>
-              <select id="env-audio-model" class="select-stylish">
-                <option value="" disabled selected>— 先填下面的 Key，再点上方「拉取模型列表」—</option>
+              <label class="label-text">分析用 API 配置 / API Profile</label>
+              <select id="env-audio-api-select" class="select-stylish" onchange="EnvSenseModule.onApiSelectChange()">
+                <option value="" disabled selected>— 选择一个已配好的 API —</option>
               </select>
               <div style="font-size:0.65rem;color:var(--s-text-secondary);line-height:1.6;margin-top:6px;">
-                ⚠️ 必须选<b>支持音频输入</b>的模型，否则会报 Model not found / 静默失败。型号名以你中转列表里的为准（各家命名不同）：<br>
-                · <b>能用</b>：Gemini 系几乎都行 —— gemini-2.5 / 3 / 3.1 的 flash、pro 等（如你中转里的 gemini-3.1-pro-preview、gemini-3-flash-preview）；OpenAI 音频专用款 gpt-audio、gpt-4o-audio-preview。<br>
+                直接选一个你在「设置 → API」里配好的接口，用它的地址和 Key，<b>无需手填</b>。<br>
+                可以跟聊天用不同的：比如聊天用 Claude 站，这里单独选一个<b>有 Gemini 的站</b>跑环境音。要用哪个站，先去「设置 → API」把它配好，这里就能选到。
+              </div>
+            </div>
+
+            <!-- 分析模型：从选中的 API 配置拉取后选择，不写死任何型号名 -->
+            <div class="input-wrapper" style="margin-bottom:8px;">
+              <label class="label-text">分析用模型 / Audio Model（从上面选的 API 拉取后选择）</label>
+              <span class="fetch-link" id="env-audio-fetch-btn" onclick="EnvSenseModule.fetchAudioModels()" style="display:inline-block; margin:4px 0 8px;">点击拉取模型列表</span>
+              <select id="env-audio-model" class="select-stylish">
+                <option value="" disabled selected>— 先选上面的 API 配置，再点「拉取模型列表」—</option>
+              </select>
+              <div style="font-size:0.65rem;color:var(--s-text-secondary);line-height:1.6;margin-top:6px;">
+                ⚠️ 必须选<b>支持音频输入</b>的模型，否则会报 Model not found / 静默失败。型号名以该站列表里的为准（各家命名不同）：<br>
+                · <b>能用</b>：Gemini 系几乎都行 —— gemini-2.5 / 3 / 3.1 的 flash、pro 等（如 gemini-3.1-pro-preview、gemini-3-flash-preview）；OpenAI 音频专用款 gpt-audio、gpt-4o-audio-preview。<br>
                 · <b>不能用</b>：普通文本模型 —— gpt-5、claude、deepseek、各种 chat 模型，它们不收音频。
               </div>
             </div>
 
-            <!-- API Key：唯一需要手填的项 -->
+            <!-- Edge URL：自动生成，只读展示 -->
             <div class="input-wrapper" style="margin-bottom:12px;">
-              <label class="label-text">分析用 API Key（存进你自己的 Supabase，前端不保留）</label>
-              <input type="password" id="env-audio-api-key" class="input-line" placeholder="粘贴你的 key">
-            </div>
-
-            <!-- Edge URL + 接口地址：自动生成，只读展示 -->
-            <div class="input-wrapper" style="margin-bottom:6px;">
               <label class="label-text">Edge Function 地址（按 Supabase Project URL 自动生成）</label>
               <div id="env-audio-edge-preview" style="font-family:'Space Mono',monospace;font-size:0.62rem;color:var(--s-text-secondary);word-break:break-all;line-height:1.5;">—</div>
-            </div>
-            <div class="input-wrapper" style="margin-bottom:12px;">
-              <label class="label-text">接口地址（自动复用聊天配置）</label>
-              <div id="env-audio-base-preview" style="font-family:'Space Mono',monospace;font-size:0.62rem;color:var(--s-text-secondary);word-break:break-all;line-height:1.5;">—</div>
             </div>
 
             <button class="btn-outline" style="width:100%; border-color:var(--s-text-primary); color:var(--s-text-primary);" onclick="EnvSenseModule.saveAudioConfig()">
               <i class="ph-bold ph-floppy-disk"></i> 保存环境音配置 / SAVE
             </button>
             <div class="cloud-hint-box" style="margin-top:12px;">
-              只需「选模型 + 粘一次 Key」。接口地址自动复用你聊天的配置，Edge 地址按你的 Supabase 项目自动拼。Key 经 Edge Function 存入你自己的 Supabase，前端不留明文。<br>
-              （前提：已在「云端设置」填好 Supabase Project URL，并在「设置 → API」激活了聊天接口。）
+              只需「选 API 配置 + 选模型」两步，地址和 Key 都自动取自你选的那个配置，无需手填。Edge 地址按你的 Supabase 项目自动拼。<br>
+              以后你在「设置 → API」里改了那个配置的 Key，环境音会自动跟着用最新的，不用回来重设。<br>
+              （前提：已在「云端设置」填好 Supabase Project URL。）
             </div>
           </div>
 
@@ -9357,7 +9360,8 @@ const EnvSenseModule = (() => {
     const cdEl = document.getElementById('env-sense-cooldown');
     if (cdEl && cfg.cooldown !== undefined) cdEl.value = cfg.cooldown;
 
-    // 环境音：回填已选模型（下拉初始为空，把已存模型放进去并选中；可点「拉取」刷新完整列表）
+    // 环境音：填充「API 配置」下拉并恢复已选；回填已选模型（下拉初始为空）
+    await _populateApiSelect(cfg.audioApiId);
     if (cfg.audioModel) _fillAudioModelSelect([cfg.audioModel], cfg.audioModel);
 
     _syncAudioSection();
@@ -9399,26 +9403,49 @@ const EnvSenseModule = (() => {
     return String(cloudUrl).trim().replace(/\/+$/, '') + '/functions/v1/env-audio-analyze';
   }
 
-  // 取当前激活聊天 API 的裸 base
-  async function _deriveChatBase() {
-    try {
-      const a = await DB.api.getActive();
-      if (a && a.url) return _rootUrl(a.url);
-    } catch(e) {}
-    return '';
+  // ── API 配置下拉：列出所有已配 profile（用它们的 url+key，无需手填）──
+  async function _populateApiSelect(selectedId) {
+    const sel = document.getElementById('env-audio-api-select');
+    if (!sel) return;
+    let profiles = [];
+    try { profiles = await DB.api.getAll(); } catch(e) {}
+    sel.innerHTML = '';
+    const ph = document.createElement('option');
+    ph.value = ''; ph.disabled = true; ph.textContent = '— 选择一个已配好的 API —';
+    sel.appendChild(ph);
+    let matched = false;
+    (profiles || []).forEach(p => {
+      const o = document.createElement('option');
+      o.value = String(p.id);
+      o.textContent = p.name || ('配置 ' + p.id);
+      if (selectedId != null && selectedId !== '' && String(p.id) === String(selectedId)) { o.selected = true; matched = true; }
+      sel.appendChild(o);
+    });
+    if (!matched) ph.selected = true; // 不默认选中：没恢复到已存的就停在占位
   }
 
-  // 刷新「Edge 地址 / 接口地址」两条只读预览
+  // 按 id 取活的 profile（每次现取 → 改了 key 自动跟着变）
+  async function _getApiProfile(id) {
+    if (id == null || id === '') return null;
+    try {
+      const all = await DB.api.getAll();
+      return (all || []).find(p => String(p.id) === String(id)) || null;
+    } catch(e) { return null; }
+  }
+
+  // 换了 API 配置 → 之前拉的模型作废，重置模型下拉
+  function onApiSelectChange() {
+    _fillAudioModelSelect([], '');
+    const link = document.getElementById('env-audio-fetch-btn');
+    if (link) link.textContent = '点击拉取模型列表';
+  }
+
+  // 刷新只读预览（现在只剩 Edge 地址；接口地址已改为选 API 配置）
   async function _syncAudioInfo() {
     const edgeEl = document.getElementById('env-audio-edge-preview');
-    const baseEl = document.getElementById('env-audio-base-preview');
     if (edgeEl) {
       const edge = await _deriveEdgeUrl();
       edgeEl.textContent = edge || '⚠️ 未检测到 Supabase 连接 —— 请先到「云端设置」填写 Project URL';
-    }
-    if (baseEl) {
-      const base = await _deriveChatBase();
-      baseEl.textContent = base || '⚠️ 未检测到已激活的聊天 API —— 请先到「设置 → API」配置并激活一个接口';
     }
   }
 
@@ -9441,25 +9468,28 @@ const EnvSenseModule = (() => {
     _syncAudioSection();
   }
 
-  // 保存环境音后端配置
-  //  - API Key：唯一手填项 → 发 Edge Function 存进用户自己的 Supabase
-  //  - 模型：下拉选（必选）
-  //  - 接口地址：自动复用聊天配置；Edge 地址：按 Supabase Project URL 自动拼
+  // 保存环境音配置：选一个已有 API 配置（用它的 url+key）+ 选一个音频模型
+  //  - 地址/Key 都取自所选 profile，无需手填
+  //  - 采集时前端会带上该 profile 的最新 key（改了 key 自动生效）
+  //  - Edge 地址：按 Supabase Project URL 自动拼
   async function saveAudioConfig() {
-    const apiKey = document.getElementById('env-audio-api-key')?.value?.trim();
-    const model  = document.getElementById('env-audio-model')?.value?.trim();
+    const apiId = document.getElementById('env-audio-api-select')?.value?.trim();
+    const model = document.getElementById('env-audio-model')?.value?.trim();
 
-    if (!model)  { alert('请先选择一个音频模型（普通聊天模型不支持音频）'); return; }
-    if (!apiKey) { alert('请填写分析用 API Key'); return; }
+    if (!apiId) { alert('请先选择一个 API 配置'); return; }
+    if (!model) { alert('请先拉取并选择一个音频模型（普通聊天模型不支持音频）'); return; }
 
-    const apiBase = await _deriveChatBase();
-    if (!apiBase) { alert('未检测到已激活的聊天 API。请先到「设置 → API」配置并激活一个接口，再来保存。'); return; }
+    const profile = await _getApiProfile(apiId);
+    if (!profile) { alert('选中的 API 配置已不存在，请重新选择'); await _populateApiSelect(''); return; }
+    const apiBase = _rootUrl(profile.url);
+    const apiKey = profile.key;
+    if (!apiBase || !apiKey) { alert('该 API 配置缺少地址或 Key，请先到「设置 → API」把它补全'); return; }
 
     const edgeUrl = await _deriveEdgeUrl();
     if (!edgeUrl) { alert('未检测到 Supabase 连接。请先到「云端设置」填写 Project URL，再来保存。'); return; }
 
     try {
-      // 把 API 配置发到用户自己的 Edge Function 存库
+      // 推一份到 Edge Function 存库（兜底 + 验证后端可达；采集时前端还会带最新 key）
       const res = await fetch(edgeUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -9470,16 +9500,14 @@ const EnvSenseModule = (() => {
         throw new Error(err.error || `HTTP ${res.status}`);
       }
 
-      // 前端存派生出的 Edge URL + model + base（均非密钥；key 不落前端）
+      // 前端只存「选了哪个配置 + 哪个模型 + Edge 地址」（不存 key，key 采集时现取）
       const cfg = await _getCfg();
-      cfg.audioEdgeUrl = edgeUrl;
+      cfg.audioApiId = String(apiId);
       cfg.audioModel = model;
-      cfg.audioApiBase = apiBase;
+      cfg.audioEdgeUrl = edgeUrl;
       await DB.settings.set('env-sense-config', cfg);
 
-      // 清掉输入框里的 key
-      document.getElementById('env-audio-api-key').value = '';
-      alert('环境音配置已保存到你的 Supabase ✓');
+      alert('环境音配置已保存 ✓');
       _syncAudioInfo();
     } catch(e) {
       alert('保存失败: ' + e.message);
@@ -9490,7 +9518,7 @@ const EnvSenseModule = (() => {
   async function _getCfg() {
     return await DB.settings.get('env-sense-config') || {
       enabled: false, location: true, audio: false, cooldown: '5',
-      audioEdgeUrl: '', audioModel: '', audioApiBase: ''
+      audioApiId: '', audioModel: '', audioEdgeUrl: ''
     };
   }
 
@@ -9565,13 +9593,20 @@ const EnvSenseModule = (() => {
       status.weather  = { state: 'skip' };
     }
 
-    // 2. 环境音 → 发到后端分析（并行）
-    if (cfg.audio && cfg.audioEdgeUrl) {
+    // 2. 环境音 → 发到后端分析（并行）；用所选 API 配置的最新 url+key（现取，改了自动生效）
+    if (cfg.audio && cfg.audioApiId && cfg.audioModel && cfg.audioEdgeUrl) {
       tasks.push((async () => {
         try {
+          const profile = await _getApiProfile(cfg.audioApiId);
+          if (!profile || !profile.url || !profile.key) {
+            status.ambience = { state: 'fail', error: '所选 API 配置已不存在或缺少地址/Key，请到环境感知页重新选择并保存' };
+            return;
+          }
           const audioB64 = await _recordAudio(AUDIO_DURATION_MS);
           if (!audioB64) { status.ambience = { state: 'fail', error: '录音/WAV转码失败（需麦克风权限 + HTTPS/localhost）' }; return; }
-          const r = await _analyzeAudioBackend(audioB64, cfg.audioEdgeUrl);
+          const r = await _analyzeAudioBackend(cfg.audioEdgeUrl, audioB64, {
+            api_key: profile.key, api_base: _rootUrl(profile.url), model: cfg.audioModel
+          });
           if (r && r.label) { snapshot.ambience = r.label; status.ambience = { state: 'ok', value: r.label }; }
           else { status.ambience = { state: 'fail', error: (r && r.error) || '后端未返回标签' }; }
         } catch(e) { status.ambience = { state: 'fail', error: '环境音采集失败: ' + (e?.message || e) }; console.warn('[EnvSense] 环境音采集失败', e); }
@@ -9579,7 +9614,7 @@ const EnvSenseModule = (() => {
     } else if (!cfg.audio) {
       status.ambience = { state: 'skip' };
     } else {
-      status.ambience = { state: 'fail', error: '未保存环境音配置（Edge 地址为空，请在上方选模型+填Key保存）' };
+      status.ambience = { state: 'fail', error: '环境音未配置完整（需：选 API 配置 + 拉取选模型 + 保存，且已配 Supabase）' };
     }
 
     await Promise.allSettled(tasks);
@@ -9602,6 +9637,12 @@ const EnvSenseModule = (() => {
     }
     if (snapshot.ambience) parts.push(`周围环境音: ${snapshot.ambience}`);
     return `# 环境感知 (Environment Awareness)\n以下是用户此刻的真实物理环境数据。你可以在对话中自然地引用这些信息（如关心天气、提醒防晒、根据所在地段聊聊周边氛围等），但不要每次都机械式地播报，像真人一样自然即可。\n⚠️ 关于位置：你可以自然地提到用户所在的城市、城区或街道地段，但【绝对不要编造】具体的店铺、餐厅、商家名称或门牌号——你并不知道那里实际有哪些店，凭空捏造会让用户立刻察觉失真。\n${parts.join('\n')}\n`;
+  }
+
+  // ── 只取环境音的注入文本（视频通话用；没有环境音则返回空串，不硬塞）──
+  function buildAmbienceOnlyBlock(snapshot) {
+    if (!snapshot || !snapshot.ambience) return '';
+    return `# 环境感知 · 背景声\n你正在和用户视频通话，能隐约听到ta那边的背景声：${snapshot.ambience}。你可以自然地对此做出反应（如问一句、或顺势聊起），但不要每次都刻意提，像真人通话一样自然即可。\n`;
   }
 
   // ── 内部：逆地理（经纬度 → 市·区·街道）。失败/超时返回 null，调用方退回经纬度 ──
@@ -9761,12 +9802,13 @@ const EnvSenseModule = (() => {
   }
 
   // ── 内部：发到后端分析环境音 ── 返回 { label } 或 { error: 可读原因 }
-  async function _analyzeAudioBackend(audioBase64, edgeUrl) {
+  // extra 里带上所选 API 配置的 { api_key, api_base, model } —— 后端优先用它们（key 每次最新）
+  async function _analyzeAudioBackend(edgeUrl, audioBase64, extra) {
     try {
       const res = await fetch(edgeUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'analyze', audio_base64: audioBase64, format: 'wav' })
+        body: JSON.stringify({ action: 'analyze', audio_base64: audioBase64, format: 'wav', ...(extra || {}) })
       });
       let data = null;
       try { data = await res.json(); } catch(e) {}
@@ -9850,25 +9892,28 @@ const EnvSenseModule = (() => {
 
   async function fetchAudioModels() {
     const link = document.getElementById('env-audio-fetch-btn');
-    const key = document.getElementById('env-audio-api-key')?.value?.trim();
-    if (!key) { alert('请先在下面填好 API Key，再拉取模型'); return; }
-    const base = await _deriveChatBase();
-    if (!base) { alert('未检测到已激活的聊天 API（接口地址自动复用它）。请先到「设置 → API」配置并激活一个接口。'); return; }
+    const apiId = document.getElementById('env-audio-api-select')?.value?.trim();
+    if (!apiId) { alert('请先在上面选择一个 API 配置'); return; }
+    const profile = await _getApiProfile(apiId);
+    if (!profile) { alert('选中的 API 配置已不存在，请重新选择'); await _populateApiSelect(''); return; }
+    if (!profile.url || !profile.key) { alert('该 API 配置缺少地址或 Key，请先到「设置 → API」补全'); return; }
+
     const orig = link ? link.textContent : '';
     if (link) link.textContent = '拉取中…';
     try {
-      const models = await ApiHelper.fetchModels(base, key); // 走 /v1/models，与聊天栏同款
+      const models = await ApiHelper.fetchModels(profile.url, profile.key); // 用该配置的地址+Key，与聊天栏同款
+      if (!models.length) throw new Error('返回了空的模型列表');
       const cfg = await _getCfg();
       _fillAudioModelSelect(models, cfg.audioModel || '');
       if (link) link.textContent = `✓ 拉到 ${models.length} 个，下面选一个支持音频的`;
       setTimeout(() => { if (link) link.textContent = '重新拉取'; }, 2500);
     } catch(e) {
       if (link) link.textContent = '拉取失败，点此重试';
-      alert('拉取模型失败：' + (e?.message || e) + '\n（确认 Key 正确，且「设置 → API」里激活的接口地址可用）');
+      alert('拉取模型失败：' + (e?.message || e) + '\n（确认该 API 配置的地址和 Key 可用）');
     }
   }
 
-  return { init, toggleEnabled, saveOptions, saveAudioConfig, collectFrame, buildPromptBlock, testCollect, fetchAudioModels, _renderStatus };
+  return { init, toggleEnabled, saveOptions, saveAudioConfig, collectFrame, buildPromptBlock, buildAmbienceOnlyBlock, testCollect, fetchAudioModels, onApiSelectChange, _renderStatus };
 })();
 
 // ============================================================
@@ -16454,6 +16499,13 @@ async function openCall(forceCharId = null) {
           }
       }
 
+      // 环境感知：视频通话只注入「环境音」（复用同一帧采集，受冷却缓存约束；没开/没配则为空）
+      let ambienceBlock = '';
+      try {
+        const frame = await EnvSenseModule.collectFrame();
+        if (frame) ambienceBlock = EnvSenseModule.buildAmbienceOnlyBlock(frame);
+      } catch(e) { console.warn('[EnvSense] 通话采集失败', e); }
+
       // 组装完整系统提示词
       const systemPrompt = `你正在与我进行一场实时的视频通话。你的名字是【${charName}】。
       
@@ -16461,7 +16513,7 @@ async function openCall(forceCharId = null) {
 ${char?.persona || '无'}
 ${char?.mbti ? 'MBTI: ' + char.mbti : ''}
 ${scheduleContext}
-
+${ambienceBlock}
 【关于我(用户)】：
 名字：${userPersona.name || '用户'}
 简介：${userPersona.bio || '无'}
